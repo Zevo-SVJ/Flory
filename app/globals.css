@@ -1,0 +1,197 @@
+@import 'tailwindcss';
+
+/* ===========================================================================
+   Worth design system
+
+   Organising principle: COLOUR IS A VERDICT.
+
+   The interface is ink on paper — near-monochrome. Chroma is reserved
+   exclusively for places where Worth has an opinion: the verdict, the score,
+   the money delta, a risk signal. Buttons, navigation and section headers are
+   never coloured. This makes the verdict unmissable without shouting, reads as
+   restraint, and keeps Worth clear of the purple-gradient AI look.
+   =========================================================================== */
+
+@theme {
+  /* --- Neutrals. Warm-biased, deliberately not pure white or pure black. --- */
+  --color-paper: #fafaf8;
+  --color-paper-sunk: #f4f4f0;
+  --color-surface: #ffffff;
+  --color-ink: #111312;
+  --color-ink-2: #3d4442;
+  --color-muted: #6b7270;
+  --color-faint: #9aa09d;
+  --color-rule: #e4e4e0;
+  --color-rule-strong: #d2d2cc;
+
+  /* --- Verdict. The only colours in the product. --- */
+  --color-buy: #146b4b;
+  --color-buy-soft: #e8f1ec;
+  --color-think: #8f5d0f;
+  --color-think-soft: #f7efe2;
+  --color-skip: #a3301f;
+  --color-skip-soft: #f8eae6;
+
+  /* Verdict colours lifted for the inverted share card, which travels on its
+     own into feeds and must stay legible and AA-contrast on ink. */
+  --color-buy-lift: #63c396;
+  --color-think-lift: #e5ab55;
+  --color-skip-lift: #f08b70;
+
+  /* --- Typography --- */
+  --font-sans:
+    var(--font-inter), ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
+    sans-serif;
+  --font-serif: var(--font-newsreader), Georgia, 'Times New Roman', serif;
+
+  /* --- Fluid type scale. Mobile-first: every step starts small. --- */
+  --text-display: clamp(2.25rem, 1.55rem + 3.5vw, 4.5rem);
+  --text-display--line-height: 1.02;
+  --text-display--letter-spacing: -0.028em;
+
+  --text-title: clamp(1.75rem, 1.35rem + 2vw, 3rem);
+  --text-title--line-height: 1.1;
+  --text-title--letter-spacing: -0.022em;
+
+  --text-heading: clamp(1.3rem, 1.15rem + 0.75vw, 1.75rem);
+  --text-heading--line-height: 1.2;
+  --text-heading--letter-spacing: -0.015em;
+
+  --text-lead: clamp(1rem, 0.95rem + 0.35vw, 1.1875rem);
+  --text-lead--line-height: 1.55;
+
+  /* Score / money figures — the emotional core of the product. */
+  --text-figure: clamp(3rem, 2rem + 5.5vw, 5.5rem);
+  --text-figure--line-height: 0.94;
+  --text-figure--letter-spacing: -0.045em;
+
+  --text-figure-sm: clamp(1.75rem, 1.4rem + 1.75vw, 2.5rem);
+  --text-figure-sm--line-height: 1;
+  --text-figure-sm--letter-spacing: -0.035em;
+
+  /* --- Radii. Restrained and consistent. --- */
+  --radius-input: 0.625rem;
+  --radius-card: 0.875rem;
+  --radius-chip: 0.4375rem;
+
+  /* --- Depth comes from hairlines, not shadows. --- */
+  --shadow-card: 0 1px 2px rgba(17, 19, 18, 0.04);
+  --shadow-lift: 0 12px 32px -12px rgba(17, 19, 18, 0.14);
+}
+
+/* ===========================================================================
+   Base
+   =========================================================================== */
+
+@layer base {
+  html {
+    color-scheme: light;
+    -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+  }
+
+  body {
+    background-color: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    /* Prevents any stray wide child from scrolling the whole page sideways. */
+    overflow-x: clip;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Digits must line up wherever they are compared — scores and prices. */
+  .tnum,
+  input[type='number'] {
+    font-variant-numeric: tabular-nums;
+  }
+
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+
+  /* Focus is never removed. Visible on every interactive element. */
+  :focus-visible {
+    outline: 2px solid var(--color-ink);
+    outline-offset: 2px;
+    border-radius: 3px;
+  }
+
+  /* iOS Safari zooms the viewport when a focused input is under 16px. */
+  input,
+  textarea,
+  select {
+    font-size: max(16px, 1rem);
+  }
+
+  ::selection {
+    background: var(--color-ink);
+    color: var(--color-paper);
+  }
+}
+
+/* ===========================================================================
+   Motion — communicates product behaviour, never decoration.
+   Every animation is disabled under prefers-reduced-motion.
+   =========================================================================== */
+
+@layer utilities {
+  /* Gated on `.js` so content is visible when JavaScript never runs — the
+     reveal is an enhancement, never a precondition for reading the page. */
+  .js .reveal {
+    opacity: 0;
+    transform: translateY(12px);
+    transition:
+      opacity 0.55s cubic-bezier(0.22, 1, 0.36, 1),
+      transform 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+    will-change: opacity, transform;
+  }
+
+  .js .reveal[data-shown='true'] {
+    opacity: 1;
+    transform: none;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .js .reveal {
+      opacity: 1;
+      transform: none;
+      transition: none;
+    }
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+    }
+  }
+
+  /* Respects the iPhone home indicator and notch. */
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .pt-safe {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+
+  /* Horizontally scrollable strips own their overflow so the page never does. */
+  .scroll-strip {
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x mandatory;
+    overscroll-behavior-x: contain;
+  }
+  .scroll-strip::-webkit-scrollbar {
+    display: none;
+  }
+}
