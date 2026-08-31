@@ -36,7 +36,7 @@ export default function LandingPage() {
     <>
       {/* The nav's Analyze targets the hero field rather than a separate
           destination, so there is exactly one action above the fold. */}
-      <SiteNav analyzeHref="/#analyze" />
+      <SiteNav analyzeHref="/#analyze" over="scene" />
 
       <Hero />
       <FoundSomething />

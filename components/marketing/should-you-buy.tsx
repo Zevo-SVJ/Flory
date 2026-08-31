@@ -1,107 +1,94 @@
-import { Section, Eyebrow, Statement, Disclosure } from './section'
+import { Disclosure } from './section'
 import { cn } from '@/lib/utils/cn'
 
 /**
  * Beat 02 — the turn.
  *
- * The internet's answer is scattered across sources that don't agree and don't
- * add up. Worth's answer is one line. The composition makes that argument
- * literally: eight fragments of half-information on the left, converging into a
- * single verdict on the right.
+ * One scene, edge to edge, instead of a grid of cards. The visitor's own
+ * research floats in the dark at different depths and scales: a rating with no
+ * context, a forum opinion, a price with nothing to compare it to. It is
+ * deliberately unresolved and slightly out of reach — that is what having
+ * twelve tabs open actually feels like.
  *
- * The fragments are deliberately unresolved — a rating with no context, a
- * forum opinion, a price with no comparison. That's what the reader actually
- * has before Worth.
+ * Then the noise stops and one line answers it. The verdict is set as type at
+ * display size, not as a panel, because a panel would make Worth's answer look
+ * like one more fragment rather than the thing that ends them.
  */
 
-const SCATTER = [
-  { text: '4.4 stars', sub: '2,140 ratings', rot: '-rotate-2' },
-  { text: '“Best I’ve owned”', sub: 'forum, 2024', rot: 'rotate-1' },
-  { text: '€399', sub: 'this seller', rot: 'rotate-2' },
-  { text: '“Overpriced”', sub: 'one review', rot: '-rotate-1' },
-  { text: '18 min video', sub: 'sponsored?', rot: 'rotate-1' },
-  { text: '€349', sub: 'different model', rot: '-rotate-2' },
-  { text: '3 sellers', sub: 'unverified', rot: 'rotate-1' },
-  { text: '“Hinge broke”', sub: 'previous gen', rot: '-rotate-1' },
+interface Fragment {
+  text: string
+  sub: string
+  /** Position, scale and blur together do the depth. */
+  place: string
+  depth: 'near' | 'mid' | 'far'
+}
+
+const FRAGMENTS: Fragment[] = [
+  { text: '4.4 ★', sub: '2,140 ratings', place: 'left-[3%] top-[4%]', depth: 'near' },
+  { text: '“Best I’ve owned”', sub: 'forum, 2024', place: 'right-[5%] top-[10%]', depth: 'mid' },
+  { text: '€399', sub: 'this seller', place: 'left-[14%] top-[30%]', depth: 'near' },
+  { text: '“Overpriced”', sub: 'one review', place: 'right-[2%] top-[34%]', depth: 'far' },
+  { text: '18 min video', sub: 'sponsored?', place: 'left-[2%] top-[54%]', depth: 'far' },
+  { text: '€349', sub: 'different model', place: 'right-[16%] top-[58%]', depth: 'mid' },
+  { text: '3 sellers', sub: 'unverified', place: 'left-[20%] top-[76%]', depth: 'mid' },
+  { text: '“Hinge broke”', sub: 'previous gen', place: 'right-[4%] top-[80%]', depth: 'near' },
 ]
+
+const DEPTH = {
+  near: 'scale-100 opacity-90',
+  mid: 'scale-[0.88] opacity-60 blur-[0.4px]',
+  far: 'scale-[0.76] opacity-35 blur-[1.2px]',
+} as const
 
 export function ShouldYouBuy() {
   return (
-    <Section tone="dark" glow>
-      <Eyebrow index="02" tone="dark">
-        But should you buy it?
-      </Eyebrow>
-
-      <div className="mt-6 grid grid-cols-1 gap-12 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.85fr)] lg:items-center lg:gap-16">
-        <div>
-          <Statement tone="dark" className="max-w-[15ch]">
-            The internet gives you information.
-          </Statement>
-          <Statement tone="dark" className="text-violet-lift mt-3 max-w-[15ch]">
-            Worth gives you a decision.
-          </Statement>
-
-          {/* The scatter. */}
-          <div className="mt-10 flex flex-wrap gap-2.5">
-            {SCATTER.map((item) => (
-              <div
-                key={item.text}
-                className={cn(
-                  'rounded-lg border border-white/8 bg-white/[0.04] px-3 py-2',
-                  item.rot,
-                )}
-              >
-                <p className="text-[0.875rem] font-medium text-white/70">{item.text}</p>
-                <p className="text-[0.6875rem] text-white/30">{item.sub}</p>
-              </div>
-            ))}
+    <section className="scene scene-in scene-out relative overflow-hidden">
+      {/* The noise. A field the reader has to look through. */}
+      <div className="relative mx-auto h-[26rem] w-full max-w-4xl sm:h-[30rem]">
+        {FRAGMENTS.map((f) => (
+          <div
+            key={f.text}
+            aria-hidden
+            className={cn('absolute max-w-[9rem] sm:max-w-none', f.place, DEPTH[f.depth])}
+          >
+            <p className="text-[0.9375rem] leading-tight font-medium text-white/75 sm:text-[1.0625rem]">
+              {f.text}
+            </p>
+            <p className="text-[0.6875rem] text-white/35">{f.sub}</p>
           </div>
+        ))}
 
-          <p className="text-lead mt-8 max-w-[42ch] text-white/55">
-            Eight half-answers that don’t agree with each other. None of them tell you whether to
-            spend the €399.
+        {/* The question, sitting in the middle of the noise. */}
+        <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 px-6 text-center">
+          <p className="label text-violet-lift">02 · But should you buy it?</p>
+          <p className="text-statement mx-auto mt-4 max-w-[14ch] font-serif font-medium text-white">
+            Twelve tabs. No answer.
           </p>
         </div>
-
-        {/* The resolution. */}
-        <div className="relative">
-          <div className="rounded-object border-violet/30 from-violet/[0.16] border bg-gradient-to-b to-transparent p-6 sm:p-8">
-            <span className="label text-violet-lift">Worth</span>
-
-            <div className="mt-6 flex items-end gap-2.5">
-              <span className="tnum text-[4.5rem] leading-[0.82] font-semibold tracking-[-0.055em] text-white sm:text-[5.5rem]">
-                61
-              </span>
-              <span className="tnum pb-2 text-sm font-medium text-white/40">/100</span>
-            </div>
-
-            <p className="text-think-lift mt-4 text-2xl leading-none font-semibold tracking-[-0.02em] uppercase">
-              Think twice
-            </p>
-
-            <p className="mt-4 font-serif text-xl leading-snug text-white">
-              The product is good. The price isn’t.
-            </p>
-
-            <ul className="mt-6 flex flex-col gap-2.5 border-t border-white/10 pt-5">
-              {[
-                ['Same model, verified retailer', '€329'],
-                ['Reviews checked', '2,140'],
-                ['Sellers compared', '11'],
-              ].map(([k, v]) => (
-                <li key={k} className="flex items-baseline justify-between gap-4">
-                  <span className="text-[0.875rem] text-white/50">{k}</span>
-                  <span className="tnum text-[0.9375rem] font-semibold text-white">{v}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          <Disclosure tone="dark" className="mt-4">
-            Illustrative analysis — not real research.
-          </Disclosure>
-        </div>
       </div>
-    </Section>
+
+      {/* The resolution, as type. */}
+      <div className="relative mx-auto max-w-4xl px-5 pb-20 text-center sm:px-6 sm:pb-24">
+        <div className="mx-auto h-16 w-px bg-gradient-to-b from-transparent via-white/20 to-transparent" />
+
+        <p className="text-lead mx-auto mt-8 max-w-[30ch] text-white/50">
+          Worth reads all of it, and answers in one line.
+        </p>
+
+        {/* The one line. Deliberately not a score — the number is beat 05's
+            job, and running the same 61 reveal three times down one page turns
+            the page's biggest moment into a motif. */}
+        <p className="text-figure mx-auto mt-10 max-w-[15ch] font-serif font-medium text-white">
+          Good product. Wrong price.
+        </p>
+        <p className="text-lead mx-auto mt-8 max-w-[32ch] text-white/60">
+          €70 above the best verified price, from one of eleven sellers carrying the same model.
+        </p>
+
+        <Disclosure tone="dark" className="mt-10">
+          Illustrative analysis — not real research.
+        </Disclosure>
+      </div>
+    </section>
   )
 }

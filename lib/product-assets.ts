@@ -19,6 +19,8 @@
  *            so the product sits in the palette instead of fighting it. The
  *            headphones were then recentred on a 4:3 canvas of the same
  *            neutral and resized to 480x360, WebP q78 (5.5 kB).
+ *   Two crops ship: `headphones.webp` on a light studio ground for the light
+ *            sections, and `headphones-dark.webp` relit for the dark scenes.
  *   Why this product: the example analysis is about unbranded over-ear
  *            noise-cancelling headphones. Attaching an invented verdict to an
  *            identifiable brand would be unfair to that brand, so the photo is
@@ -44,7 +46,7 @@ export interface ProductAsset {
   height: number
 }
 
-export type ProductAssetKey = 'headphones' | 'course'
+export type ProductAssetKey = 'headphones' | 'headphonesDark' | 'course'
 
 /* Typed as the interface rather than `as const`, so `kind` stays a union and
    a component can still branch on photo vs render after a swap. */
@@ -55,6 +57,16 @@ export const PRODUCT_ASSETS: Record<ProductAssetKey, ProductAsset> = {
     kind: 'photo',
     width: 480,
     height: 360,
+  },
+  /* The same photograph relit for Worth's dark scenes: the yellow seamless
+     replaced by a violet studio pool, a cool rim drawn from the product's own
+     speculars, and a contact shadow beneath it. This is the hero plate. */
+  headphonesDark: {
+    src: '/images/products/headphones-dark.webp',
+    alt: 'Over-ear noise-cancelling headphones, lit on a dark studio set',
+    kind: 'photo',
+    width: 720,
+    height: 540,
   },
   course: {
     src: '/images/products/course.svg',

@@ -10,7 +10,7 @@ export function Wordmark({
   tone = 'ink',
 }: {
   className?: string
-  tone?: 'ink' | 'light'
+  tone?: 'ink' | 'light' | 'dark'
 }) {
   return (
     <span
@@ -20,7 +20,7 @@ export function Wordmark({
         className,
       )}
     >
-      Worth<span className="text-violet">.</span>
+      Worth<span className={tone === 'ink' ? 'text-violet' : 'text-violet-lift'}>.</span>
     </span>
   )
 }

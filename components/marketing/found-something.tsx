@@ -4,83 +4,64 @@ import { ProductImage } from '@/components/worth/product-image'
 /**
  * Beat 01 — the moment before Worth.
  *
- * Deliberately quiet and almost copy-free: a product, a price, a seller, a
- * rating. It's a listing, presented as a listing. The reader recognises the
- * situation without being told about it, which is what makes the next section's
- * turn land.
+ * The product, at size, with the listing's numbers set against it as type
+ * rather than as UI. Earlier this section drew a fake browser window around the
+ * photograph; that chrome said nothing — Worth is not a Mac app, and a visitor
+ * does not need a pretend address bar to recognise a shop.
+ *
+ * What is left is the situation itself: a thing you want, a price, a rating,
+ * and no way to tell whether the price is fair. The section is deliberately
+ * almost copy-free, so the turn in beat 02 lands.
  */
 export function FoundSomething() {
   return (
     <Section tone="sunk">
-      <div className="grid grid-cols-1 items-center gap-12 lg:grid-cols-2 lg:gap-20">
+      <div className="grid grid-cols-1 items-center gap-10 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:gap-16">
         <div className="order-2 lg:order-1">
           <Eyebrow index="01">You found something</Eyebrow>
           <Statement className="mt-5 max-w-[16ch]">You found something you want.</Statement>
           <p className="text-lead text-graphite mt-6 max-w-[38ch]">
             It looks right. The reviews look fine. The price looks… like a price.
           </p>
+
+          {/* The listing's own facts, as type. */}
+          <dl className="border-line mt-10 grid max-w-[30rem] grid-cols-3 gap-4 border-t pt-6">
+            {[
+              ['Price', '€399'],
+              ['Rating', '4.4'],
+              ['Ratings', '2,140'],
+            ].map(([k, v]) => (
+              <div key={k}>
+                <dt className="label text-faint">{k}</dt>
+                <dd className="tnum text-ink mt-2 text-[1.75rem] leading-none font-semibold tracking-[-0.035em]">
+                  {v}
+                </dd>
+              </div>
+            ))}
+          </dl>
         </div>
 
-        {/* The listing, as you'd meet it. */}
+        {/* The product itself, large and unframed. */}
         <div className="order-1 lg:order-2">
-          <div className="rounded-object border-line bg-surface shadow-object mx-auto max-w-[26rem] overflow-hidden border">
-            <div className="border-line flex items-center gap-2 border-b px-4 py-2.5">
-              <span className="bg-line-strong size-2 rounded-full" aria-hidden />
-              <span className="bg-line-strong size-2 rounded-full" aria-hidden />
-              <span className="bg-line-strong size-2 rounded-full" aria-hidden />
-              <span className="text-faint ml-2 truncate text-[0.75rem]">
-                audio-store.example/headphones
-              </span>
-            </div>
-
+          <div className="relative">
             <ProductImage
               asset="headphones"
-              sizes="(max-width: 1024px) 90vw, 420px"
-              className="aspect-[4/3] w-full border-b border-line"
+              sizes="(max-width: 1024px) 100vw, 560px"
+              className="aspect-[4/3] w-full"
             />
-
-            <div className="flex flex-col gap-3 p-5">
-              <div>
-                <p className="text-ink font-medium">Over-ear noise-cancelling headphones</p>
-                <p className="text-graphite mt-0.5 text-[0.875rem]">Audio Store · In stock</p>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <Stars />
-                <span className="text-graphite text-[0.8125rem]">4.4 · 2,140 ratings</span>
-              </div>
-
-              <div className="border-line flex items-baseline justify-between gap-3 border-t pt-3">
-                <span className="tnum text-figure-sm text-ink font-semibold tracking-[-0.035em]">
-                  €399
-                </span>
-                <span className="bg-ink rounded-full px-4 py-2 text-[0.8125rem] font-medium text-white">
-                  Add to basket
-                </span>
-              </div>
-            </div>
+            <p className="text-ink absolute bottom-4 left-4 max-w-[18ch] text-[0.9375rem] font-medium sm:bottom-6 sm:left-6 sm:text-[1.0625rem]">
+              Over-ear noise-cancelling headphones
+              <span className="text-graphite block text-[0.8125rem] font-normal">
+                Audio Store · In stock
+              </span>
+            </p>
           </div>
 
-          <Disclosure className="mt-4 text-center lg:text-left">
+          <Disclosure className="mt-4">
             Illustrative listing. Not a real product, price or seller.
           </Disclosure>
         </div>
       </div>
     </Section>
-  )
-}
-
-function Stars() {
-  return (
-    <span className="flex gap-0.5" aria-hidden>
-      {[0, 1, 2, 3, 4].map((i) => (
-        <svg key={i} width="13" height="13" viewBox="0 0 14 14" fill="none">
-          <path
-            d="M7 1.5 8.7 5l3.8.5-2.8 2.7.7 3.8L7 10.2 3.6 12l.7-3.8L1.5 5.5 5.3 5 7 1.5Z"
-            fill={i < 4 ? 'var(--color-think)' : 'var(--color-line-strong)'}
-          />
-        </svg>
-      ))}
-    </span>
   )
 }

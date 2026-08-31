@@ -59,22 +59,24 @@ export function MoneyMoment() {
         <Statement className="mt-5 max-w-[16ch]">Same thing. €70 less.</Statement>
       </div>
 
-      <div ref={ref} className="mt-14 sm:mt-20">
-        {/* Vertical so the drop reads as a drop, on any width. */}
-        <div className="flex flex-col gap-6">
-          <Row label="Current price" value="€399" muted />
+      <div ref={ref} className="mt-16 sm:mt-24">
+        {/* One column, centred, at the largest scale the page uses for money.
+            The drop reads as a drop on any width, and the saving lands last and
+            biggest because it is the only number that is the visitor's. */}
+        <div className="flex flex-col items-center gap-5 text-center">
+          <Row label="You were about to spend" value="€399" muted />
           <Connector />
-          <Row label="Better price" value={`€${price}`} accent />
+          <Row label="Worth found" value={`€${price}`} accent />
           <Connector />
-          <Row label="You save" value="€70" saving faded={!done} />
+          <Row label="You keep" value="€70" saving huge faded={!done} />
         </div>
 
-        <p className="text-lead text-graphite mt-12 max-w-[46ch]">
+        <p className="text-lead text-graphite mx-auto mt-16 max-w-[46ch] text-center">
           Worth pays for itself the first time it catches one of these. That’s the pitch — not saved
           time, not smarter shopping. Money you were about to hand over and didn’t need to.
         </p>
 
-        <Disclosure className="mt-6">
+        <Disclosure className="mx-auto mt-6 text-center">
           An illustrative example. Worth has no real users yet and makes no claim about savings.
         </Disclosure>
       </div>
@@ -88,6 +90,7 @@ function Row({
   muted,
   accent,
   saving,
+  huge,
   faded,
 }: {
   label: string
@@ -95,17 +98,18 @@ function Row({
   muted?: boolean
   accent?: boolean
   saving?: boolean
+  huge?: boolean
   faded?: boolean
 }) {
   return (
     <div
-      className={`flex items-baseline justify-between gap-6 transition-opacity duration-500 motion-reduce:transition-none ${
+      className={`flex flex-col items-center gap-2 transition-opacity duration-500 motion-reduce:transition-none ${
         faded ? 'opacity-0' : 'opacity-100'
       }`}
     >
-      <span className="label text-graphite">{label}</span>
+      <span className="label text-faint">{label}</span>
       <span
-        className={`tnum text-figure font-semibold tracking-[-0.045em] ${
+        className={`tnum font-semibold tracking-[-0.045em] ${huge ? 'text-display' : 'text-figure'} ${
           saving ? 'text-buy' : muted ? 'text-faint line-through decoration-1' : 'text-ink'
         } ${accent ? 'text-ink' : ''}`}
       >
@@ -118,7 +122,7 @@ function Row({
 /** The drop, drawn. */
 function Connector() {
   return (
-    <div className="flex justify-end pr-3" aria-hidden>
+    <div className="flex justify-center" aria-hidden>
       <svg width="14" height="34" viewBox="0 0 14 34" fill="none">
         <path
           d="M7 0v29M1.5 23.5 7 29.5l5.5-6"

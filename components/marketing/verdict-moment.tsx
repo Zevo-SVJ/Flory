@@ -1,16 +1,17 @@
-import { Section, Eyebrow, Disclosure } from './section'
+import { Disclosure } from './section'
 import { cn } from '@/lib/utils/cn'
 
 /**
- * Beat 05 — the verdict.
+ * Beat 05 — the verdict, and why.
  *
- * The page's centre of gravity, and the one moment Worth stops gathering and
- * commits. Dark stage with violet lighting, the score at display scale on a
- * banded scale so the conclusion is visibly derived from the number rather
- * than asserted next to it.
+ * The page's centre of gravity. A full-bleed scene rather than a section with
+ * columns: the score arrives at display scale, dead centre, on a banded rule
+ * that shows 61 sitting inside "think twice" rather than asserting it. Then the
+ * six things Worth actually weighed, full width and legible, so the number is
+ * visibly the conclusion of an argument rather than a mood.
  *
- * Set inline rather than inside a card: a card would make the verdict one more
- * element on the page instead of the thing the page is for.
+ * The hero shows this reveal in miniature as the launch shot. This is where it
+ * gets the room to be the point of the page.
  */
 
 const SIGNALS = [
@@ -32,81 +33,49 @@ export function VerdictMoment() {
   const score = 61
 
   return (
-    <Section tone="dark" glow>
-      <Eyebrow index="05" tone="dark">
-        The answer
-      </Eyebrow>
+    <section className="scene scene-in scene-out relative overflow-hidden py-24 sm:py-32">
+      <div className="relative mx-auto max-w-4xl px-5 text-center sm:px-6">
+        <p className="label text-white/40">05 · The answer</p>
 
-      <div className="mt-8 grid grid-cols-1 gap-12 lg:mt-12 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)] lg:gap-20">
-        <div>
-          <div className="flex items-end gap-3">
-            <span className="tnum text-score font-semibold text-white">{score}</span>
-            <span className="tnum pb-3 text-lg font-medium text-white/35 sm:pb-4">/100</span>
-          </div>
+        <p className="tnum text-display mt-8 font-semibold text-white">
+          {score}
+          <span className="text-[0.2em] font-normal tracking-normal text-white/30"> /100</span>
+        </p>
 
-          <Scale score={score} />
+        <Scale score={score} />
 
-          <p className="text-think-lift mt-8 text-3xl leading-none font-semibold tracking-[-0.025em] uppercase sm:text-4xl">
-            Think twice
-          </p>
+        <p className="text-think-lift text-statement mt-10 font-serif font-medium">Think twice</p>
 
-          <p className="text-statement mt-5 max-w-[18ch] font-serif leading-[1.05] font-medium text-white">
-            The product is good. The price isn’t.
-          </p>
-        </div>
-
-        <div className="flex flex-col gap-9 lg:pt-6">
-          <div>
-            <span className="label text-white/45">What it costs you</span>
-            <div className="mt-5 flex flex-wrap items-baseline gap-x-4 gap-y-2">
-              <span className="tnum text-3xl font-medium text-white/30 line-through decoration-1 sm:text-4xl">
-                €399
-              </span>
-              <svg
-                width="28"
-                height="15"
-                viewBox="0 0 22 12"
-                fill="none"
-                aria-hidden
-                className="self-center"
-              >
-                <path
-                  d="M0 6h19M14.5 1.5 19.5 6l-5 4.5"
-                  stroke="var(--color-violet-lift)"
-                  strokeWidth="1.8"
-                  strokeLinecap="square"
-                />
-              </svg>
-              <span className="tnum text-4xl font-semibold tracking-[-0.035em] text-white sm:text-5xl">
-                €329
-              </span>
-            </div>
-            <p className="tnum text-buy-lift mt-4 text-lg font-semibold">€70 potential saving</p>
-          </div>
-
-          <div className="border-t border-white/10 pt-7">
-            <span className="label text-white/45">Why</span>
-            <ul className="mt-5 flex flex-col divide-y divide-white/8">
-              {SIGNALS.map(([label, detail, tone]) => (
-                <li key={label} className="flex items-start gap-3 py-3">
-                  <span
-                    className={cn('mt-1.5 size-1.5 shrink-0 rounded-full', DOT[tone])}
-                    aria-hidden
-                  />
-                  <span className="text-[0.875rem] leading-snug text-white/60">
-                    <span className="font-semibold text-white">{label}</span> · {detail}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
+        <p className="text-statement mx-auto mt-4 max-w-[18ch] font-serif font-medium text-white">
+          The product is good. The price isn’t.
+        </p>
       </div>
 
-      <Disclosure tone="dark" className="mt-12">
-        Illustrative analysis — not a real product evaluation.
-      </Disclosure>
-    </Section>
+      {/* The reasoning, full width. */}
+      <div className="relative mx-auto mt-20 max-w-4xl px-5 sm:px-6">
+        <p className="label border-b border-white/10 pb-4 text-white/40">
+          What Worth weighed
+        </p>
+        <ul className="flex flex-col divide-y divide-white/8">
+          {SIGNALS.map(([label, detail, tone]) => (
+            <li key={label} className="flex items-baseline gap-4 py-5 sm:gap-6">
+              <span
+                className={cn('size-2 shrink-0 translate-y-[-1px] rounded-full', DOT[tone])}
+                aria-hidden
+              />
+              <span className="text-page w-[6.5rem] shrink-0 font-medium text-white sm:w-40">
+                {label}
+              </span>
+              <span className="text-lead text-white/55">{detail}</span>
+            </li>
+          ))}
+        </ul>
+
+        <Disclosure tone="dark" className="mt-10">
+          Illustrative analysis — not a real product evaluation.
+        </Disclosure>
+      </div>
+    </section>
   )
 }
 
@@ -117,7 +86,7 @@ export function VerdictMoment() {
 function Scale({ score }: { score: number }) {
   const ticks = Array.from({ length: 21 }, (_, i) => i * 5)
   return (
-    <div className="mt-6 max-w-lg">
+    <div className="mx-auto mt-8 max-w-lg">
       <div className="relative h-8">
         <div className="absolute inset-x-0 top-4 flex justify-between">
           {ticks.map((tick) => (
