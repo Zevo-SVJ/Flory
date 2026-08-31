@@ -20,7 +20,7 @@ export function AnalysisRow({ analysis }: { analysis: Analysis }) {
     <li>
       <Link
         href={`/analyze/${analysis.id}`}
-        className="rounded-card border-rule bg-surface hover:border-rule-strong flex items-center gap-3.5 border px-4 py-3.5 transition motion-reduce:transition-none"
+        className="rounded-object border-line bg-surface hover:border-line-strong flex items-center gap-3.5 border px-4 py-3.5 transition motion-reduce:transition-none"
       >
         {complete ? (
           <span
@@ -34,7 +34,7 @@ export function AnalysisRow({ analysis }: { analysis: Analysis }) {
             {score}
           </span>
         ) : (
-          <span className="border-rule bg-paper-sunk text-muted flex size-11 shrink-0 items-center justify-center rounded-full border text-[0.6875rem]">
+          <span className="border-line bg-ivory-deep text-graphite flex size-11 shrink-0 items-center justify-center rounded-full border text-[0.6875rem]">
             —
           </span>
         )}
@@ -44,7 +44,7 @@ export function AnalysisRow({ analysis }: { analysis: Analysis }) {
             {analysis.title ??
               (analysis.inputUrl ? displayUrl(analysis.inputUrl, 40) : 'Screenshot')}
           </p>
-          <p className="text-muted truncate text-[0.8125rem]">
+          <p className="text-graphite truncate text-[0.8125rem]">
             {complete ? VERDICT_LABEL[verdict] : (STATUS_LABEL[status] ?? status)}
             {price && ` · ${price}`}
             {' · '}

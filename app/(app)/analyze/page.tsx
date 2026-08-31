@@ -24,8 +24,8 @@ export default async function AnalyzePage({
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-title text-ink font-serif font-medium">Is it worth your money?</h1>
-        <p className="text-lead text-muted mt-2">
+        <h1 className="text-page text-ink font-serif font-medium">Is it worth your money?</h1>
+        <p className="text-lead text-graphite mt-2">
           Paste a link, or upload a screenshot of what you’re looking at.
         </p>
       </div>

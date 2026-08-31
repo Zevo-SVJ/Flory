@@ -29,8 +29,8 @@ export function OnboardingForm({
       <input type="hidden" name="next" value={next} />
 
       <div>
-        <h1 className="text-title text-ink font-serif font-medium">Two quick questions.</h1>
-        <p className="text-lead text-muted mt-2">
+        <h1 className="text-page text-ink font-serif font-medium">Two quick questions.</h1>
+        <p className="text-lead text-graphite mt-2">
           They help Worth weigh what matters to you. Skip them if you’d rather not.
         </p>
       </div>
@@ -102,10 +102,10 @@ function ChipGroup({
                 onToggle(active ? selected.filter((v) => v !== option) : [...selected, option])
               }
               className={cn(
-                'rounded-chip min-h-11 border px-4 text-[0.9375rem] transition motion-reduce:transition-none',
+                'rounded-note min-h-11 border px-4 text-[0.9375rem] transition motion-reduce:transition-none',
                 active
-                  ? 'border-ink bg-ink text-paper'
-                  : 'border-rule-strong bg-surface text-ink-2 hover:border-ink hover:text-ink',
+                  ? 'border-worth bg-worth text-white'
+                  : 'border-line-strong bg-surface text-ink-soft hover:border-worth hover:text-worth-deep',
               )}
             >
               {option}

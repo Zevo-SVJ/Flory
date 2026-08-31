@@ -1,15 +1,28 @@
 import { cn } from '@/lib/utils/cn'
 
-/** The Worth wordmark. Never set in all caps. */
-export function Wordmark({ className }: { className?: string }) {
+/**
+ * The Worth wordmark: editorial serif with a Worth Blue full stop. The dot is
+ * small enough to be quiet and specific enough to be ours — it repeats in the
+ * app shell, the auth pages and the share card.
+ *
+ * Never set in all caps.
+ */
+export function Wordmark({
+  className,
+  tone = 'ink',
+}: {
+  className?: string
+  tone?: 'ink' | 'light'
+}) {
   return (
     <span
       className={cn(
-        'text-ink font-serif text-[1.375rem] font-medium tracking-[-0.02em] sm:text-[1.5rem]',
+        'font-serif text-[1.4375rem] leading-none font-medium tracking-[-0.02em] sm:text-[1.5rem]',
+        tone === 'ink' ? 'text-ink' : 'text-white',
         className,
       )}
     >
-      Worth
+      Worth<span className="text-worth">.</span>
     </span>
   )
 }

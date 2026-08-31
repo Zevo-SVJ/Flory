@@ -1,30 +1,30 @@
 'use client'
 
+import Link from 'next/link'
 import { useId, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { validateUrl } from '@/lib/analysis/validate'
 import { cn } from '@/lib/utils/cn'
-import { ScreenshotPicker } from './screenshot-picker'
 
 /**
- * The primary product interaction.
+ * The Worth field — the product's primary object.
  *
- * This is a real <form> that GETs to /analyze, so it works before hydration and
- * without JavaScript. The client layer only adds inline validation and the
- * screenshot affordance.
+ * Built as one continuous surface with the action fused to it, so it reads as
+ * a search-and-investigate instrument rather than a form input with a button
+ * underneath. That fusion holds on mobile too: the button sits inside the
+ * field rather than becoming a full-width bar, which is what made the previous
+ * version look like every other SaaS page.
  *
- * If the visitor is signed out, /analyze redirects them to sign-up carrying the
- * URL — they never paste it twice. See `lib/auth/pending-input.ts`.
+ * It remains a real <form> that GETs to /analyze, so it works before
+ * hydration and without JavaScript.
  */
 export function AnalyzeInput({
   defaultValue = '',
-  autoFocus = false,
   size = 'lg',
   showScreenshot = true,
   className,
 }: {
   defaultValue?: string
-  autoFocus?: boolean
   size?: 'md' | 'lg'
   showScreenshot?: boolean
   className?: string
@@ -33,9 +33,10 @@ export function AnalyzeInput({
   const router = useRouter()
   const [value, setValue] = useState(defaultValue)
   const [error, setError] = useState<string | null>(null)
+  const [focused, setFocused] = useState(false)
   const [pending, setPending] = useState(false)
 
-  const height = size === 'lg' ? 'h-13 sm:h-15' : 'h-12 sm:h-13'
+  const tall = size === 'lg'
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -51,12 +52,25 @@ export function AnalyzeInput({
 
   return (
     <div className={cn('w-full', className)}>
-      <form action="/analyze" method="get" onSubmit={handleSubmit} className="w-full">
+      <form action="/analyze" method="get" onSubmit={handleSubmit}>
         <label htmlFor={id} className="sr-only">
           Paste a product, offer or URL to analyse
         </label>
 
-        <div className="flex flex-col gap-2 sm:relative sm:block">
+        <div
+          className={cn(
+            'rounded-input bg-surface flex items-center gap-2 border transition-all duration-200',
+            'motion-reduce:transition-none',
+            tall ? 'h-15 pr-1.5 pl-4 sm:h-17 sm:pr-2 sm:pl-5' : 'h-14 pr-1.5 pl-4 sm:pl-4',
+            error
+              ? 'border-skip shadow-none'
+              : focused
+                ? 'border-worth shadow-[0_0_0_4px_var(--color-worth-wash)]'
+                : 'border-line-strong shadow-object',
+          )}
+        >
+          <LinkGlyph active={focused || value.length > 0} className="hidden sm:block" />
+
           <input
             id={id}
             name="url"
@@ -67,8 +81,9 @@ export function AnalyzeInput({
             autoCapitalize="none"
             autoCorrect="off"
             spellCheck={false}
-            autoFocus={autoFocus}
             value={value}
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
             onChange={(event) => {
               setValue(event.target.value)
               if (error) setError(null)
@@ -77,13 +92,9 @@ export function AnalyzeInput({
             aria-invalid={error ? true : undefined}
             aria-describedby={error ? `${id}-error` : undefined}
             className={cn(
-              'rounded-input bg-surface text-ink shadow-card w-full border px-4',
+              'text-ink h-full min-w-0 flex-1 self-stretch bg-transparent outline-none',
               'placeholder:text-faint',
-              'focus:ring-ink/8 transition duration-200 focus:ring-4 focus:outline-none',
-              'motion-reduce:transition-none',
-              height,
-              size === 'lg' ? 'sm:pr-36 sm:text-[1.0625rem]' : 'sm:pr-32',
-              error ? 'border-skip focus:border-skip' : 'border-rule-strong focus:border-ink',
+              tall && 'sm:text-[1.0625rem]',
             )}
           />
 
@@ -91,25 +102,63 @@ export function AnalyzeInput({
             type="submit"
             disabled={pending}
             className={cn(
-              'rounded-input bg-ink text-paper inline-flex w-full items-center justify-center font-medium',
-              'hover:bg-ink-2 transition active:scale-[0.99] disabled:opacity-60',
-              'motion-reduce:transition-none motion-reduce:active:scale-100',
-              'sm:absolute sm:top-1.5 sm:right-1.5 sm:bottom-1.5 sm:w-auto sm:px-6',
-              size === 'lg' ? 'h-12 text-base' : 'h-11 text-[0.9375rem]',
+              'bg-worth inline-flex shrink-0 items-center justify-center rounded-[0.5rem] font-medium text-white',
+              'hover:bg-worth-deep transition-colors disabled:opacity-60',
+              'motion-reduce:transition-none',
+              tall
+                ? 'h-12 px-3.5 text-[0.9375rem] sm:h-13 sm:px-6 sm:text-base'
+                : 'h-11 px-3.5 text-[0.9375rem]',
             )}
           >
-            {pending ? 'Analysing…' : 'Analyze'}
+            {pending ? 'Checking…' : 'Analyze'}
           </button>
         </div>
 
         {error && (
-          <p id={`${id}-error`} role="alert" className="text-skip mt-2 text-sm font-medium">
+          <p id={`${id}-error`} role="alert" className="text-skip mt-2.5 text-sm font-medium">
             {error}
           </p>
         )}
       </form>
 
-      {showScreenshot && <ScreenshotPicker className="mt-3" />}
+      {showScreenshot && (
+        <p className="text-graphite mt-3 text-[0.8125rem]">
+          No link?{' '}
+          <Link
+            href="/analyze?input=screenshot"
+            className="text-worth decoration-worth-line hover:decoration-worth font-medium underline underline-offset-4 transition-colors motion-reduce:transition-none"
+          >
+            Upload a screenshot
+          </Link>{' '}
+          instead.
+        </p>
+      )}
     </div>
+  )
+}
+
+/** Link glyph. Turns Worth Blue once the field is live. */
+function LinkGlyph({ active, className }: { active: boolean; className?: string }) {
+  return (
+    <svg
+      width="19"
+      height="19"
+      viewBox="0 0 20 20"
+      fill="none"
+      aria-hidden
+      className={cn(
+        'shrink-0 transition-colors motion-reduce:transition-none',
+        active ? 'text-worth' : 'text-faint',
+        className,
+      )}
+    >
+      <path
+        d="M8.2 11.8a3.4 3.4 0 0 0 5.1.4l2.3-2.3a3.4 3.4 0 0 0-4.8-4.8l-1.3 1.3M11.8 8.2a3.4 3.4 0 0 0-5.1-.4l-2.3 2.3a3.4 3.4 0 0 0 4.8 4.8l1.3-1.3"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   )
 }

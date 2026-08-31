@@ -1,11 +1,16 @@
-import type { Analysis } from './types'
+import type { Analysis, Verdict } from './types'
 
 /**
- * Static examples used on the landing page.
+ * Illustrative examples used on the landing page.
  *
- * These are illustrative product previews, not real analyses, and every surface
- * that renders them labels them as such. The numbers come from the product
- * brief and describe a hypothetical purchase.
+ * These are not real analyses. Worth's research engine isn't connected, and no
+ * figure here describes a real listing, price or review — every surface that
+ * renders them says so.
+ *
+ * They are written to be *plausible* rather than random, because the landing
+ * page's job is to show what a Worth result looks like. A verdict of "think
+ * twice on a genuinely good product, because of the price" demonstrates the
+ * product's actual point far better than a generic low score does.
  */
 
 const BASE = {
@@ -21,107 +26,155 @@ const BASE = {
   isFixture: true,
 } as const
 
-/** Hero preview and the verdict section. */
-export const HERO_EXAMPLE: Analysis = {
+/**
+ * The primary example, used in the hero, the verdict moment, the money
+ * section and the share card — one product followed all the way through, so
+ * the page reads as a single investigation rather than six unrelated demos.
+ */
+export const PRIMARY_EXAMPLE: Analysis = {
   ...BASE,
-  id: 'example-hero',
+  id: 'example-primary',
   category: 'product',
-  title: 'Wireless noise-cancelling headphones',
-  score: 34,
-  verdict: 'skip',
-  summary: 'You’re paying too much for what you get.',
-  priceMinor: 17900,
-  bestPriceMinor: 7900,
+  title: 'Sony WH-1000XM6',
+  score: 61,
+  verdict: 'think_twice',
+  summary: 'The headphones are good. The price isn’t.',
+  priceMinor: 39900,
+  bestPriceMinor: 32900,
   result: {
     valueSummary:
-      'Mid-range drivers and plastic hinges, priced alongside models with metal frames and better noise cancelling.',
+      'Class-leading noise cancelling and a 30-hour battery. Nothing wrong with the product — three other retailers are simply selling the same model for less.',
     signals: [
       {
         kind: 'price',
         tone: 'negative',
         label: 'Price',
-        detail: '€100 above comparable models with the same specification.',
+        detail: '€70 above the best price found for the same model.',
       },
       {
         kind: 'reviews',
-        tone: 'negative',
-        label: 'Review concerns',
-        detail: 'Buyers repeatedly report the hinge cracking within a year.',
+        tone: 'positive',
+        label: 'Reviews',
+        detail: 'Battery life and call quality are consistently praised.',
       },
       {
         kind: 'trust',
-        tone: 'neutral',
+        tone: 'positive',
         label: 'Trust',
-        detail: 'Established seller, standard 30-day returns.',
+        detail: 'Authorised seller, 30-day returns, 2-year warranty.',
+      },
+      {
+        kind: 'value',
+        tone: 'positive',
+        label: 'Value',
+        detail: 'Top of its class for noise cancelling at this tier.',
+      },
+      {
+        kind: 'risk',
+        tone: 'caution',
+        label: 'Risk',
+        detail: 'A refresh is expected within about six months.',
       },
       {
         kind: 'alternative',
         tone: 'positive',
-        label: 'Alternative found',
-        detail: 'A comparable model with a metal frame costs €79.',
+        label: 'Alternatives',
+        detail: 'Identical model, authorised retailer, €329.',
       },
     ],
     evidence: [
       {
-        id: 'ex-1',
+        id: 'p1',
         kind: 'price',
-        claim:
-          'Listed at €179 while four other retailers carry the same model between €99 and €129.',
+        claim: 'Listed at €399 while three other authorised retailers carry it at €329–€349.',
         source: { label: 'Illustrative example — not a real source' },
       },
       {
-        id: 'ex-2',
+        id: 'p2',
         kind: 'reviews',
-        claim: 'Hinge failure is the most common complaint across long-term reviews.',
+        claim: '“Battery life is genuinely 30 hours” appears across long-term reviews.',
         source: { label: 'Illustrative example — not a real source' },
       },
       {
-        id: 'ex-3',
-        kind: 'value',
-        claim: 'Noise cancelling measured a tier below models at the same price.',
+        id: 'p3',
+        kind: 'risk',
+        claim: 'The previous two generations were replaced on an 18-month cycle.',
         source: { label: 'Illustrative example — not a real source' },
       },
     ],
     alternatives: [
       {
-        id: 'ex-alt-1',
-        title: 'Comparable model, metal frame',
-        priceMinor: 7900,
+        id: 'p-alt-1',
+        title: 'Same model, authorised retailer',
+        priceMinor: 32900,
         currency: 'EUR',
-        reason: 'Same noise cancelling tier, sturdier build, €100 less.',
+        reason: 'Identical product and warranty, €70 less.',
       },
     ],
   },
 }
 
-/** The money section and the share card tell one consistent story. */
-export const SHARE_EXAMPLE: Analysis = {
-  ...BASE,
-  id: 'example-share',
-  category: 'product',
-  title: 'Robot vacuum with mapping',
-  score: 31,
-  verdict: 'skip',
-  summary: 'Worth found a comparable option for €159.',
-  priceMinor: 24900,
-  bestPriceMinor: 15900,
-  result: {
-    valueSummary: 'Same suction and mapping as models costing a third less.',
-    signals: [
-      {
-        kind: 'price',
-        tone: 'negative',
-        label: 'Price',
-        detail: '€90 above a comparable model.',
-      },
-      {
-        kind: 'alternative',
-        tone: 'positive',
-        label: 'Alternative found',
-        detail: 'Same suction and mapping for €159.',
-      },
-    ],
-    evidence: [],
-    alternatives: [],
+/* ------------------------------------------------------------------------ */
+/* Worth works wherever money is about to be spent — not just retail.        */
+/* ------------------------------------------------------------------------ */
+
+export interface CategoryExample {
+  id: string
+  kind: string
+  title: string
+  meta: string
+  price: string
+  bestPrice: string | null
+  score: number
+  verdict: Verdict
+  line: string
+}
+
+export const CATEGORY_EXAMPLES: CategoryExample[] = [
+  {
+    id: 'physical',
+    kind: 'Physical product',
+    title: 'Sony WH-1000XM6',
+    meta: 'Over-ear headphones',
+    price: '€399',
+    bestPrice: '€329',
+    score: 61,
+    verdict: 'think_twice',
+    line: 'Good product, wrong price. Same model for €329.',
   },
+  {
+    id: 'software',
+    kind: 'Software',
+    title: 'Project tool, annual plan',
+    meta: 'Team subscription',
+    price: '€96/yr',
+    bestPrice: null,
+    score: 82,
+    verdict: 'buy',
+    line: 'Priced fairly for what you use, and easy to leave.',
+  },
+  {
+    id: 'course',
+    kind: 'Digital product',
+    title: '“Six-figure freelancing” course',
+    meta: 'Online course, 14 modules',
+    price: '€249',
+    bestPrice: null,
+    score: 28,
+    verdict: 'skip',
+    line: 'Outcome claims aren’t backed by anything checkable.',
+  },
+]
+
+/* The evidence wall: real-shaped fragments from the primary investigation. */
+export const EVIDENCE_WALL = {
+  priceFound: '€329',
+  priceListed: '€399',
+  retailersChecked: 11,
+  reviewPositive: '“Battery life is genuinely 30 hours.”',
+  reviewNegative: '“The case is bulkier than the last generation.”',
+  reviewsRead: 2140,
+  sellerReturns: '30-day returns',
+  sellerWarranty: '2-year warranty',
+  riskNote: 'A refresh is expected within about six months.',
 }

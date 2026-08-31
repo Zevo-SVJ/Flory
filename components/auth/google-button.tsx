@@ -41,7 +41,7 @@ export function GoogleButton({ next }: { next: string }) {
         type="button"
         onClick={handleClick}
         disabled={pending}
-        className="rounded-input border-rule-strong bg-surface text-ink hover:border-ink hover:bg-paper-sunk inline-flex min-h-12 w-full items-center justify-center gap-2.5 border px-4 font-medium transition disabled:opacity-60 motion-reduce:transition-none"
+        className="rounded-input border-line-strong bg-surface text-ink hover:border-ink hover:bg-ivory-deep inline-flex min-h-12 w-full items-center justify-center gap-2.5 border px-4 font-medium transition disabled:opacity-60 motion-reduce:transition-none"
       >
         <GoogleIcon />
         {pending ? 'Redirecting…' : 'Continue with Google'}

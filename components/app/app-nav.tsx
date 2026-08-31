@@ -24,7 +24,7 @@ export function MobileTabBar() {
   return (
     <nav
       aria-label="Main"
-      className="pb-safe border-rule bg-paper/95 fixed inset-x-0 bottom-0 z-40 border-t backdrop-blur-md lg:hidden"
+      className="pb-safe border-line bg-ivory/95 fixed inset-x-0 bottom-0 z-40 border-t backdrop-blur-md lg:hidden"
     >
       <ul className="flex">
         {ITEMS.map((item) => (
@@ -53,7 +53,7 @@ function TabItem({
         className={cn(
           'flex min-h-14 flex-col items-center justify-center gap-1 px-1 py-2 text-[0.6875rem] font-medium transition',
           'motion-reduce:transition-none',
-          active ? 'text-ink' : 'text-faint',
+          active ? 'text-worth' : 'text-faint',
         )}
       >
         <Icon />
@@ -92,8 +92,8 @@ function SidebarItem({
         'rounded-input flex min-h-11 items-center gap-2.5 px-3 text-[0.9375rem] transition',
         'motion-reduce:transition-none',
         active
-          ? 'bg-paper-sunk text-ink font-medium'
-          : 'text-muted hover:bg-paper-sunk hover:text-ink',
+          ? 'bg-ivory-deep text-ink font-medium'
+          : 'text-graphite hover:bg-ivory-deep hover:text-ink',
       )}
     >
       <Icon />

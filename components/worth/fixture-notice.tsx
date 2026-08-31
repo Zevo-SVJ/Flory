@@ -19,8 +19,8 @@ export function FixtureNotice({
     return (
       <span
         className={cn(
-          'rounded-chip border-rule-strong bg-paper-sunk inline-flex items-center gap-1.5 border',
-          'text-muted px-2 py-1 text-[0.625rem] font-medium tracking-[0.1em] uppercase',
+          'rounded-note border-line-strong bg-ivory-deep inline-flex items-center gap-1.5 border',
+          'text-graphite px-2 py-1 text-[0.625rem] font-medium tracking-[0.1em] uppercase',
           className,
         )}
       >
@@ -33,11 +33,11 @@ export function FixtureNotice({
   return (
     <p
       className={cn(
-        'rounded-input border-rule-strong bg-paper-sunk text-muted border px-3.5 py-3 text-[0.8125rem] leading-relaxed',
+        'rounded-input border-line-strong bg-ivory-deep text-graphite border px-3.5 py-3 text-[0.8125rem] leading-relaxed',
         className,
       )}
     >
-      <strong className="text-ink-2 font-semibold">Sample result, not real research.</strong>{' '}
+      <strong className="text-ink-soft font-semibold">Sample result, not real research.</strong>{' '}
       Worth’s research engine isn’t connected yet, so this analysis comes from development fixture
       data. The numbers, signals and evidence below are placeholders — don’t make a purchase
       decision from them.

@@ -104,7 +104,7 @@ export function ScreenshotUpload({
     <div ref={sectionRef} className="flex flex-col gap-3">
       <div>
         <h2 className="text-ink text-[0.9375rem] font-semibold">Upload a screenshot</h2>
-        <p className="text-muted mt-1 text-[0.875rem] leading-snug">
+        <p className="text-graphite mt-1 text-[0.875rem] leading-snug">
           For things without a link — a listing in an app, a story, a message.
         </p>
       </div>
@@ -121,17 +121,17 @@ export function ScreenshotUpload({
 
       {preview ? (
         <div className="flex flex-col gap-3">
-          <div className="rounded-card border-rule bg-surface flex items-center gap-3 border p-3">
+          <div className="rounded-object border-line bg-surface flex items-center gap-3 border p-3">
             {/* Local object URL preview; next/image adds nothing for a blob. */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={preview}
               alt="Screenshot preview"
-              className="rounded-input border-rule size-16 shrink-0 border object-cover"
+              className="rounded-input border-line size-16 shrink-0 border object-cover"
             />
             <div className="min-w-0 flex-1">
               <p className="text-ink truncate text-[0.875rem] font-medium">{file?.name}</p>
-              <p className="text-muted text-[0.8125rem]">
+              <p className="text-graphite text-[0.8125rem]">
                 {file ? `${(file.size / 1024 / 1024).toFixed(1)} MB` : ''}
               </p>
             </div>
@@ -143,14 +143,14 @@ export function ScreenshotUpload({
                 setPreview(null)
                 if (inputRef.current) inputRef.current.value = ''
               }}
-              className="rounded-chip text-muted hover:text-ink min-h-11 px-2 text-[0.875rem]"
+              className="rounded-note text-graphite hover:text-ink min-h-11 px-2 text-[0.875rem]"
             >
               Remove
             </button>
           </div>
 
-          <p className="rounded-input border-rule-strong bg-paper-sunk text-muted border px-3.5 py-3 text-[0.8125rem] leading-relaxed">
-            <strong className="text-ink-2 font-semibold">Heads up:</strong> Worth can’t read
+          <p className="rounded-input border-line-strong bg-ivory-deep text-graphite border px-3.5 py-3 text-[0.8125rem] leading-relaxed">
+            <strong className="text-ink-soft font-semibold">Heads up:</strong> Worth can’t read
             screenshots yet. Your image is stored privately and the analysis will use the same
             development fixture data as every other result until the research engine ships.
           </p>
@@ -164,13 +164,13 @@ export function ScreenshotUpload({
           type="button"
           onClick={() => inputRef.current?.click()}
           className={cn(
-            'rounded-card flex min-h-24 w-full flex-col items-center justify-center gap-1.5',
-            'border-rule-strong bg-surface border border-dashed px-4 py-6 transition',
-            'hover:border-ink hover:bg-paper-sunk motion-reduce:transition-none',
+            'rounded-object flex min-h-24 w-full flex-col items-center justify-center gap-1.5',
+            'border-line-strong bg-surface border border-dashed px-4 py-6 transition',
+            'hover:border-ink hover:bg-ivory-deep motion-reduce:transition-none',
           )}
         >
           <span className="text-ink text-[0.9375rem] font-medium">Choose an image</span>
-          <span className="text-muted text-[0.8125rem]">
+          <span className="text-graphite text-[0.8125rem]">
             PNG, JPEG, WebP or HEIC · up to {Math.round(MAX_UPLOAD_BYTES / 1024 / 1024)} MB
           </span>
         </button>

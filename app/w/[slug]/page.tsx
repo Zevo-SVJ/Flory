@@ -71,8 +71,8 @@ export default async function SharePage({ params }: { params: Promise<{ slug: st
           {analysis.isFixture && <FixtureNotice className="mt-6" />}
 
           {analysis.signals.length > 0 && (
-            <div className="border-rule mt-8 border-t pt-6">
-              <h2 className="text-muted text-[0.6875rem] font-medium tracking-[0.14em] uppercase">
+            <div className="border-line mt-8 border-t pt-6">
+              <h2 className="text-graphite text-[0.6875rem] font-medium tracking-[0.14em] uppercase">
                 Why this verdict
               </h2>
               <div className="mt-3">
@@ -81,11 +81,11 @@ export default async function SharePage({ params }: { params: Promise<{ slug: st
             </div>
           )}
 
-          <div className="border-rule mt-10 border-t pt-8">
+          <div className="border-line mt-10 border-t pt-8">
             <h2 className="text-heading text-ink font-serif font-medium">
               Thinking about buying something?
             </h2>
-            <p className="text-muted mt-2 text-[0.9375rem]">
+            <p className="text-graphite mt-2 text-[0.9375rem]">
               Paste it and Worth will tell you whether it’s worth your money.
             </p>
             <div className="mt-5">

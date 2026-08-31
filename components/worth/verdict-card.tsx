@@ -1,92 +1,101 @@
 import type { Analysis } from '@/lib/analysis/types'
-import { VERDICT_LABEL, VERDICT_STYLE } from '@/lib/analysis/verdict'
+import { VERDICT_LABEL } from '@/lib/analysis/verdict'
+import { formatMoney, moneyDelta } from '@/lib/analysis/format'
 import { cn } from '@/lib/utils/cn'
-import { Card } from '@/components/ui/card'
-import { ScoreDial } from './score-dial'
-import { MoneyRow } from './money-delta'
+import { ScoreMeter } from './score-meter'
+import { PriceDrop } from './price-drop'
 import { SignalList } from './signal-list'
-import { FixtureNotice } from './fixture-notice'
+
+const VERDICT_TEXT = {
+  buy: 'text-buy',
+  think_twice: 'text-think',
+  skip: 'text-skip',
+} as const
 
 /**
  * The Worth result.
  *
- * This single component renders the landing page's illustrative preview, the
- * authenticated result page and the public share page. Fixtures feed it today;
- * the research engine will feed it next. Nothing here changes when that happens.
+ * One component for the authenticated result page and the public share page,
+ * built from the same brand objects as the landing page: the banded score
+ * meter, the price drop, the signal list. Fixtures feed it today; the research
+ * engine will feed it next, and nothing here changes when it does.
  *
- * The verdict stays visually dominant — Worth is a decision product, not a
- * research report.
+ * The verdict stays dominant — Worth is a decision product, not a report.
  */
 export function VerdictCard({
   analysis,
   showSignals = true,
-  showLabel = true,
   className,
 }: {
   analysis: Analysis
   showSignals?: boolean
-  showLabel?: boolean
   className?: string
 }) {
   const { score, verdict, summary, title } = analysis
   if (score === null || verdict === null) return null
 
-  const style = VERDICT_STYLE[verdict]
+  const price = formatMoney(analysis.priceMinor, analysis.currency)
+  const best = formatMoney(analysis.bestPriceMinor, analysis.currency)
+  const delta = moneyDelta(analysis.priceMinor, analysis.bestPriceMinor)
+  const saving = delta ? formatMoney(delta.savingMinor, analysis.currency) : null
   const signals = analysis.result?.signals ?? []
 
   return (
-    <Card className={cn('min-w-0 overflow-hidden', className)}>
-      {showLabel && (
-        <div className="border-rule flex items-center justify-between gap-3 border-b px-4 py-2.5 sm:px-6">
-          <FixtureNotice variant="badge" />
-          <span className="text-faint text-[0.6875rem] font-semibold tracking-[0.16em] uppercase">
-            Worth
-          </span>
-        </div>
+    <div
+      className={cn(
+        'rounded-object border-line bg-surface min-w-0 overflow-hidden border',
+        className,
       )}
+    >
+      <div className="flex flex-col gap-6 p-5 sm:p-7">
+        {title && (
+          <div className="flex items-baseline justify-between gap-4">
+            <p className="text-ink min-w-0 truncate font-medium" title={title}>
+              {title}
+            </p>
+            {price && <span className="tnum text-ink shrink-0 text-lg font-semibold">{price}</span>}
+          </div>
+        )}
 
-      <div className="flex flex-col gap-5 p-4 sm:p-6">
-        {/* Verdict — the dominant element. */}
-        <div className="flex items-center gap-4 sm:gap-6">
-          <ScoreDial score={score} verdict={verdict} />
-          <div className="min-w-0 flex-1">
-            {title && (
-              <p className="text-muted mb-1.5 truncate text-[0.8125rem]" title={title}>
-                {title}
-              </p>
-            )}
+        <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between sm:gap-8">
+          <div className="min-w-0">
             <p
               className={cn(
-                'text-[1.75rem] leading-none font-semibold tracking-[-0.02em] uppercase sm:text-[2.25rem]',
-                style.text,
+                'text-2xl leading-none font-semibold tracking-[-0.02em] uppercase sm:text-3xl',
+                VERDICT_TEXT[verdict],
               )}
             >
               {VERDICT_LABEL[verdict]}
             </p>
             {summary && (
-              <p className="text-ink-2 mt-2.5 font-serif text-[1.0625rem] leading-snug sm:text-lg">
+              <p className="text-ink mt-3 max-w-[32ch] font-serif text-lg leading-snug sm:text-xl">
                 {summary}
               </p>
             )}
           </div>
+
+          <ScoreMeter
+            score={score}
+            verdict={verdict}
+            size="md"
+            className="w-full shrink-0 sm:w-52"
+          />
         </div>
 
-        {analysis.priceMinor !== null && (
-          <div className="border-rule border-t pt-4">
-            <MoneyRow
-              priceMinor={analysis.priceMinor}
-              bestPriceMinor={analysis.bestPriceMinor}
-              currency={analysis.currency}
-            />
+        {price && best && (
+          <div className="border-line border-t pt-5">
+            <span className="label text-graphite">Better price found</span>
+            <PriceDrop from={price} to={best} saving={saving} size="md" className="mt-3" />
           </div>
         )}
 
         {showSignals && signals.length > 0 && (
-          <div className="border-rule border-t pt-1">
-            <SignalList signals={signals} />
+          <div className="border-line border-t pt-5">
+            <span className="label text-graphite">Why</span>
+            <SignalList signals={signals} className="mt-3" />
           </div>
         )}
       </div>
-    </Card>
+    </div>
   )
 }

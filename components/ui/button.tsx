@@ -6,15 +6,15 @@ type Variant = 'primary' | 'secondary' | 'ghost'
 type Size = 'md' | 'lg'
 
 const base =
-  'inline-flex items-center justify-center gap-2 rounded-input font-medium transition ' +
+  'inline-flex items-center justify-center gap-2 rounded-[0.5rem] font-medium transition ' +
   'disabled:cursor-not-allowed disabled:opacity-50 active:scale-[0.985] ' +
   'motion-reduce:transition-none motion-reduce:active:scale-100'
 
 /* Primary is ink, never a colour — colour is reserved for verdicts. */
 const variants: Record<Variant, string> = {
-  primary: 'bg-ink text-paper hover:bg-ink-2',
-  secondary: 'border border-rule-strong bg-surface text-ink hover:border-ink hover:bg-paper-sunk',
-  ghost: 'text-muted hover:bg-paper-sunk hover:text-ink',
+  primary: 'bg-worth text-white hover:bg-worth-deep',
+  secondary: 'border border-line-strong bg-surface text-ink hover:border-ink hover:bg-ivory-deep',
+  ghost: 'text-graphite hover:bg-ivory-deep hover:text-ink',
 }
 
 /* Every size clears the 44px minimum touch target. */

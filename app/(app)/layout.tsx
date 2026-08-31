@@ -22,15 +22,15 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <div className="flex min-h-dvh flex-col lg:flex-row">
       {/* Mobile top bar */}
-      <header className="pt-safe border-rule bg-paper/90 sticky top-0 z-30 border-b backdrop-blur-md lg:hidden">
+      <header className="pt-safe border-line bg-ivory/90 sticky top-0 z-30 border-b backdrop-blur-md lg:hidden">
         <div className="flex h-14 items-center justify-between px-4">
-          <Link href="/dashboard" className="rounded-chip" aria-label="Worth">
+          <Link href="/dashboard" className="rounded-note" aria-label="Worth">
             <Wordmark />
           </Link>
           <form action="/auth/signout" method="post">
             <button
               type="submit"
-              className="rounded-chip text-muted inline-flex min-h-11 items-center px-2 text-[0.875rem]"
+              className="rounded-note text-graphite inline-flex min-h-11 items-center px-2 text-[0.875rem]"
             >
               Sign out
             </button>
@@ -39,15 +39,15 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       </header>
 
       {/* Desktop sidebar */}
-      <aside className="border-rule hidden w-60 shrink-0 border-r px-4 py-6 lg:flex lg:flex-col lg:gap-8">
-        <Link href="/dashboard" className="rounded-chip px-3" aria-label="Worth">
+      <aside className="border-line hidden w-60 shrink-0 border-r px-4 py-6 lg:flex lg:flex-col lg:gap-8">
+        <Link href="/dashboard" className="rounded-note px-3" aria-label="Worth">
           <Wordmark />
         </Link>
         <DesktopSidebar />
         <form action="/auth/signout" method="post" className="mt-auto">
           <button
             type="submit"
-            className="rounded-input text-muted hover:bg-paper-sunk hover:text-ink flex min-h-11 w-full items-center px-3 text-[0.9375rem] transition motion-reduce:transition-none"
+            className="rounded-input text-graphite hover:bg-ivory-deep hover:text-ink flex min-h-11 w-full items-center px-3 text-[0.9375rem] transition motion-reduce:transition-none"
           >
             Sign out
           </button>

@@ -156,9 +156,9 @@ export function NewPasswordForm({ action }: { action: Action }) {
 
 function CheckInbox({ email }: { email?: string }) {
   return (
-    <div className="rounded-card border-rule bg-surface border p-5">
+    <div className="rounded-object border-line bg-surface border p-5">
       <h2 className="text-ink text-[0.9375rem] font-semibold">Check your inbox</h2>
-      <p className="text-muted mt-2 text-[0.875rem] leading-relaxed">
+      <p className="text-graphite mt-2 text-[0.875rem] leading-relaxed">
         If {email ? <span className="text-ink">{email}</span> : 'that address'} has an account with
         us, there’s a link on its way. Open it on this device to continue.
       </p>

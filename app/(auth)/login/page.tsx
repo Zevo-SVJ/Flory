@@ -51,7 +51,7 @@ export default async function LoginPage({
         {error && ERRORS[error] && (
           <p
             role="alert"
-            className="rounded-input border-skip/25 bg-skip-soft text-skip border px-3.5 py-3 text-[0.875rem] font-medium"
+            className="rounded-input border-skip/25 bg-skip-wash text-skip border px-3.5 py-3 text-[0.875rem] font-medium"
           >
             {ERRORS[error]}
           </p>
@@ -70,7 +70,7 @@ export default async function LoginPage({
         <p className="text-center text-[0.875rem]">
           <Link
             href="/forgot-password"
-            className="text-muted hover:text-ink inline-flex min-h-11 items-center underline underline-offset-4"
+            className="text-graphite hover:text-ink inline-flex min-h-11 items-center underline underline-offset-4"
           >
             Forgot your password?
           </Link>

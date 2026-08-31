@@ -30,19 +30,19 @@ export const VERDICT_STYLE: Record<
 > = {
   buy: {
     text: 'text-buy',
-    bg: 'bg-buy-soft',
+    bg: 'bg-buy-wash',
     border: 'border-buy/25',
     dot: 'bg-buy',
   },
   think_twice: {
     text: 'text-think',
-    bg: 'bg-think-soft',
+    bg: 'bg-think-wash',
     border: 'border-think/25',
     dot: 'bg-think',
   },
   skip: {
     text: 'text-skip',
-    bg: 'bg-skip-soft',
+    bg: 'bg-skip-wash',
     border: 'border-skip/25',
     dot: 'bg-skip',
   },
@@ -71,7 +71,7 @@ export const TONE_STYLE: Record<SignalTone, { text: string; dot: string }> = {
   positive: { text: 'text-buy', dot: 'bg-buy' },
   caution: { text: 'text-think', dot: 'bg-think' },
   negative: { text: 'text-skip', dot: 'bg-skip' },
-  neutral: { text: 'text-muted', dot: 'bg-faint' },
+  neutral: { text: 'text-graphite', dot: 'bg-faint' },
 }
 
 export const SIGNAL_ORDER: SignalKind[] = [

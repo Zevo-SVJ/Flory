@@ -1,87 +1,100 @@
 @import 'tailwindcss';
 
 /* ===========================================================================
-   Worth design system
+   Worth design system — "Consumer intelligence"
 
-   Organising principle: COLOUR IS A VERDICT.
+   Two colour jobs, kept strictly separate:
 
-   The interface is ink on paper — near-monochrome. Chroma is reserved
-   exclusively for places where Worth has an opinion: the verdict, the score,
-   the money delta, a risk signal. Buttons, navigation and section headers are
-   never coloured. This makes the verdict unmissable without shouting, reads as
-   restraint, and keeps Worth clear of the purple-gradient AI look.
+     Worth Blue  = identity. Brand accents, the act of investigating, links,
+                   active states, the primary action, data marks.
+     Green/amber/red = meaning. A verdict, and nothing else.
+
+   Blue never expresses a verdict; a verdict colour never expresses the brand.
+   That separation is what lets Worth be recognisable without the score
+   becoming decorative.
    =========================================================================== */
 
 @theme {
-  /* --- Neutrals. Warm-biased, deliberately not pure white or pure black. --- */
-  --color-paper: #fafaf8;
-  --color-paper-sunk: #f4f4f0;
+  /* --- Ground. One warm ivory the whole way down, so the page reads as a
+         single continuous surface rather than alternating marketing blocks. --- */
+  --color-ivory: #f7f5ef;
+  --color-ivory-deep: #f1eee5;
   --color-surface: #ffffff;
-  --color-ink: #111312;
-  --color-ink-2: #3d4442;
-  --color-muted: #6b7270;
-  --color-faint: #9aa09d;
-  --color-rule: #e4e4e0;
-  --color-rule-strong: #d2d2cc;
 
-  /* --- Verdict. The only colours in the product. --- */
-  --color-buy: #146b4b;
-  --color-buy-soft: #e8f1ec;
-  --color-think: #8f5d0f;
-  --color-think-soft: #f7efe2;
-  --color-skip: #a3301f;
-  --color-skip-soft: #f8eae6;
+  --color-ink: #111318;
+  --color-ink-soft: #33363e;
+  --color-graphite: #6d717a;
+  --color-faint: #9ca0a8;
 
-  /* Verdict colours lifted for the inverted share card, which travels on its
-     own into feeds and must stay legible and AA-contrast on ink. */
-  --color-buy-lift: #63c396;
-  --color-think-lift: #e5ab55;
-  --color-skip-lift: #f08b70;
+  --color-line: #e3e1da;
+  --color-line-strong: #d2cfc4;
 
-  /* --- Typography --- */
+  /* --- Worth Blue: the identity. --- */
+  --color-worth: #3157ff;
+  --color-worth-deep: #1e36b5;
+  --color-worth-wash: #edf0ff;
+  --color-worth-line: #c3cdff;
+
+  /* --- Verdict: the meaning. --- */
+  --color-buy: #15805b;
+  --color-buy-wash: #e6f2ed;
+  --color-think: #b77718;
+  --color-think-wash: #fbf1e2;
+  --color-skip: #c43d32;
+  --color-skip-wash: #fbeae8;
+
+  /* --- Typography ---------------------------------------------------------
+     Serif is rationed: the hero, the verdict's reasoning, and two editorial
+     statements. Everything structural is grotesk, so the serif keeps its
+     weight instead of becoming the page's default voice. */
   --font-sans:
     var(--font-inter), ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
     sans-serif;
   --font-serif: var(--font-newsreader), Georgia, 'Times New Roman', serif;
 
-  /* --- Fluid type scale. Mobile-first: every step starts small. --- */
-  --text-display: clamp(2.25rem, 1.55rem + 3.5vw, 4.5rem);
-  --text-display--line-height: 1.02;
-  --text-display--letter-spacing: -0.028em;
+  --text-hero: clamp(2.5rem, 1.6rem + 4.4vw, 5.25rem);
+  --text-hero--line-height: 0.98;
+  --text-hero--letter-spacing: -0.032em;
 
-  --text-title: clamp(1.75rem, 1.35rem + 2vw, 3rem);
-  --text-title--line-height: 1.1;
-  --text-title--letter-spacing: -0.022em;
+  --text-statement: clamp(1.75rem, 1.25rem + 2.4vw, 3.25rem);
+  --text-statement--line-height: 1.08;
+  --text-statement--letter-spacing: -0.024em;
 
-  --text-heading: clamp(1.3rem, 1.15rem + 0.75vw, 1.75rem);
+  --text-heading: clamp(1.25rem, 1.1rem + 0.7vw, 1.625rem);
   --text-heading--line-height: 1.2;
-  --text-heading--letter-spacing: -0.015em;
+  --text-heading--letter-spacing: -0.014em;
+
+  /* In-app page titles. Smaller than a marketing statement — a dashboard
+     heading is a signpost, not an argument. */
+  --text-page: clamp(1.5rem, 1.32rem + 0.9vw, 2rem);
+  --text-page--line-height: 1.15;
+  --text-page--letter-spacing: -0.018em;
 
   --text-lead: clamp(1rem, 0.95rem + 0.35vw, 1.1875rem);
   --text-lead--line-height: 1.55;
 
-  /* Score / money figures — the emotional core of the product. */
-  --text-figure: clamp(3rem, 2rem + 5.5vw, 5.5rem);
-  --text-figure--line-height: 0.94;
+  /* Money and scores. The product is numbers; they get their own scale. */
+  --text-figure: clamp(2.75rem, 1.9rem + 4.6vw, 5rem);
+  --text-figure--line-height: 0.9;
   --text-figure--letter-spacing: -0.045em;
 
-  --text-figure-sm: clamp(1.75rem, 1.4rem + 1.75vw, 2.5rem);
+  --text-figure-sm: clamp(1.75rem, 1.45rem + 1.5vw, 2.5rem);
   --text-figure-sm--line-height: 1;
   --text-figure-sm--letter-spacing: -0.035em;
 
-  /* --- Radii. Restrained and consistent. --- */
-  --radius-input: 0.625rem;
-  --radius-card: 0.875rem;
-  --radius-chip: 0.4375rem;
+  --text-score: clamp(4rem, 2.6rem + 7vw, 8rem);
+  --text-score--line-height: 0.84;
+  --text-score--letter-spacing: -0.055em;
 
-  /* --- Depth comes from hairlines, not shadows. --- */
-  --shadow-card: 0 1px 2px rgba(17, 19, 18, 0.04);
-  --shadow-lift: 0 12px 32px -12px rgba(17, 19, 18, 0.14);
+  /* --- Shape. Evidence modules are square-ish and flat: an investigation
+         note, not a UI card. Only true product objects get real radius. --- */
+  --radius-note: 0.25rem;
+  --radius-input: 0.75rem;
+  --radius-object: 1.125rem;
+
+  --shadow-object: 0 1px 2px rgba(17, 19, 24, 0.04), 0 12px 28px -18px rgba(17, 19, 24, 0.22);
+  --shadow-lift: 0 18px 48px -24px rgba(17, 19, 24, 0.32);
 }
-
-/* ===========================================================================
-   Base
-   =========================================================================== */
 
 @layer base {
   html {
@@ -97,19 +110,18 @@
   }
 
   body {
-    background-color: var(--color-paper);
+    background-color: var(--color-ivory);
     color: var(--color-ink);
     font-family: var(--font-sans);
-    /* Prevents any stray wide child from scrolling the whole page sideways. */
     overflow-x: clip;
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
   }
 
-  /* Digits must line up wherever they are compared — scores and prices. */
-  .tnum,
-  input[type='number'] {
+  /* Digits that get compared must line up. */
+  .tnum {
     font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum' 1;
   }
 
   h1,
@@ -118,14 +130,13 @@
     text-wrap: balance;
   }
 
-  /* Focus is never removed. Visible on every interactive element. */
   :focus-visible {
-    outline: 2px solid var(--color-ink);
+    outline: 2px solid var(--color-worth);
     outline-offset: 2px;
     border-radius: 3px;
   }
 
-  /* iOS Safari zooms the viewport when a focused input is under 16px. */
+  /* Under 16px, iOS Safari zooms the viewport on focus. */
   input,
   textarea,
   select {
@@ -133,38 +144,106 @@
   }
 
   ::selection {
-    background: var(--color-ink);
-    color: var(--color-paper);
+    background: var(--color-worth);
+    color: #fff;
   }
 }
 
-/* ===========================================================================
-   Motion — communicates product behaviour, never decoration.
-   Every animation is disabled under prefers-reduced-motion.
-   =========================================================================== */
-
 @layer utilities {
-  /* Gated on `.js` so content is visible when JavaScript never runs — the
-     reveal is an enhancement, never a precondition for reading the page. */
-  .js .reveal {
-    opacity: 0;
-    transform: translateY(12px);
-    transition:
-      opacity 0.55s cubic-bezier(0.22, 1, 0.36, 1),
-      transform 0.55s cubic-bezier(0.22, 1, 0.36, 1);
-    will-change: opacity, transform;
+  /* --- Brand marks ------------------------------------------------------- */
+
+  /* The uppercase micro-label used on every evidence module and section.
+     Repeating this exact treatment is part of what makes the page cohere. */
+  .label {
+    font-size: 0.625rem;
+    font-weight: 600;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    line-height: 1;
   }
 
-  .js .reveal[data-shown='true'] {
-    opacity: 1;
-    transform: none;
+  /* Ruled grid lines used to join compositions across the page. */
+  .rule-x {
+    background-image: linear-gradient(to right, var(--color-line) 0 100%);
+    background-size: 100% 1px;
+    background-repeat: no-repeat;
+  }
+
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .pt-safe {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+
+  .scroll-strip {
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+  }
+  .scroll-strip::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* --- Motion -------------------------------------------------------------
+     There is no generic scroll-fade here on purpose. Every animation below
+     depicts a specific product event: a check completing, a score settling,
+     a price dropping. If motion isn't saying something, it isn't used. */
+
+  @keyframes worth-check-in {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  @keyframes worth-scan {
+    0% {
+      transform: translateX(-100%);
+    }
+    100% {
+      transform: translateX(320%);
+    }
+  }
+
+  @keyframes worth-settle {
+    from {
+      opacity: 0;
+      transform: scale(0.97);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  .anim-check {
+    animation: worth-check-in 0.42s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  }
+  .anim-settle {
+    animation: worth-settle 0.5s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  }
+  .anim-scan::after {
+    content: '';
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 30%;
+    background: linear-gradient(90deg, transparent, var(--color-worth-wash), transparent);
+    animation: worth-scan 1.6s linear infinite;
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .js .reveal {
-      opacity: 1;
-      transform: none;
-      transition: none;
+    .anim-check,
+    .anim-settle {
+      animation: none;
+    }
+    .anim-scan::after {
+      display: none;
     }
     *,
     *::before,
@@ -173,25 +252,5 @@
       animation-iteration-count: 1 !important;
       transition-duration: 0.001ms !important;
     }
-  }
-
-  /* Respects the iPhone home indicator and notch. */
-  .pb-safe {
-    padding-bottom: env(safe-area-inset-bottom, 0px);
-  }
-  .pt-safe {
-    padding-top: env(safe-area-inset-top, 0px);
-  }
-
-  /* Horizontally scrollable strips own their overflow so the page never does. */
-  .scroll-strip {
-    overflow-x: auto;
-    scrollbar-width: none;
-    -webkit-overflow-scrolling: touch;
-    scroll-snap-type: x mandatory;
-    overscroll-behavior-x: contain;
-  }
-  .scroll-strip::-webkit-scrollbar {
-    display: none;
   }
 }

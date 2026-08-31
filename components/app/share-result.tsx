@@ -47,10 +47,10 @@ export function ShareResult({ analysis }: { analysis: Analysis }) {
   return (
     <Card className="flex flex-col gap-5 p-5">
       <div>
-        <h2 className="text-muted text-[0.6875rem] font-medium tracking-[0.14em] uppercase">
+        <h2 className="text-graphite text-[0.6875rem] font-medium tracking-[0.14em] uppercase">
           Share this
         </h2>
-        <p className="text-muted mt-2 text-[0.9375rem] leading-snug">
+        <p className="text-graphite mt-2 text-[0.9375rem] leading-snug">
           A shared result shows the verdict and the money — never the link you pasted.
         </p>
       </div>
@@ -69,7 +69,7 @@ export function ShareResult({ analysis }: { analysis: Analysis }) {
 
       {shareUrl ? (
         <div className="flex flex-col gap-2">
-          <div className="rounded-input border-rule bg-paper-sunk flex items-center gap-2 border px-3 py-2.5">
+          <div className="rounded-input border-line bg-ivory-deep flex items-center gap-2 border px-3 py-2.5">
             <span className="text-ink min-w-0 flex-1 truncate text-[0.875rem]">{shareUrl}</span>
           </div>
           <Button type="button" onClick={handleCopy} variant="secondary">

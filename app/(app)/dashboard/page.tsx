@@ -23,10 +23,10 @@ export default async function DashboardPage() {
   return (
     <div className="flex flex-col gap-8">
       <div>
-        <h1 className="text-title text-ink font-serif font-medium">
+        <h1 className="text-page text-ink font-serif font-medium">
           Ready to check your next purchase?
         </h1>
-        <p className="text-lead text-muted mt-2">Paste anything you’re thinking about buying.</p>
+        <p className="text-lead text-graphite mt-2">Paste anything you’re thinking about buying.</p>
         <div className="mt-6">
           <AnalyzeInput size="md" />
         </div>
@@ -34,13 +34,13 @@ export default async function DashboardPage() {
 
       <section>
         <div className="flex items-baseline justify-between gap-3">
-          <h2 className="text-muted text-[0.6875rem] font-medium tracking-[0.14em] uppercase">
+          <h2 className="text-graphite text-[0.6875rem] font-medium tracking-[0.14em] uppercase">
             Recent
           </h2>
           {analyses.length > 0 && (
             <Link
               href="/history"
-              className="text-muted hover:text-ink inline-flex min-h-11 items-center text-[0.875rem] underline underline-offset-4"
+              className="text-graphite hover:text-ink inline-flex min-h-11 items-center text-[0.875rem] underline underline-offset-4"
             >
               All analyses
             </Link>
@@ -51,7 +51,7 @@ export default async function DashboardPage() {
           {analyses.length === 0 ? (
             <Card className="flex flex-col items-start gap-2 p-6">
               <p className="text-ink font-medium">You haven’t analysed anything yet.</p>
-              <p className="text-muted text-[0.9375rem] leading-snug">
+              <p className="text-graphite text-[0.9375rem] leading-snug">
                 Paste a product, offer or URL above to get started.
               </p>
             </Card>

@@ -13,7 +13,7 @@ export function SetupNotice() {
   return (
     <div className="flex min-h-dvh flex-col">
       <header className="pt-safe px-4 py-5 sm:px-6">
-        <Link href="/" className="rounded-chip inline-flex" aria-label="Worth — home">
+        <Link href="/" className="rounded-note inline-flex" aria-label="Worth — home">
           <Wordmark />
         </Link>
       </header>
@@ -22,19 +22,19 @@ export function SetupNotice() {
           <h1 className="text-heading text-ink font-serif font-medium">
             Worth isn’t connected yet.
           </h1>
-          <p className="text-muted mt-3 text-[0.9375rem] leading-relaxed">
+          <p className="text-graphite mt-3 text-[0.9375rem] leading-relaxed">
             Accounts and saved analyses need a Supabase project. Add{' '}
-            <code className="bg-paper-sunk rounded px-1.5 py-0.5 text-[0.8125rem]">
+            <code className="bg-ivory-deep rounded px-1.5 py-0.5 text-[0.8125rem]">
               NEXT_PUBLIC_SUPABASE_URL
             </code>{' '}
             and{' '}
-            <code className="bg-paper-sunk rounded px-1.5 py-0.5 text-[0.8125rem]">
+            <code className="bg-ivory-deep rounded px-1.5 py-0.5 text-[0.8125rem]">
               NEXT_PUBLIC_SUPABASE_ANON_KEY
             </code>{' '}
             to{' '}
-            <code className="bg-paper-sunk rounded px-1.5 py-0.5 text-[0.8125rem]">.env.local</code>
+            <code className="bg-ivory-deep rounded px-1.5 py-0.5 text-[0.8125rem]">.env.local</code>
             , then run the migrations in{' '}
-            <code className="bg-paper-sunk rounded px-1.5 py-0.5 text-[0.8125rem]">
+            <code className="bg-ivory-deep rounded px-1.5 py-0.5 text-[0.8125rem]">
               supabase/migrations/
             </code>
             . See the README.

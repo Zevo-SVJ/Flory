@@ -73,16 +73,16 @@ export function AnalyzeForm({
             placeholder="Paste a product, offer or URL…"
             aria-invalid={error ? true : undefined}
             className={cn(
-              'rounded-input bg-surface text-ink shadow-card h-13 w-full border px-4',
+              'rounded-input bg-surface text-ink shadow-object h-13 w-full border px-4',
               'placeholder:text-faint focus:ring-ink/8 transition focus:ring-4 focus:outline-none',
               'motion-reduce:transition-none',
-              error ? 'border-skip' : 'border-rule-strong focus:border-ink',
+              error ? 'border-skip' : 'border-line-strong focus:border-ink',
             )}
           />
         </div>
 
         <fieldset className="flex flex-col gap-2">
-          <legend className="text-muted text-[0.6875rem] font-medium tracking-[0.14em] uppercase">
+          <legend className="text-graphite text-[0.6875rem] font-medium tracking-[0.14em] uppercase">
             Category — optional
           </legend>
           <div className="flex flex-wrap gap-2">
@@ -95,10 +95,10 @@ export function AnalyzeForm({
                   aria-pressed={active}
                   onClick={() => setCategory(active ? null : value)}
                   className={cn(
-                    'rounded-chip min-h-11 border px-3.5 text-[0.875rem] transition motion-reduce:transition-none',
+                    'rounded-note min-h-11 border px-3.5 text-[0.875rem] transition motion-reduce:transition-none',
                     active
-                      ? 'border-ink bg-ink text-paper'
-                      : 'border-rule-strong bg-surface text-muted hover:border-ink hover:text-ink',
+                      ? 'border-worth bg-worth text-white'
+                      : 'border-line-strong bg-surface text-graphite hover:border-worth hover:text-worth-deep',
                   )}
                 >
                   {CATEGORY_LABEL[value]}
@@ -125,7 +125,7 @@ export function AnalyzeForm({
         </Button>
       </form>
 
-      <div className="border-rule border-t pt-6">
+      <div className="border-line border-t pt-6">
         <ScreenshotUpload userId={userId} defaultOpen={openScreenshot} />
       </div>
     </div>

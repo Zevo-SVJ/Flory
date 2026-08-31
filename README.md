@@ -163,9 +163,29 @@ from `getEngine()`. Nothing else changes.
 
 ### Design system
 
-**Colour is a verdict.** The interface is ink on paper; chroma appears only
-where Worth has an opinion — the verdict, the score, the money delta, a risk
-signal. Buttons and navigation are never coloured.
+**Two colour jobs, kept strictly separate.** Worth Blue (`#3157FF`) is the
+identity — brand accents, links, active states, the primary action, the arrow
+on a price drop. Green / amber / red carry _meaning_ and only ever express a
+verdict. Blue never expresses a verdict; a verdict colour never expresses the
+brand. That separation is what lets Worth be recognisable without the score
+becoming decorative.
+
+Three brand objects repeat across marketing, the app and the share card, and
+are what make a screenshot recognisable without a logo:
+
+| Object           | What it is                            | Why not the obvious thing                                                                        |
+| ---------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `ScoreMeter`     | The score on a banded measuring scale | A donut chart hides the bands, so 61 looks arbitrary instead of visibly landing in "think twice" |
+| `PriceDrop`      | `€399 → €329, save €70`               | One fixed treatment for the most repeatable idea in the product                                  |
+| `EvidenceModule` | Flat, squared, hairline-bordered note | A rounded shadow card reads as a feature grid; this reads as a filed finding                     |
+
+Typography rations the serif: the hero, section statements and a verdict's
+reasoning. Everything structural is grotesk, so the serif keeps its weight.
+Money and scores use tabular figures throughout.
+
+Motion is never decorative. Each animation depicts one product event — a check
+completing, a score settling, a price counting down — and there is deliberately
+no generic scroll-fade. All of it is disabled under `prefers-reduced-motion`.
 
 Money is stored as **integer minor units** (`bigint`), never floats.
 

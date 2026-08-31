@@ -23,7 +23,7 @@ export function Field({
       </label>
       {children}
       {hint && !error && (
-        <p id={describedBy} className="text-muted text-[0.8125rem]">
+        <p id={describedBy} className="text-graphite text-[0.8125rem]">
           {hint}
         </p>
       )}
@@ -40,7 +40,7 @@ export function Input({ className, ...props }: ComponentProps<'input'>) {
   return (
     <input
       className={cn(
-        'rounded-input border-rule-strong bg-surface text-ink min-h-12 w-full border px-3.5',
+        'rounded-input border-line-strong bg-surface text-ink min-h-12 w-full border px-3.5',
         'placeholder:text-faint',
         'focus:border-ink focus:ring-ink/12 transition focus:ring-2 focus:outline-none',
         'motion-reduce:transition-none',

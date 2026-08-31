@@ -30,7 +30,7 @@ export default async function ResultPage({ params }: { params: Promise<{ id: str
           <h1 className="text-heading text-ink font-serif font-medium">
             Worth couldn’t finish this one.
           </h1>
-          <p className="text-muted mt-2 text-[0.9375rem] leading-relaxed">
+          <p className="text-graphite mt-2 text-[0.9375rem] leading-relaxed">
             {analysis.errorMessage ?? 'Something went wrong during the analysis.'}
           </p>
           <Link
@@ -52,7 +52,7 @@ export default async function ResultPage({ params }: { params: Promise<{ id: str
       <div>
         <Link
           href="/history"
-          className="text-muted hover:text-ink inline-flex min-h-11 items-center text-[0.875rem] underline underline-offset-4"
+          className="text-graphite hover:text-ink inline-flex min-h-11 items-center text-[0.875rem] underline underline-offset-4"
         >
           ← All analyses
         </Link>
@@ -65,14 +65,14 @@ export default async function ResultPage({ params }: { params: Promise<{ id: str
 
       {analysis.isFixture && <FixtureNotice />}
 
-      <VerdictCard analysis={analysis} showLabel={false} />
+      <VerdictCard analysis={analysis} />
 
       {analysis.result?.valueSummary && (
         <Card className="p-5">
-          <h2 className="text-muted text-[0.6875rem] font-medium tracking-[0.14em] uppercase">
+          <h2 className="text-graphite text-[0.6875rem] font-medium tracking-[0.14em] uppercase">
             What you’re getting
           </h2>
-          <p className="text-ink-2 mt-2 text-[0.9375rem] leading-relaxed">
+          <p className="text-ink-soft mt-2 text-[0.9375rem] leading-relaxed">
             {analysis.result.valueSummary}
           </p>
         </Card>

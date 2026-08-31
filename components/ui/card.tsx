@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils/cn'
 export function Card({ className, ...props }: ComponentProps<'div'>) {
   return (
     <div
-      className={cn('rounded-card border-rule bg-surface shadow-card border', className)}
+      className={cn('rounded-object border-line bg-surface shadow-object border', className)}
       {...props}
     />
   )
@@ -15,7 +15,7 @@ export function Eyebrow({ className, ...props }: ComponentProps<'span'>) {
   return (
     <span
       className={cn(
-        'text-muted text-[0.6875rem] font-medium tracking-[0.12em] uppercase',
+        'text-graphite text-[0.6875rem] font-medium tracking-[0.12em] uppercase',
         className,
       )}
       {...props}

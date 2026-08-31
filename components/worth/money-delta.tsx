@@ -54,7 +54,7 @@ function MoneyCell({
     <div className="min-w-0">
       {/* Fixed label height keeps the three figures on one baseline even when
           a longer label wraps to two lines. */}
-      <dt className="text-muted flex min-h-[2.3em] items-start text-[0.625rem] leading-tight font-medium tracking-[0.1em] uppercase">
+      <dt className="text-graphite flex min-h-[2.3em] items-start text-[0.625rem] leading-tight font-medium tracking-[0.1em] uppercase">
         {label}
       </dt>
       <dd
