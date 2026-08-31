@@ -1,46 +1,66 @@
+'use client'
+
 import { AnalyzeInput } from '@/components/worth/analyze-input'
-import { InvestigationScene } from '@/components/worth/investigation-scene'
+import { WorthConsole } from '@/components/worth/worth-console'
+import { useScrollProgress } from '@/lib/hooks/use-scroll-progress'
 
 /**
  * The hero.
  *
- * Question, then instrument, then answer — in that order and at that scale.
- * The headline reveals first, the field follows, and the scene beneath runs
- * the whole product in about three seconds: a checkout at its advertised
- * price, Worth reading it, the fees appearing, the six dimensions resolving,
- * the score, and the verdict last.
+ * A stage, lit from above, with one object standing on it. The headline is the
+ * largest type on the page and carries almost no words; the field is right
+ * under it because pasting a link is the product; and the console below is
+ * Worth actually doing the thing, assembling itself while you read the
+ * headline.
  *
- * The entire hero is one dark environment running from the top of the page,
- * so the navigation, the question, the field and the decision all belong to
- * the same world. It ends on a hard edge, not a fade.
+ * Three depths, moving at three rates as you scroll away: the light, the type,
+ * the object. That is what stops it reading as a flat page with a screenshot
+ * on it.
  */
 export function Hero() {
+  const ref = useScrollProgress<HTMLElement>()
+
   return (
-    <section className="scene scene-out relative overflow-hidden pt-20 pb-20 sm:pt-24 sm:pb-24">
-      <div className="relative z-[1] mx-auto max-w-5xl px-5 text-center sm:px-6">
-        <h1 className="text-hero motion-safe:anim-wipe mx-auto max-w-[15ch] font-serif font-medium text-white">
-          Is it actually <span className="text-violet-lift">worth</span> it?
+    <section
+      ref={ref}
+      className="stage stage-lit stage-grid scene-out depth relative overflow-hidden pt-24 pb-24 sm:pt-28 sm:pb-32"
+    >
+      <div className="relative z-[1] mx-auto max-w-6xl px-5 sm:px-6">
+        {/* The question, at the size of a question that costs money. */}
+        {/* The brand's question, not the visitor's. The visitor's — "should I
+            actually buy this?" — is the subject of the next scene, and running
+            both here would spend the page's largest type twice on one idea. */}
+        <h1 className="text-hero motion-safe:anim-wipe depth-slow max-w-[11ch] font-serif font-medium text-balance text-white">
+          Is it <span className="text-electric">actually</span> worth it?
         </h1>
 
-        <p
-          className="text-lead motion-safe:anim-land mx-auto mt-6 max-w-[40ch] text-white/60"
-          style={{ animationDelay: '160ms' }}
-        >
-          Paste a link. Worth does the research you were about to do yourself, and gives you a
-          verdict before you spend.
-        </p>
+        <div className="mt-10 grid grid-cols-1 gap-8 lg:mt-12 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:items-end lg:gap-16">
+          <p
+            className="text-lead motion-safe:anim-land max-w-[36ch] text-white/55"
+            style={{ animationDelay: '180ms' }}
+          >
+            Paste a link. Worth reads the price, the fees, the reviews, the seller and the
+            alternatives — then tells you whether it’s worth the money.
+          </p>
 
-        <div
-          id="analyze"
-          className="motion-safe:anim-land mx-auto mt-9 max-w-[34rem] scroll-mt-24 sm:mt-10"
-          style={{ animationDelay: '280ms' }}
-        >
-          <AnalyzeInput tone="dark" />
+          <div
+            id="analyze"
+            className="motion-safe:anim-land w-full scroll-mt-24"
+            style={{ animationDelay: '300ms' }}
+          >
+            <AnalyzeInput tone="dark" />
+          </div>
         </div>
       </div>
 
-      <div className="relative z-[1] mt-14 px-5 sm:mt-20 sm:px-6">
-        <InvestigationScene />
+      {/* The object. Sits lower and moves faster than the type above it. */}
+      <div className="depth-fast relative z-[1] mx-auto mt-16 max-w-5xl px-5 sm:mt-20 sm:px-6">
+        <WorthConsole />
+
+        <p className="mt-8 text-[0.8125rem] text-white/35">
+          Illustrative analysis. Worth’s research engine isn’t connected yet, so this checkout,
+          these figures and this verdict are written, not researched.
+        </p>
       </div>
     </section>
   )

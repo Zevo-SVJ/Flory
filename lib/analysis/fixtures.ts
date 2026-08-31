@@ -213,18 +213,3 @@ export const CATEGORY_EXAMPLES: CategoryExample[] = [
     line: 'Outcome claims aren’t backed by anything checkable.',
   },
 ]
-
-/* The research a person would otherwise do themselves: the fragments that end
-   up spread across fifteen tabs before any decision gets made. */
-export const RESEARCH_FRAGMENTS = [
-  { text: '€892', sub: 'advertised' },
-  { text: '4.5 ★', sub: '1,284 reviews' },
-  { text: '“fees at checkout”', sub: 'review, 2025' },
-  { text: '€84', sub: 'platform fee' },
-  { text: 'Annual only', sub: 'billing terms' },
-  { text: '€31', sub: 'onboarding add-on' },
-  { text: '14 days', sub: 'refund window' },
-  { text: '€724', sub: 'another provider' },
-  { text: '4.7 ★', sub: '860 reviews' },
-  { text: '“cancel any time”', sub: 'competitor terms' },
-] as const

@@ -66,7 +66,7 @@ export function VerdictMoment() {
         if (!entries[0]?.isIntersecting || started.current) return
         started.current = true
         io.disconnect()
-        signals.forEach((_, i) => window.setTimeout(() => setShown(i + 1), 220 + i * 150))
+        signals.forEach((_, i) => window.setTimeout(() => setShown(i + 1), 160 + i * 105))
       },
       { threshold: 0.3 },
     )
@@ -87,10 +87,10 @@ export function VerdictMoment() {
   return (
     <section
       ref={ref}
-      className="scene scene-in scene-out relative overflow-hidden py-24 sm:py-32"
+      className="stage stage-lit scene-in scene-out relative overflow-hidden py-24 sm:py-32"
     >
       <div className="relative mx-auto max-w-6xl px-5 sm:px-6">
-        <p className="label text-center text-white/40">05 · The answer</p>
+        <p className="label text-electric text-center">04 · The verdict</p>
 
         <div className="mt-14 grid grid-cols-2 items-center gap-x-6 gap-y-7 sm:gap-x-10 lg:mt-16 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)_minmax(0,1fr)] lg:gap-x-14 lg:gap-y-9">
           {signals.map((s, i) => (
@@ -117,8 +117,13 @@ export function VerdictMoment() {
           <div className="col-span-2 py-4 text-center lg:col-span-1 lg:col-start-2 lg:row-span-3 lg:row-start-1 lg:py-0">
             {/* `/100` carries its own size: an em-relative size here resolves
                 against the paragraph, not against the score beside it. */}
+            {/* A dash, not a zero, until the evidence is in: a display-size 0
+                sitting there for a second reads as a score of nothing rather
+                than as a number that has not been reached yet. */}
             <p className="tnum flex items-start justify-center text-white">
-              <span className="text-display font-semibold">{score}</span>
+              <span className={cn('text-display font-semibold', !scored && 'text-white/20')}>
+                {scored ? score : '—'}
+              </span>
               <span className="mt-3 ml-1.5 text-[1rem] text-white/35 sm:mt-6 sm:text-[1.375rem]">
                 /100
               </span>

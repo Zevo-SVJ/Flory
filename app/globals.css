@@ -30,19 +30,29 @@
   --color-line: #e6e4de;
   --color-line-strong: #d4d1c8;
 
-  /* --- Dark environment. Near-black carrying a violet cast, so the dark
-         stage belongs to the same brand rather than being generic black. --- */
+  /* --- Dark environment ---------------------------------------------------
+     Near-black carrying a violet cast, so the dark stage belongs to the brand
+     rather than being generic black. `void` is the deepest value on the page
+     and is what full-bleed scenes sit on. --- */
+  --color-void: #05050a;
   --color-midnight: #0b0a14;
   --color-midnight-2: #131120;
   --color-midnight-3: #1c1930;
   --color-midnight-line: #2a2640;
 
-  /* --- Worth Violet: the identity. --- */
+  /* --- Worth Violet: the identity ------------------------------------------
+     `violet` is the brand. `electric` is light — it only ever appears as a
+     highlight, a rim or a halo, never as a fill. `indigo` is the cold end of
+     the same light, used to give depth behind glass. --- */
   --color-violet: #5b3df5;
   --color-violet-deep: #4526d6;
   --color-violet-lift: #a08fff; /* legible on midnight */
   --color-violet-wash: #f1eeff;
   --color-violet-line: #d5cbff;
+  --color-electric: #8b5cff;
+  --color-indigo: #2a1f8f;
+  --color-indigo-deep: #171057;
+  --color-lavender: #cabfff;
 
   /* --- Verdict: the meaning. --- */
   --color-buy: #15805b;
@@ -62,13 +72,13 @@
     sans-serif;
   --font-serif: var(--font-newsreader), Georgia, 'Times New Roman', serif;
 
-  --text-hero: clamp(2.75rem, 1.7rem + 5vw, 6rem);
-  --text-hero--line-height: 0.96;
-  --text-hero--letter-spacing: -0.035em;
+  --text-hero: clamp(3.25rem, 1.6rem + 7.4vw, 8rem);
+  --text-hero--line-height: 0.9;
+  --text-hero--letter-spacing: -0.045em;
 
-  --text-statement: clamp(2rem, 1.35rem + 3vw, 4rem);
-  --text-statement--line-height: 1.04;
-  --text-statement--letter-spacing: -0.028em;
+  --text-statement: clamp(2.25rem, 1.3rem + 4.2vw, 5rem);
+  --text-statement--line-height: 0.98;
+  --text-statement--letter-spacing: -0.035em;
 
   --text-heading: clamp(1.3rem, 1.12rem + 0.8vw, 1.75rem);
   --text-heading--line-height: 1.18;
@@ -95,9 +105,9 @@
 
   /* The verdict reveal. Larger than anything else on the page, because the
      verdict is the thing Worth actually produces. */
-  --text-display: clamp(3.25rem, 1.9rem + 6.4vw, 7.5rem);
-  --text-display--line-height: 0.9;
-  --text-display--letter-spacing: -0.05em;
+  --text-display: clamp(4rem, 2rem + 9vw, 11rem);
+  --text-display--line-height: 0.84;
+  --text-display--letter-spacing: -0.055em;
 
   /* --- Shape --- */
   --radius-note: 0.375rem;
@@ -183,43 +193,67 @@
   }
 
   /* --- Scenes --------------------------------------------------------------
-     A scene is a full-bleed dark environment, not a card. It is how Worth
-     shows the product being investigated: the page falls into near-black, a
-     pool of Worth Violet lights the subject, and the edges feather back into
-     the light sections so the two never butt up against each other in a hard
-     band. Scenes carry the imagery; cards carry small facts. */
+     A scene is a full-bleed environment, not a card. `.stage` is the deepest
+     one: near-black lit from above by Worth Violet and from below by indigo,
+     which is what gives the page its sense of a room rather than a background
+     colour. Scenes carry the composition; cards carry small facts. */
 
-  .scene {
+  .stage {
     position: relative;
     isolation: isolate;
-    background-color: #07060e;
-    background-image:
-      radial-gradient(70% 48% at 50% 8%, rgba(91, 61, 245, 0.38) 0%, transparent 68%),
-      radial-gradient(46% 36% at 12% 44%, rgba(160, 143, 255, 0.16) 0%, transparent 70%),
-      radial-gradient(52% 44% at 92% 78%, rgba(69, 38, 214, 0.22) 0%, transparent 72%);
+    background-color: var(--color-void);
     color: #ffffff;
+  }
+
+  /* The light in the room. Two sources, deliberately off-centre, so the page
+     is never symmetrically lit. */
+  .stage-lit::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    background-image:
+      radial-gradient(58% 42% at 62% -6%, rgba(139, 92, 255, 0.34) 0%, transparent 64%),
+      radial-gradient(46% 40% at 8% 30%, rgba(42, 31, 143, 0.42) 0%, transparent 68%),
+      radial-gradient(54% 46% at 88% 92%, rgba(69, 38, 214, 0.24) 0%, transparent 70%);
+  }
+
+  /* A very quiet technical grid. It exists to give the void a scale, and is
+     faint enough that you read it as texture rather than as a graphic. */
+  .stage-grid::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    background-image:
+      linear-gradient(rgba(255, 255, 255, 0.028) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.028) 1px, transparent 1px);
+    background-size: 72px 72px;
+    mask-image: radial-gradient(72% 62% at 50% 40%, #000 0%, transparent 78%);
+    -webkit-mask-image: radial-gradient(72% 62% at 50% 40%, #000 0%, transparent 78%);
   }
 
   /* Colour worlds change on a hard edge, never on a fade. A cross-fade between
      warm white and near-black spends its whole distance in grey, which reads as
-     a rendering artefact; a clean boundary reads as turning a page. `.scene-in`
-     and `.scene-out` therefore draw a thin brand rule at the boundary rather
-     than a gradient. */
+     a rendering artefact; a clean boundary reads as turning a page. The rule at
+     the seam is the brand doing the cutting. */
   .scene-in::before,
   .scene-out::after {
     content: '';
     position: absolute;
     inset-inline: 0;
-    height: 2px;
+    height: 1px;
     background: linear-gradient(
       90deg,
       transparent,
-      var(--color-violet) 22%,
-      var(--color-violet-lift) 50%,
-      var(--color-violet) 78%,
+      var(--color-violet) 24%,
+      var(--color-electric) 50%,
+      var(--color-violet) 76%,
       transparent
     );
-    opacity: 0.55;
+    opacity: 0.7;
     pointer-events: none;
     z-index: 3;
   }
@@ -230,17 +264,94 @@
     bottom: 0;
   }
 
+  /* --- Glass ---------------------------------------------------------------
+     Dark glass, not frosted white. A thin lit top edge and a deep shadow are
+     what make a panel read as a physical object rather than a div with a
+     border, so both are part of the primitive. */
+
+  .glass {
+    position: relative;
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.07) 0%, rgba(255, 255, 255, 0.02) 42%),
+      rgba(12, 10, 24, 0.72);
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    backdrop-filter: blur(18px) saturate(1.15);
+    box-shadow:
+      0 1px 0 0 rgba(255, 255, 255, 0.07) inset,
+      0 40px 90px -40px rgba(0, 0, 0, 0.9),
+      0 0 0 1px rgba(139, 92, 255, 0.06);
+  }
+
+  /* The lit top edge, drawn separately so it can be brighter in the middle —
+     a uniform 1px border reads as a stroke, a graded one reads as a highlight. */
+  .glass-rim::before {
+    content: '';
+    position: absolute;
+    inset-inline: 12%;
+    top: -1px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(202, 191, 255, 0.75), transparent);
+    pointer-events: none;
+  }
+
+  /* A halo behind an object. Sits at z-index -1 of its own stacking context,
+     so it lights the space around the object rather than washing over it. */
+  .halo::before {
+    content: '';
+    position: absolute;
+    inset: -18%;
+    z-index: -1;
+    border-radius: 50%;
+    background: radial-gradient(
+      50% 50% at 50% 50%,
+      rgba(139, 92, 255, 0.35) 0%,
+      rgba(42, 31, 143, 0.16) 45%,
+      transparent 72%
+    );
+    filter: blur(28px);
+    pointer-events: none;
+  }
+
   /* A floating fact over a scene. Not a card: no fill of its own beyond the
-     minimum needed to stay legible over photography. */
+     minimum needed to stay legible over what is behind it. */
   .fact {
     backdrop-filter: blur(10px);
     background: rgba(10, 9, 20, 0.55);
     border: 1px solid rgba(255, 255, 255, 0.1);
   }
 
-  /* Type that has to sit on top of photography. */
+  /* Type that has to sit on top of a lit scene. */
   .on-photo {
     text-shadow: 0 2px 24px rgba(4, 3, 10, 0.85);
+  }
+
+  /* --- Depth ---------------------------------------------------------------
+     Layers move at different rates as the page scrolls. `--p` is written by
+     `useScrollProgress` and runs 0 → 1 across the element's pass through the
+     viewport; nothing here reads layout, so a scroll costs one composited
+     transform and no style recalculation. */
+
+  .depth {
+    --p: 0;
+    will-change: transform;
+  }
+  .depth-slow {
+    transform: translate3d(0, calc((var(--p) - 0.5) * -34px), 0);
+  }
+  .depth-fast {
+    transform: translate3d(0, calc((var(--p) - 0.5) * 66px), 0);
+  }
+  .depth-tilt {
+    transform: perspective(1400px) rotateX(calc((0.5 - var(--p)) * 5deg))
+      translate3d(0, calc((var(--p) - 0.5) * -22px), 0);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .depth-slow,
+    .depth-fast,
+    .depth-tilt {
+      transform: none;
+    }
   }
 
   .pb-safe {
@@ -332,8 +443,14 @@
     position: absolute;
     inset: 0 auto 0 0;
     width: 28%;
-    background: linear-gradient(90deg, transparent, rgba(91, 61, 245, 0.16), transparent);
-    animation: worth-sweep 1.7s linear infinite;
+    background: linear-gradient(
+      100deg,
+      transparent,
+      rgba(202, 191, 255, 0.09) 40%,
+      rgba(139, 92, 255, 0.16) 55%,
+      transparent
+    );
+    animation: worth-sweep 1.9s cubic-bezier(0.45, 0, 0.55, 1) infinite;
   }
 
   /* A masked reveal: the line wipes up from behind its own baseline. Used for
@@ -375,11 +492,44 @@
     animation-delay: calc(var(--i, 0) * 110ms);
   }
 
+  /* The console's entrance. Three layers arriving from behind with a settling
+     micro-rotation, so the object assembles rather than fading in. Only the
+     hero uses this — it is the one place on the page that earns a staged
+     entrance. */
+  @keyframes worth-rise {
+    from {
+      opacity: 0;
+      transform: perspective(1200px) translate3d(0, var(--rise-y, 26px), -60px)
+        rotateX(var(--rise-x, 7deg)) scale(0.965);
+    }
+    to {
+      opacity: var(--rise-o, 1);
+      transform: perspective(1200px) translate3d(0, 0, 0) rotateX(0deg) scale(1);
+    }
+  }
+
+  .anim-rise-1 {
+    animation: worth-rise 1.05s cubic-bezier(0.16, 1, 0.3, 1) 0.06s backwards;
+  }
+  .anim-rise-2 {
+    --rise-y: 34px;
+    --rise-o: 0.45;
+    animation: worth-rise 1.05s cubic-bezier(0.16, 1, 0.3, 1) 0.18s backwards;
+  }
+  .anim-rise-3 {
+    --rise-y: 42px;
+    --rise-o: 0.25;
+    animation: worth-rise 1.05s cubic-bezier(0.16, 1, 0.3, 1) 0.28s backwards;
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .anim-land,
     .anim-settle,
     .anim-wipe,
-    .anim-converge {
+    .anim-converge,
+    .anim-rise-1,
+    .anim-rise-2,
+    .anim-rise-3 {
       animation: none;
     }
     .anim-sweep::after,

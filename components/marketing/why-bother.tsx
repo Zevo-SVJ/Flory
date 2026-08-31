@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { Disclosure, Section, Eyebrow, Statement } from './section'
-import { COMPARISON_EXAMPLE, MONEY_EXAMPLE, RESEARCH_FRAGMENTS } from '@/lib/analysis/fixtures'
+import { COMPARISON_EXAMPLE, MONEY_EXAMPLE } from '@/lib/analysis/fixtures'
 import { cn } from '@/lib/utils/cn'
 
 /**
@@ -50,134 +50,20 @@ function useOnceInView<T extends HTMLElement>(onEnter: () => void, threshold = 0
   return ref
 }
 
+/**
+ * Scene 06 — the money.
+ *
+ * Two chapters, both about the same figure. The research-chaos chapter that
+ * used to open this section is gone: scene 02 now makes that argument with the
+ * visitor's own question at the centre of it, and making it twice weakened
+ * both.
+ */
 export function WhyBother() {
   return (
     <>
-      <ResearchChaos />
       <RealPrice />
       <BetterOption />
     </>
-  )
-}
-
-/* ==========================================================================
-   01 — Research chaos becomes one answer.
-   The fragments are placed as a scattered field, then reorganise into a single
-   ordered column. The movement is the argument, so nothing else moves.
-   ========================================================================== */
-
-/**
- * How far each fragment is displaced from its place in the finished list.
- *
- * The ordered list is the real layout: ten rows in normal flow. Scatter is
- * expressed as a transform *off* those rows, so the animation is pure
- * translate/scale — nothing animates `left`, `top` or `width`, which are not
- * compositor properties and which made this section stagger visibly mid-flight.
- *
- * `indent` is a percentage of the row's own (full) width and never exceeds 44,
- * while a scattered fragment is capped at 52% wide — so the widest fragment in
- * the furthest position still lands inside the field.
- */
-const SCATTER = [
-  { indent: 2, rows: -0.4, s: 1 },
-  { indent: 40, rows: -1.1, s: 0.86 },
-  { indent: 18, rows: 0.7, s: 0.94 },
-  { indent: 44, rows: 0.2, s: 1 },
-  { indent: 0, rows: 1.4, s: 0.82 },
-  { indent: 26, rows: -0.6, s: 0.9 },
-  { indent: 42, rows: 0.9, s: 0.86 },
-  { indent: 6, rows: -1.3, s: 0.96 },
-  { indent: 30, rows: 1.1, s: 0.84 },
-  { indent: 14, rows: -0.8, s: 0.9 },
-]
-
-/** One row of the finished list, in rem. Also the unit scatter is measured in. */
-const ROW = 2.6
-
-function ResearchChaos() {
-  const [ordered, setOrdered] = useState(false)
-  const ref = useOnceInView<HTMLElement>(() => {
-    window.setTimeout(() => setOrdered(true), 800)
-  }, 0.25)
-
-  return (
-    <section ref={ref} className="scene scene-in scene-out relative overflow-hidden py-20 sm:py-28">
-      <div className="relative mx-auto max-w-5xl px-5 sm:px-6">
-        <p className="label text-violet-lift">02 · The research</p>
-        <p className="text-statement mt-5 max-w-[16ch] font-serif font-medium text-white">
-          Stop opening fifteen tabs.
-        </p>
-        <p className="text-lead mt-6 max-w-[42ch] text-white/55">
-          The price, the fees, the reviews, the terms, and whatever else is out there at a better
-          price. Worth reads all of it in one pass.
-        </p>
-
-        {/* The field. Ten fragments, displaced, then settling into one list. */}
-        <ul className="mt-12 flex flex-col sm:mt-16">
-          {RESEARCH_FRAGMENTS.map((f, i) => {
-            const pos = SCATTER[i] ?? SCATTER[0]!
-            return (
-              <li
-                key={f.text}
-                style={{
-                  height: `${ROW}rem`,
-                  transform: ordered
-                    ? 'none'
-                    : `translate3d(${pos.indent}%, ${pos.rows * ROW}rem, 0) scale(${pos.s})`,
-                  transformOrigin: 'left center',
-                }}
-                className={cn(
-                  'transition-[transform,opacity] duration-[900ms] ease-[cubic-bezier(0.22,1,0.36,1)]',
-                  'motion-reduce:transition-none',
-                  ordered ? 'opacity-100' : 'opacity-65',
-                )}
-              >
-                <div
-                  className={cn(
-                    'flex items-baseline gap-3 transition-colors duration-700',
-                    'motion-reduce:transition-none',
-                    ordered ? 'border-b border-white/10 pb-2.5' : 'max-w-[52%]',
-                  )}
-                >
-                  <span
-                    className={cn(
-                      'text-[0.9375rem] font-medium sm:text-[1.0625rem]',
-                      ordered ? 'text-white' : 'text-white/70',
-                    )}
-                  >
-                    {f.text}
-                  </span>
-                  <span className="truncate text-[0.6875rem] text-white/35">{f.sub}</span>
-                  <span
-                    aria-hidden
-                    className={cn(
-                      'text-buy-lift ml-auto text-[0.6875rem] transition-opacity duration-500',
-                      'motion-reduce:transition-none',
-                      ordered ? 'opacity-100' : 'opacity-0',
-                    )}
-                  >
-                    read
-                  </span>
-                </div>
-              </li>
-            )
-          })}
-        </ul>
-
-        <p
-          className={cn(
-            'text-lead mt-8 max-w-[38ch] transition-opacity duration-700 motion-reduce:transition-none',
-            ordered ? 'text-white/70 opacity-100' : 'opacity-0',
-          )}
-        >
-          Ten things you would have had to find yourself. One pass, one answer.
-        </p>
-
-        <Disclosure tone="dark" className="mt-8">
-          Illustrative fragments — not real listings, reviews or prices.
-        </Disclosure>
-      </div>
-    </section>
   )
 }
 
@@ -191,19 +77,15 @@ function ResearchChaos() {
 function RealPrice() {
   const [phase, setPhase] = useState(0)
   const ref = useOnceInView<HTMLElement>(() => {
-    ;[300, 620, 1000, 1400].forEach((at, i) =>
-      window.setTimeout(() => setPhase(i + 1), at),
-    )
+    ;[300, 620, 1000, 1400].forEach((at, i) => window.setTimeout(() => setPhase(i + 1), at))
   }, 0.18)
 
   return (
     <section ref={ref}>
       <Section width="wide">
         <div className="max-w-[34rem]">
-          <Eyebrow index="03">The real price</Eyebrow>
-          <Statement className="mt-5 max-w-[18ch]">
-            Know what you’re actually paying for.
-          </Statement>
+          <Eyebrow index="06">The real price</Eyebrow>
+          <Statement className="mt-5 max-w-[18ch]">Know what you’re actually paying for.</Statement>
         </div>
 
         <div className="mt-12 sm:mt-16">
@@ -257,16 +139,14 @@ function RealPrice() {
               <p className="tnum text-display text-ink font-semibold">
                 {MONEY_EXAMPLE.better.amount}
               </p>
-              <p className="tnum text-buy text-figure-sm font-semibold">
-                −{MONEY_EXAMPLE.saving}
-              </p>
+              <p className="tnum text-buy text-figure-sm font-semibold">−{MONEY_EXAMPLE.saving}</p>
             </div>
           </div>
         </div>
 
         <p className="text-lead text-graphite mt-16 max-w-[46ch]">
-          Worth pays for itself the first time it catches one of these. That’s the pitch — not
-          saved time, not smarter shopping. Money you were about to hand over and didn’t need to.
+          Worth pays for itself the first time it catches one of these. That’s the pitch — not saved
+          time, not smarter shopping. Money you were about to hand over and didn’t need to.
         </p>
 
         <Disclosure className="mt-6">
@@ -293,9 +173,12 @@ function BetterOption() {
   }, 0.35)
 
   return (
-    <section ref={ref} className="scene scene-in scene-out relative overflow-hidden py-20 sm:py-28">
+    <section
+      ref={ref}
+      className="stage stage-lit scene-in scene-out relative overflow-hidden py-24 sm:py-32"
+    >
       <div className="relative mx-auto max-w-5xl px-5 sm:px-6">
-        <p className="label text-violet-lift">04 · The alternative</p>
+        <p className="label text-violet-lift">06 · The alternative</p>
         <p className="text-statement mt-5 max-w-[16ch] font-serif font-medium text-white">
           Find the better option.
         </p>
@@ -366,7 +249,10 @@ function Side({
       </p>
       <dl className="mt-7 flex flex-col gap-3">
         {data.rows.map(([k, v]) => (
-          <div key={k} className="flex items-baseline justify-between gap-4 border-t border-white/8 pt-3">
+          <div
+            key={k}
+            className="flex items-baseline justify-between gap-4 border-t border-white/8 pt-3"
+          >
             <dt className="text-[0.8125rem] text-white/40">{k}</dt>
             <dd className={cn('text-[0.9375rem]', worth ? 'text-white' : 'text-white/55')}>{v}</dd>
           </div>

@@ -21,10 +21,13 @@ import { Wordmark } from './wordmark'
 export function SiteNav({
   analyzeHref = '/analyze',
   over = 'paper',
+  floating = false,
 }: {
   analyzeHref?: string
   /** 'scene' sits on Worth's dark hero; 'paper' on the light pages. */
   over?: 'scene' | 'paper'
+  /** Overlay the first screen instead of occupying space above it. */
+  floating?: boolean
 }) {
   const dark = over === 'scene'
   const [lifted, setLifted] = useState(false)
@@ -39,17 +42,20 @@ export function SiteNav({
   return (
     <div
       className={cn(
-        'pt-safe sticky top-0 z-50 border-b transition-colors duration-300',
-        'motion-reduce:transition-none',
+        'pt-safe z-50 border-b transition-colors duration-300 motion-reduce:transition-none',
+        /* Fixed over the hero so the stage runs to the top of the viewport;
+           sticky on the light pages, where it should occupy its own space. */
+        floating ? 'fixed inset-x-0 top-0' : 'sticky top-0',
         dark
-          ? /* Continuous with the hero scene at rest, then a blurred strip once
-               the visitor has scrolled past it. */
+          ? /* Invisible over the hero — the first screen is the product, not a
+               product with a bar floating on it. Once past it, a thin blurred
+               strip keeps Worth's environment with the visitor. */
             lifted
-            ? 'border-white/10 bg-[#07060e]/85 backdrop-blur-xl'
-            : 'border-transparent bg-[#07060e]'
+            ? 'border-white/8 bg-[#05050a]/70 backdrop-blur-2xl'
+            : 'border-transparent bg-transparent'
           : lifted
             ? 'border-line/70 bg-paper/85 backdrop-blur-xl'
-            : 'border-transparent bg-paper',
+            : 'bg-paper border-transparent',
       )}
     >
       <header className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-2.5 sm:px-6 sm:py-3">

@@ -7,7 +7,6 @@ const GROUPS: Array<[string, Array<[string, string]>]> = [
     [
       ['How it works', '/#how-it-works'],
       ['Pricing', '/#pricing'],
-      ['FAQ', '/#faq'],
     ],
   ],
   [

@@ -23,14 +23,7 @@ export type Category = 'product' | 'software' | 'course' | 'other'
 /* 'fees' is its own dimension rather than part of 'price': the gap between an
    advertised figure and the figure that actually leaves your account is the
    single thing Worth most often has to point at. */
-export type SignalKind =
-  | 'price'
-  | 'fees'
-  | 'value'
-  | 'reviews'
-  | 'trust'
-  | 'risk'
-  | 'alternative'
+export type SignalKind = 'price' | 'fees' | 'value' | 'reviews' | 'trust' | 'risk' | 'alternative'
 
 /** How a signal reflects on the purchase. Drives the verdict colour. */
 export type SignalTone = 'positive' | 'caution' | 'negative' | 'neutral'

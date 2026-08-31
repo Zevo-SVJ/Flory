@@ -1,66 +1,56 @@
 import { SiteNav } from '@/components/marketing/site-nav'
 import { Hero } from '@/components/marketing/hero'
-import { HowItWorks } from '@/components/marketing/how-it-works'
-import { WhyBother } from '@/components/marketing/why-bother'
+import { TheQuestion } from '@/components/marketing/the-question'
+import { TheProcess } from '@/components/marketing/the-process'
 import { VerdictMoment } from '@/components/marketing/verdict-moment'
-import { PurchaseTypes } from '@/components/marketing/purchase-types'
-import { ProductDemo } from '@/components/marketing/product-demo'
-import { ShareMoment } from '@/components/marketing/share-moment'
+import { ValueRisk } from '@/components/marketing/value-risk'
+import { WhyBother } from '@/components/marketing/why-bother'
 import { PreLaunch } from '@/components/marketing/pre-launch'
 import { PricingSection } from '@/components/marketing/pricing-section'
-import { Faq } from '@/components/marketing/faq'
 import { FinalCta } from '@/components/marketing/final-cta'
 import { StickyAnalyzeBar } from '@/components/marketing/sticky-analyze-bar'
 
 /**
  * The Worth landing page.
  *
- * One decision, followed from doubt to conclusion. The same checkout runs
- * through every section — advertised at €892, actually €1,007, available
- * elsewhere at €724 — so the page reads as a single investigation rather than
- * a stack of unrelated feature demos.
+ * Seven scenes, not a stack of sections. Each one has a single dominant visual
+ * idea and hands over to the next:
  *
- * The narrative, in order:
+ *   01  the object      Worth, standing on a lit stage, assembling itself
+ *   02  the question    "should I actually buy this?", inside the noise
+ *   03  the process     one pinned panel, transformed by the scroll
+ *   04  the verdict     the score, surrounded by the evidence it came from
+ *   05  value / risk    a beam settling off level — good is not worth it
+ *   06  the money       what it really costs, and what Worth found instead
+ *   07  the invitation  the field again, on the darkest screen of the page
  *
- *   hero          I am about to pay for something.
- *   how it works  Paste it. Worth investigates. You decide.
- *   why bother    I would otherwise do this research myself:
- *                   01 the research      chaos becomes one answer
- *                   02 the real price    what actually leaves my account
- *                   03 the alternative   something better exists
- *   the answer    the six dimensions, and what they add up to
- *   anywhere      it works on more than one kind of spend
- *   using it      this is the product, on a phone
- *   it travels    the result is worth posting
- *   honesty       nothing here has launched yet
- *   pricing, questions, and the field again
+ * Between them sit the two things that have to be said plainly rather than
+ * staged: that nothing has launched yet, and what it will cost.
  *
- * Colour worlds change on hard edges, never on a fade: dark is Worth working,
- * light is the visitor's own register. The switch happens when the content
- * changes register, not on a fixed cadence.
+ * One example runs through all of it — a checkout advertised at €892 that is
+ * €1,007 once fees are counted, and €724 elsewhere — so the page reads as one
+ * investigation rather than seven demos. Every figure is illustrative and every
+ * surface that shows one says so.
  *
- * Fully static: no session lookup and no database call, so it's fast on a
- * phone over a mobile network.
+ * Fully static: no session lookup and no database call. The only client
+ * JavaScript is the field, the console's build sequence, and two scroll
+ * listeners that write CSS custom properties without re-rendering.
  */
 export default function LandingPage() {
   return (
     <>
-      {/* The nav's Analyze targets the hero field rather than a separate
-          destination, so there is exactly one action above the fold. */}
-      <SiteNav analyzeHref="/#analyze" over="scene" />
+      {/* Over the hero, not above it: the nav is fixed inside the first screen
+          so the stage runs to the top of the viewport. */}
+      <SiteNav analyzeHref="/#analyze" over="scene" floating />
 
       <Hero />
-      <HowItWorks />
-      <WhyBother />
+      <TheQuestion />
+      <TheProcess />
       <VerdictMoment />
-      <PurchaseTypes />
-      <ProductDemo />
-      <ShareMoment />
+      <ValueRisk />
+      <WhyBother />
       <PreLaunch />
       <PricingSection />
-      <div id="faq" className="scroll-mt-24">
-        <Faq />
-      </div>
       <FinalCta />
 
       <StickyAnalyzeBar />
