@@ -21,7 +21,7 @@ export function AnalysisProgress() {
           {SIGNAL_ORDER.map((kind, index) => (
             <li key={kind} className="flex items-center gap-3">
               <span
-                className="border-line-strong bg-ivory-deep size-4 shrink-0 animate-pulse rounded-full border"
+                className="border-line-strong bg-paper-2 size-4 shrink-0 animate-pulse rounded-full border"
                 style={{ animationDelay: `${index * 140}ms` }}
                 aria-hidden
               />

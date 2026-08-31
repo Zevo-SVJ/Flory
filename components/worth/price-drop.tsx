@@ -88,7 +88,7 @@ function ArrowRight() {
     >
       <path
         d="M0 6h19M14.5 1.5 19.5 6l-5 4.5"
-        stroke="var(--color-worth)"
+        stroke="var(--color-violet)"
         strokeWidth="1.75"
         strokeLinecap="square"
       />
@@ -108,7 +108,7 @@ function ArrowDown() {
     >
       <path
         d="M6 0v17M1.5 12.5 6 17.5l4.5-5"
-        stroke="var(--color-worth)"
+        stroke="var(--color-violet)"
         strokeWidth="1.75"
         strokeLinecap="square"
       />

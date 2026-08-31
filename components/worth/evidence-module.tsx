@@ -29,7 +29,7 @@ export function EvidenceModule({
       className={cn(
         'border-line bg-surface flex flex-col gap-3 border p-4 sm:p-5',
         'rounded-note',
-        tone === 'brand' && 'border-worth-line bg-worth-wash',
+        tone === 'brand' && 'border-violet-line bg-violet-wash',
         tone === 'positive' && 'border-buy/20',
         tone === 'caution' && 'border-think/25',
         tone === 'negative' && 'border-skip/25',
@@ -37,7 +37,7 @@ export function EvidenceModule({
       )}
     >
       <div className="flex items-baseline justify-between gap-3">
-        <span className={cn('label', tone === 'brand' ? 'text-worth-deep' : 'text-graphite')}>
+        <span className={cn('label', tone === 'brand' ? 'text-violet-deep' : 'text-graphite')}>
           {label}
         </span>
         {count && <span className="tnum text-faint text-[0.6875rem]">{count}</span>}

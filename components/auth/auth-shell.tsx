@@ -39,7 +39,7 @@ export function AuthShell({
           )}
 
           {pendingUrl && (
-            <div className="rounded-input border-line bg-ivory-deep mt-5 flex items-center gap-2.5 border px-3.5 py-3">
+            <div className="rounded-input border-line bg-paper-2 mt-5 flex items-center gap-2.5 border px-3.5 py-3">
               <span className="bg-buy size-1.5 shrink-0 rounded-full" aria-hidden />
               <div className="min-w-0">
                 <p className="text-graphite text-[0.6875rem] font-medium tracking-[0.1em] uppercase">

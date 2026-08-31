@@ -24,17 +24,16 @@ export function SetupNotice() {
           </h1>
           <p className="text-graphite mt-3 text-[0.9375rem] leading-relaxed">
             Accounts and saved analyses need a Supabase project. Add{' '}
-            <code className="bg-ivory-deep rounded px-1.5 py-0.5 text-[0.8125rem]">
+            <code className="bg-paper-2 rounded px-1.5 py-0.5 text-[0.8125rem]">
               NEXT_PUBLIC_SUPABASE_URL
             </code>{' '}
             and{' '}
-            <code className="bg-ivory-deep rounded px-1.5 py-0.5 text-[0.8125rem]">
+            <code className="bg-paper-2 rounded px-1.5 py-0.5 text-[0.8125rem]">
               NEXT_PUBLIC_SUPABASE_ANON_KEY
             </code>{' '}
-            to{' '}
-            <code className="bg-ivory-deep rounded px-1.5 py-0.5 text-[0.8125rem]">.env.local</code>
+            to <code className="bg-paper-2 rounded px-1.5 py-0.5 text-[0.8125rem]">.env.local</code>
             , then run the migrations in{' '}
-            <code className="bg-ivory-deep rounded px-1.5 py-0.5 text-[0.8125rem]">
+            <code className="bg-paper-2 rounded px-1.5 py-0.5 text-[0.8125rem]">
               supabase/migrations/
             </code>
             . See the README.

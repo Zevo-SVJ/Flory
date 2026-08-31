@@ -69,7 +69,7 @@ export function ShareResult({ analysis }: { analysis: Analysis }) {
 
       {shareUrl ? (
         <div className="flex flex-col gap-2">
-          <div className="rounded-input border-line bg-ivory-deep flex items-center gap-2 border px-3 py-2.5">
+          <div className="rounded-input border-line bg-paper-2 flex items-center gap-2 border px-3 py-2.5">
             <span className="text-ink min-w-0 flex-1 truncate text-[0.875rem]">{shareUrl}</span>
           </div>
           <Button type="button" onClick={handleCopy} variant="secondary">

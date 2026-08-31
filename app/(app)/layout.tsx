@@ -22,7 +22,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <div className="flex min-h-dvh flex-col lg:flex-row">
       {/* Mobile top bar */}
-      <header className="pt-safe border-line bg-ivory/90 sticky top-0 z-30 border-b backdrop-blur-md lg:hidden">
+      <header className="pt-safe border-line bg-paper/90 sticky top-0 z-30 border-b backdrop-blur-md lg:hidden">
         <div className="flex h-14 items-center justify-between px-4">
           <Link href="/dashboard" className="rounded-note" aria-label="Worth">
             <Wordmark />
@@ -47,7 +47,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <form action="/auth/signout" method="post" className="mt-auto">
           <button
             type="submit"
-            className="rounded-input text-graphite hover:bg-ivory-deep hover:text-ink flex min-h-11 w-full items-center px-3 text-[0.9375rem] transition motion-reduce:transition-none"
+            className="rounded-input text-graphite hover:bg-paper-2 hover:text-ink flex min-h-11 w-full items-center px-3 text-[0.9375rem] transition motion-reduce:transition-none"
           >
             Sign out
           </button>

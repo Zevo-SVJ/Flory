@@ -163,31 +163,59 @@ from `getEngine()`. Nothing else changes.
 
 ### Design system
 
-**Two colour jobs, kept strictly separate.** Worth Blue (`#3157FF`) is the
-identity — brand accents, links, active states, the primary action, the arrow
-on a price drop. Green / amber / red carry _meaning_ and only ever express a
-verdict. Blue never expresses a verdict; a verdict colour never expresses the
-brand. That separation is what lets Worth be recognisable without the score
-becoming decorative.
+**Two environments, used as stages.** Light (warm white) is the consumer and
+editorial register — the thing you're considering. Dark (midnight with violet
+lighting) is Worth working: analysis, evidence, the verdict, the shared result.
+The page changes stage when the content changes register, never on a fixed
+alternating cadence.
 
-Three brand objects repeat across marketing, the app and the share card, and
-are what make a screenshot recognisable without a logo:
+**Two colour jobs, kept separate.** Worth Violet (`#5B3DF5`) is the identity:
+brand accents, links, active states, the primary action, the arrow on a price
+drop. Green / amber / red carry _meaning_ and only ever express a verdict.
+Violet is never a verdict; a verdict colour is never the brand.
 
-| Object           | What it is                            | Why not the obvious thing                                                                        |
-| ---------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| `ScoreMeter`     | The score on a banded measuring scale | A donut chart hides the bands, so 61 looks arbitrary instead of visibly landing in "think twice" |
-| `PriceDrop`      | `€399 → €329, save €70`               | One fixed treatment for the most repeatable idea in the product                                  |
-| `EvidenceModule` | Flat, squared, hairline-bordered note | A rounded shadow card reads as a feature grid; this reads as a filed finding                     |
+Recurring objects give the page brand recall without a logo:
 
-Typography rations the serif: the hero, section statements and a verdict's
-reasoning. Everything structural is grotesk, so the serif keeps its weight.
-Money and scores use tabular figures throughout.
+| Object             | What it is                                                                                                                        |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
+| Banded score scale | The score drawn on a scale with the verdict bands marked, so 61 visibly lands inside "think twice" rather than being told it does |
+| Price drop         | `€399 → €329, save €70` — struck original, violet arrow for Worth's finding, green only on the saving                             |
+| Evidence module    | Flat, squared, hairline-bordered, dimension named in the corner: a filed finding, not a feature card                              |
 
-Motion is never decorative. Each animation depicts one product event — a check
-completing, a score settling, a price counting down — and there is deliberately
-no generic scroll-fade. All of it is disabled under `prefers-reduced-motion`.
+Typography rations the serif to the hero, section statements and a verdict's
+reasoning; everything structural is grotesk. Money and scores use tabular
+figures throughout.
+
+Motion is never decorative. Each animation depicts one product event — findings
+landing around the product, a score settling, a price counting down — and there
+is deliberately no generic scroll-fade. All of it is off under
+`prefers-reduced-motion`.
 
 Money is stored as **integer minor units** (`bigint`), never floats.
+
+### Product imagery
+
+⚠️ **The product images are locally authored SVG renders, not photographs.**
+
+This build environment's network policy blocks every image host — Wikimedia,
+Unsplash and every CDN return 403 at the egress gateway — so no real photograph
+could be downloaded into the repository.
+
+Everything resolves through `lib/product-assets.ts`, so swapping in real
+photography is a one-line change per entry and touches no component:
+
+```ts
+headphones: {
+  src: '/images/products/headphones.jpg',  // drop the file in public/images/products/
+  kind: 'photo',                            // 'photo' covers, 'render' contains
+  ...
+}
+```
+
+The illustrative product is also deliberately **unbranded**. Publishing an
+evaluative verdict with invented prices against a real, named commercial
+product would be a fabricated review of someone's actual product, however
+clearly the page labels it.
 
 ### Dependency policy
 

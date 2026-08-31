@@ -9,23 +9,24 @@ import { cn } from '@/lib/utils/cn'
 /**
  * The Worth field — the product's primary object.
  *
- * Built as one continuous surface with the action fused to it, so it reads as
- * a search-and-investigate instrument rather than a form input with a button
- * underneath. That fusion holds on mobile too: the button sits inside the
- * field rather than becoming a full-width bar, which is what made the previous
- * version look like every other SaaS page.
+ * One continuous surface with the action fused into it, so it reads as a
+ * search-and-investigate instrument rather than a form input with a button
+ * underneath. That fusion holds on mobile: the button stays inside the field
+ * rather than becoming a full-width bar.
  *
- * It remains a real <form> that GETs to /analyze, so it works before
- * hydration and without JavaScript.
+ * Still a real <form> that GETs to /analyze, so it works before hydration and
+ * without JavaScript.
  */
 export function AnalyzeInput({
   defaultValue = '',
   size = 'lg',
+  tone = 'light',
   showScreenshot = true,
   className,
 }: {
   defaultValue?: string
   size?: 'md' | 'lg'
+  tone?: 'light' | 'dark'
   showScreenshot?: boolean
   className?: string
 }) {
@@ -37,6 +38,7 @@ export function AnalyzeInput({
   const [pending, setPending] = useState(false)
 
   const tall = size === 'lg'
+  const dark = tone === 'dark'
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -59,17 +61,21 @@ export function AnalyzeInput({
 
         <div
           className={cn(
-            'rounded-input bg-surface flex items-center gap-2 border transition-all duration-200',
+            'flex items-center gap-2.5 rounded-full border transition-all duration-200',
             'motion-reduce:transition-none',
-            tall ? 'h-15 pr-1.5 pl-4 sm:h-17 sm:pr-2 sm:pl-5' : 'h-14 pr-1.5 pl-4 sm:pl-4',
-            error
-              ? 'border-skip shadow-none'
-              : focused
-                ? 'border-worth shadow-[0_0_0_4px_var(--color-worth-wash)]'
-                : 'border-line-strong shadow-object',
+            tall ? 'h-15 pr-1.5 pl-4 sm:h-17 sm:pr-2 sm:pl-6' : 'h-14 pr-1.5 pl-4 sm:pl-5',
+            dark
+              ? 'border-white/12 bg-white/[0.06] backdrop-blur-sm'
+              : 'border-line-strong bg-surface shadow-object',
+            error && 'border-skip',
+            !error &&
+              focused &&
+              (dark
+                ? 'border-violet-lift bg-white/[0.09]'
+                : 'border-violet shadow-[0_0_0_5px_var(--color-violet-wash)]'),
           )}
         >
-          <LinkGlyph active={focused || value.length > 0} className="hidden sm:block" />
+          <LinkGlyph active={focused || value.length > 0} dark={dark} className="hidden sm:block" />
 
           <input
             id={id}
@@ -92,8 +98,8 @@ export function AnalyzeInput({
             aria-invalid={error ? true : undefined}
             aria-describedby={error ? `${id}-error` : undefined}
             className={cn(
-              'text-ink h-full min-w-0 flex-1 self-stretch bg-transparent outline-none',
-              'placeholder:text-faint',
+              'h-full min-w-0 flex-1 self-stretch bg-transparent outline-none',
+              dark ? 'text-white placeholder:text-white/35' : 'text-ink placeholder:text-faint',
               tall && 'sm:text-[1.0625rem]',
             )}
           />
@@ -102,12 +108,12 @@ export function AnalyzeInput({
             type="submit"
             disabled={pending}
             className={cn(
-              'bg-worth inline-flex shrink-0 items-center justify-center rounded-[0.5rem] font-medium text-white',
-              'hover:bg-worth-deep transition-colors disabled:opacity-60',
+              'bg-violet inline-flex shrink-0 items-center justify-center rounded-full font-medium text-white',
+              'hover:bg-violet-deep transition-colors disabled:opacity-60',
               'motion-reduce:transition-none',
               tall
-                ? 'h-12 px-3.5 text-[0.9375rem] sm:h-13 sm:px-6 sm:text-base'
-                : 'h-11 px-3.5 text-[0.9375rem]',
+                ? 'h-12 px-4 text-[0.9375rem] sm:h-13 sm:px-7 sm:text-base'
+                : 'h-11 px-5 text-[0.9375rem]',
             )}
           >
             {pending ? 'Checking…' : 'Analyze'}
@@ -115,18 +121,23 @@ export function AnalyzeInput({
         </div>
 
         {error && (
-          <p id={`${id}-error`} role="alert" className="text-skip mt-2.5 text-sm font-medium">
+          <p id={`${id}-error`} role="alert" className="text-skip mt-2.5 px-2 text-sm font-medium">
             {error}
           </p>
         )}
       </form>
 
       {showScreenshot && (
-        <p className="text-graphite mt-3 text-[0.8125rem]">
+        <p className={cn('mt-3 px-2 text-[0.875rem]', dark ? 'text-white/45' : 'text-graphite')}>
           No link?{' '}
           <Link
             href="/analyze?input=screenshot"
-            className="text-worth decoration-worth-line hover:decoration-worth font-medium underline underline-offset-4 transition-colors motion-reduce:transition-none"
+            className={cn(
+              'font-medium underline underline-offset-4 transition-colors motion-reduce:transition-none',
+              dark
+                ? 'text-violet-lift decoration-violet-lift/40 hover:decoration-violet-lift'
+                : 'text-violet decoration-violet-line hover:decoration-violet',
+            )}
           >
             Upload a screenshot
           </Link>{' '}
@@ -137,8 +148,15 @@ export function AnalyzeInput({
   )
 }
 
-/** Link glyph. Turns Worth Blue once the field is live. */
-function LinkGlyph({ active, className }: { active: boolean; className?: string }) {
+function LinkGlyph({
+  active,
+  dark,
+  className,
+}: {
+  active: boolean
+  dark: boolean
+  className?: string
+}) {
   return (
     <svg
       width="19"
@@ -148,7 +166,13 @@ function LinkGlyph({ active, className }: { active: boolean; className?: string 
       aria-hidden
       className={cn(
         'shrink-0 transition-colors motion-reduce:transition-none',
-        active ? 'text-worth' : 'text-faint',
+        active
+          ? dark
+            ? 'text-violet-lift'
+            : 'text-violet'
+          : dark
+            ? 'text-white/30'
+            : 'text-faint',
         className,
       )}
     >

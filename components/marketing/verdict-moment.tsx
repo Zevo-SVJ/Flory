@@ -1,60 +1,70 @@
-import { Section } from './section'
-import { PRIMARY_EXAMPLE } from '@/lib/analysis/fixtures'
-import { VERDICT_THRESHOLDS } from '@/lib/analysis/verdict'
+import { Section, Eyebrow, Disclosure } from './section'
+import { cn } from '@/lib/utils/cn'
 
 /**
- * The verdict — the page's centre of gravity.
+ * Beat 05 — the verdict.
  *
- * Full-bleed ink, because this is the one moment where Worth stops gathering
- * and commits. The score is set at display scale with the band scale beneath
- * it, so the conclusion is visibly derived rather than asserted.
+ * The page's centre of gravity, and the one moment Worth stops gathering and
+ * commits. Dark stage with violet lighting, the score at display scale on a
+ * banded scale so the conclusion is visibly derived from the number rather
+ * than asserted next to it.
  *
- * Rendered dark and inline rather than as a card: a card would make the
- * verdict one more element on the page instead of the thing the page is for.
+ * Set inline rather than inside a card: a card would make the verdict one more
+ * element on the page instead of the thing the page is for.
  */
+
+const SIGNALS = [
+  ['Price', '€70 above the best verified price', 'negative'],
+  ['Reviews', 'Battery and call quality consistently praised', 'positive'],
+  ['Trust', 'Verified seller, 30-day returns, 2-year warranty', 'positive'],
+  ['Value', 'Top of its class for noise cancelling', 'positive'],
+  ['Risk', 'A refresh is expected within six months', 'caution'],
+  ['Alternatives', 'Identical model, verified retailer, €329', 'positive'],
+] as const
+
+const DOT = {
+  positive: 'bg-buy-lift',
+  negative: 'bg-skip-lift',
+  caution: 'bg-think-lift',
+} as const
+
 export function VerdictMoment() {
-  const score = PRIMARY_EXAMPLE.score ?? 61
+  const score = 61
 
   return (
-    <Section tone="ink">
-      <div className="flex flex-col gap-3">
-        <div className="flex items-baseline gap-3">
-          <span className="tnum label text-worth">04</span>
-          <span className="label text-white/45">The answer</span>
-        </div>
-      </div>
+    <Section tone="dark" glow>
+      <Eyebrow index="05" tone="dark">
+        The answer
+      </Eyebrow>
 
-      <div className="mt-10 grid grid-cols-1 gap-10 lg:mt-14 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.95fr)] lg:gap-16">
+      <div className="mt-8 grid grid-cols-1 gap-12 lg:mt-12 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)] lg:gap-20">
         <div>
           <div className="flex items-end gap-3">
-            <span className="tnum text-score leading-[0.84] font-semibold tracking-[-0.055em] text-white">
-              {score}
-            </span>
-            <span className="tnum pb-2 text-lg font-medium text-white/40 sm:pb-3">/100</span>
+            <span className="tnum text-score font-semibold text-white">{score}</span>
+            <span className="tnum pb-3 text-lg font-medium text-white/35 sm:pb-4">/100</span>
           </div>
 
-          {/* The same band scale as everywhere else, inverted for ink. */}
-          <DarkScale score={score} />
+          <Scale score={score} />
 
-          <p className="text-think mt-7 text-3xl leading-none font-semibold tracking-[-0.025em] uppercase sm:text-4xl">
+          <p className="text-think-lift mt-8 text-3xl leading-none font-semibold tracking-[-0.025em] uppercase sm:text-4xl">
             Think twice
           </p>
 
-          <p className="text-statement mt-4 max-w-[24ch] font-serif leading-[1.1] font-medium text-white">
-            {PRIMARY_EXAMPLE.summary}
+          <p className="text-statement mt-5 max-w-[18ch] font-serif leading-[1.05] font-medium text-white">
+            The product is good. The price isn’t.
           </p>
         </div>
 
-        <div className="flex flex-col gap-8 lg:pt-4">
+        <div className="flex flex-col gap-9 lg:pt-6">
           <div>
             <span className="label text-white/45">What it costs you</span>
-            <div className="mt-4 flex flex-wrap items-baseline gap-x-4 gap-y-2">
-              <span className="tnum text-3xl font-medium text-white/35 line-through decoration-1 sm:text-4xl">
+            <div className="mt-5 flex flex-wrap items-baseline gap-x-4 gap-y-2">
+              <span className="tnum text-3xl font-medium text-white/30 line-through decoration-1 sm:text-4xl">
                 €399
               </span>
               <svg
-                width="26"
-                height="14"
+                width="28"
+                height="15"
                 viewBox="0 0 22 12"
                 fill="none"
                 aria-hidden
@@ -62,8 +72,8 @@ export function VerdictMoment() {
               >
                 <path
                   d="M0 6h19M14.5 1.5 19.5 6l-5 4.5"
-                  stroke="var(--color-worth)"
-                  strokeWidth="1.75"
+                  stroke="var(--color-violet-lift)"
+                  strokeWidth="1.8"
                   strokeLinecap="square"
                 />
               </svg>
@@ -71,29 +81,20 @@ export function VerdictMoment() {
                 €329
               </span>
             </div>
-            <p className="tnum text-buy mt-3 text-lg font-semibold">€70 potential saving</p>
+            <p className="tnum text-buy-lift mt-4 text-lg font-semibold">€70 potential saving</p>
           </div>
 
-          <div className="border-t border-white/12 pt-6">
+          <div className="border-t border-white/10 pt-7">
             <span className="label text-white/45">Why</span>
-            <ul className="mt-4 flex flex-col divide-y divide-white/10">
-              {(PRIMARY_EXAMPLE.result?.signals ?? []).map((signal) => (
-                <li key={signal.kind} className="flex items-start gap-3 py-2.5">
+            <ul className="mt-5 flex flex-col divide-y divide-white/8">
+              {SIGNALS.map(([label, detail, tone]) => (
+                <li key={label} className="flex items-start gap-3 py-3">
                   <span
-                    className={`mt-1.5 size-1.5 shrink-0 rounded-full ${
-                      signal.tone === 'positive'
-                        ? 'bg-buy'
-                        : signal.tone === 'negative'
-                          ? 'bg-skip'
-                          : signal.tone === 'caution'
-                            ? 'bg-think'
-                            : 'bg-white/40'
-                    }`}
+                    className={cn('mt-1.5 size-1.5 shrink-0 rounded-full', DOT[tone])}
                     aria-hidden
                   />
-                  <span className="text-[0.875rem] leading-snug text-white/70">
-                    <span className="font-semibold text-white">{signal.label}</span> ·{' '}
-                    {signal.detail}
+                  <span className="text-[0.875rem] leading-snug text-white/60">
+                    <span className="font-semibold text-white">{label}</span> · {detail}
                   </span>
                 </li>
               ))}
@@ -102,45 +103,42 @@ export function VerdictMoment() {
         </div>
       </div>
 
-      <p className="mt-10 text-[0.75rem] text-white/35">
+      <Disclosure tone="dark" className="mt-12">
         Illustrative analysis — not a real product evaluation.
-      </p>
+      </Disclosure>
     </Section>
   )
 }
 
-/** The band scale, inverted. Same geometry as ScoreMeter so it reads as one system. */
-function DarkScale({ score }: { score: number }) {
+/**
+ * The banded scale. The verdict thresholds are drawn, so 61 is visibly inside
+ * "think twice" rather than being told it is.
+ */
+function Scale({ score }: { score: number }) {
   const ticks = Array.from({ length: 21 }, (_, i) => i * 5)
   return (
-    <div className="mt-5 max-w-md">
-      <div className="relative h-7">
-        <div className="absolute inset-x-0 top-3.5 flex justify-between">
+    <div className="mt-6 max-w-lg">
+      <div className="relative h-8">
+        <div className="absolute inset-x-0 top-4 flex justify-between">
           {ticks.map((tick) => (
             <span
               key={tick}
-              className={`w-px ${tick % 25 === 0 ? 'h-3.5' : 'h-2'} ${
-                tick <= score ? 'bg-white/55' : 'bg-white/18'
-              }`}
+              className={cn(
+                'w-px',
+                tick % 25 === 0 ? 'h-4' : 'h-2',
+                tick <= score ? 'bg-white/55' : 'bg-white/15',
+              )}
             />
           ))}
         </div>
         <div className="absolute top-0 -translate-x-1/2" style={{ left: `${score}%` }}>
-          <span className="bg-think block h-7 w-[3px] rounded-full" />
+          <span className="bg-think-lift block h-8 w-[3px] rounded-full" />
         </div>
       </div>
-      <div className="label mt-1.5 flex justify-between text-white/35">
-        <span>Skip</span>
-        <span
-          className={
-            score >= VERDICT_THRESHOLDS.thinkTwice && score < VERDICT_THRESHOLDS.buy
-              ? 'text-think'
-              : ''
-          }
-        >
-          Think twice
-        </span>
-        <span>Buy</span>
+      <div className="label mt-2 flex text-white/30">
+        <span className="flex-1 text-left">Skip</span>
+        <span className="text-think-lift flex-1 text-center">Think twice</span>
+        <span className="flex-1 text-right">Buy</span>
       </div>
     </div>
   )

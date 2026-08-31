@@ -12,9 +12,9 @@ const base =
 
 /* Primary is ink, never a colour — colour is reserved for verdicts. */
 const variants: Record<Variant, string> = {
-  primary: 'bg-worth text-white hover:bg-worth-deep',
-  secondary: 'border border-line-strong bg-surface text-ink hover:border-ink hover:bg-ivory-deep',
-  ghost: 'text-graphite hover:bg-ivory-deep hover:text-ink',
+  primary: 'bg-violet text-white hover:bg-violet-deep',
+  secondary: 'border border-line-strong bg-surface text-ink hover:border-ink hover:bg-paper-2',
+  ghost: 'text-graphite hover:bg-paper-2 hover:text-ink',
 }
 
 /* Every size clears the 44px minimum touch target. */

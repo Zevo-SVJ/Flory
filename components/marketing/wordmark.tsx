@@ -1,11 +1,9 @@
 import { cn } from '@/lib/utils/cn'
 
 /**
- * The Worth wordmark: editorial serif with a Worth Blue full stop. The dot is
- * small enough to be quiet and specific enough to be ours — it repeats in the
- * app shell, the auth pages and the share card.
- *
- * Never set in all caps.
+ * The Worth wordmark: editorial serif with a violet full stop. Small enough to
+ * be quiet, specific enough to be ours — it repeats in the nav, the app shell,
+ * the auth pages and the share card.
  */
 export function Wordmark({
   className,
@@ -22,7 +20,7 @@ export function Wordmark({
         className,
       )}
     >
-      Worth<span className="text-worth">.</span>
+      Worth<span className="text-violet">.</span>
     </span>
   )
 }

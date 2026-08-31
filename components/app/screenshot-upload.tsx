@@ -149,7 +149,7 @@ export function ScreenshotUpload({
             </button>
           </div>
 
-          <p className="rounded-input border-line-strong bg-ivory-deep text-graphite border px-3.5 py-3 text-[0.8125rem] leading-relaxed">
+          <p className="rounded-input border-line-strong bg-paper-2 text-graphite border px-3.5 py-3 text-[0.8125rem] leading-relaxed">
             <strong className="text-ink-soft font-semibold">Heads up:</strong> Worth can’t read
             screenshots yet. Your image is stored privately and the analysis will use the same
             development fixture data as every other result until the research engine ships.
@@ -166,7 +166,7 @@ export function ScreenshotUpload({
           className={cn(
             'rounded-object flex min-h-24 w-full flex-col items-center justify-center gap-1.5',
             'border-line-strong bg-surface border border-dashed px-4 py-6 transition',
-            'hover:border-ink hover:bg-ivory-deep motion-reduce:transition-none',
+            'hover:border-ink hover:bg-paper-2 motion-reduce:transition-none',
           )}
         >
           <span className="text-ink text-[0.9375rem] font-medium">Choose an image</span>

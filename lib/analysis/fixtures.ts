@@ -11,6 +11,11 @@ import type { Analysis, Verdict } from './types'
  * page's job is to show what a Worth result looks like. A verdict of "think
  * twice on a genuinely good product, because of the price" demonstrates the
  * product's actual point far better than a generic low score does.
+ *
+ * The example product is deliberately unbranded. Publishing an evaluative
+ * verdict with invented prices against a real, named commercial product would
+ * be a fabricated review of someone's actual product, however clearly the page
+ * labels it — so the illustration keeps the shape and drops the brand.
  */
 
 const BASE = {
@@ -35,7 +40,7 @@ export const PRIMARY_EXAMPLE: Analysis = {
   ...BASE,
   id: 'example-primary',
   category: 'product',
-  title: 'Sony WH-1000XM6',
+  title: 'Over-ear noise-cancelling headphones',
   score: 61,
   verdict: 'think_twice',
   summary: 'The headphones are good. The price isn’t.',
@@ -134,7 +139,7 @@ export const CATEGORY_EXAMPLES: CategoryExample[] = [
   {
     id: 'physical',
     kind: 'Physical product',
-    title: 'Sony WH-1000XM6',
+    title: 'Over-ear noise-cancelling headphones',
     meta: 'Over-ear headphones',
     price: '€399',
     bestPrice: '€329',

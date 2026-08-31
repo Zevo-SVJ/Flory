@@ -104,8 +104,8 @@ function ChipGroup({
               className={cn(
                 'rounded-note min-h-11 border px-4 text-[0.9375rem] transition motion-reduce:transition-none',
                 active
-                  ? 'border-worth bg-worth text-white'
-                  : 'border-line-strong bg-surface text-ink-soft hover:border-worth hover:text-worth-deep',
+                  ? 'border-violet bg-violet text-white'
+                  : 'border-line-strong bg-surface text-ink-soft hover:border-violet hover:text-violet-deep',
               )}
             >
               {option}

@@ -19,7 +19,7 @@ export function FixtureNotice({
     return (
       <span
         className={cn(
-          'rounded-note border-line-strong bg-ivory-deep inline-flex items-center gap-1.5 border',
+          'rounded-note border-line-strong bg-paper-2 inline-flex items-center gap-1.5 border',
           'text-graphite px-2 py-1 text-[0.625rem] font-medium tracking-[0.1em] uppercase',
           className,
         )}
@@ -33,7 +33,7 @@ export function FixtureNotice({
   return (
     <p
       className={cn(
-        'rounded-input border-line-strong bg-ivory-deep text-graphite border px-3.5 py-3 text-[0.8125rem] leading-relaxed',
+        'rounded-input border-line-strong bg-paper-2 text-graphite border px-3.5 py-3 text-[0.8125rem] leading-relaxed',
         className,
       )}
     >

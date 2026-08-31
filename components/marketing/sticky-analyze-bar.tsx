@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react'
 /**
  * Mobile sticky action.
  *
- * Appears once the hero field scrolls out of reach, so Worth's one action stays
+ * Appears once the hero field scrolls out of reach so Worth's one action stays
  * within thumb reach on a phone. It returns to that same field rather than
  * being a second destination, so it never competes as a CTA.
  */
@@ -31,7 +31,7 @@ export function StickyAnalyzeBar() {
   return (
     <div
       aria-hidden={!visible}
-      className={`pb-safe border-line bg-ivory/95 fixed inset-x-0 bottom-0 z-40 border-t backdrop-blur-md transition-transform duration-300 motion-reduce:transition-none lg:hidden ${
+      className={`pb-safe border-line bg-paper/95 fixed inset-x-0 bottom-0 z-40 border-t backdrop-blur-md transition-transform duration-300 motion-reduce:transition-none lg:hidden ${
         visible ? 'translate-y-0' : 'translate-y-full'
       }`}
     >
@@ -39,7 +39,7 @@ export function StickyAnalyzeBar() {
         <a
           href="#analyze"
           tabIndex={visible ? undefined : -1}
-          className="bg-worth flex h-12 w-full items-center justify-center rounded-[0.5rem] text-base font-medium text-white"
+          className="bg-violet flex h-12 w-full items-center justify-center rounded-full text-base font-medium text-white"
         >
           Check something you’re buying
         </a>

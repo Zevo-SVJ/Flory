@@ -34,7 +34,7 @@ export function AnalysisRow({ analysis }: { analysis: Analysis }) {
             {score}
           </span>
         ) : (
-          <span className="border-line bg-ivory-deep text-graphite flex size-11 shrink-0 items-center justify-center rounded-full border text-[0.6875rem]">
+          <span className="border-line bg-paper-2 text-graphite flex size-11 shrink-0 items-center justify-center rounded-full border text-[0.6875rem]">
             —
           </span>
         )}

@@ -97,8 +97,8 @@ export function AnalyzeForm({
                   className={cn(
                     'rounded-note min-h-11 border px-3.5 text-[0.875rem] transition motion-reduce:transition-none',
                     active
-                      ? 'border-worth bg-worth text-white'
-                      : 'border-line-strong bg-surface text-graphite hover:border-worth hover:text-worth-deep',
+                      ? 'border-violet bg-violet text-white'
+                      : 'border-line-strong bg-surface text-graphite hover:border-violet hover:text-violet-deep',
                   )}
                 >
                   {CATEGORY_LABEL[value]}

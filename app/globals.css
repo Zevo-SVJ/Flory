@@ -1,79 +1,86 @@
 @import 'tailwindcss';
 
 /* ===========================================================================
-   Worth design system — "Consumer intelligence"
+   Worth design system
 
-   Two colour jobs, kept strictly separate:
+   Two environments, used as stages rather than decoration:
 
-     Worth Blue  = identity. Brand accents, the act of investigating, links,
-                   active states, the primary action, data marks.
-     Green/amber/red = meaning. A verdict, and nothing else.
+     LIGHT — warm white. Editorial, consumer, the product you are considering.
+     DARK  — midnight with violet lighting. Worth working: analysis, evidence,
+             the verdict, the shareable result.
 
-   Blue never expresses a verdict; a verdict colour never expresses the brand.
-   That separation is what lets Worth be recognisable without the score
-   becoming decorative.
+   The page moves between them when the content changes register, never on a
+   fixed alternating cadence.
+
+   Worth Violet is the identity. Verdict colours (green / amber / red) carry
+   meaning and only ever express a decision. Violet is never a verdict.
    =========================================================================== */
 
 @theme {
-  /* --- Ground. One warm ivory the whole way down, so the page reads as a
-         single continuous surface rather than alternating marketing blocks. --- */
-  --color-ivory: #f7f5ef;
-  --color-ivory-deep: #f1eee5;
+  /* --- Light environment ------------------------------------------------- */
+  --color-paper: #fbfaf8;
+  --color-paper-2: #f4f2ee;
   --color-surface: #ffffff;
 
-  --color-ink: #111318;
-  --color-ink-soft: #33363e;
-  --color-graphite: #6d717a;
-  --color-faint: #9ca0a8;
+  --color-ink: #12121a;
+  --color-ink-soft: #35343f;
+  --color-graphite: #6b6b7b;
+  --color-faint: #9a9aa8;
 
-  --color-line: #e3e1da;
-  --color-line-strong: #d2cfc4;
+  --color-line: #e6e4de;
+  --color-line-strong: #d4d1c8;
 
-  /* --- Worth Blue: the identity. --- */
-  --color-worth: #3157ff;
-  --color-worth-deep: #1e36b5;
-  --color-worth-wash: #edf0ff;
-  --color-worth-line: #c3cdff;
+  /* --- Dark environment. Near-black carrying a violet cast, so the dark
+         stage belongs to the same brand rather than being generic black. --- */
+  --color-midnight: #0b0a14;
+  --color-midnight-2: #131120;
+  --color-midnight-3: #1c1930;
+  --color-midnight-line: #2a2640;
+
+  /* --- Worth Violet: the identity. --- */
+  --color-violet: #5b3df5;
+  --color-violet-deep: #4526d6;
+  --color-violet-lift: #a08fff; /* legible on midnight */
+  --color-violet-wash: #f1eeff;
+  --color-violet-line: #d5cbff;
 
   /* --- Verdict: the meaning. --- */
   --color-buy: #15805b;
   --color-buy-wash: #e6f2ed;
+  --color-buy-lift: #4fd39d;
   --color-think: #b77718;
   --color-think-wash: #fbf1e2;
+  --color-think-lift: #f0b65c;
   --color-skip: #c43d32;
   --color-skip-wash: #fbeae8;
+  --color-skip-lift: #f2836e;
 
-  /* --- Typography ---------------------------------------------------------
-     Serif is rationed: the hero, the verdict's reasoning, and two editorial
-     statements. Everything structural is grotesk, so the serif keeps its
-     weight instead of becoming the page's default voice. */
+  /* --- Typography. Serif is rationed to the hero, section statements and a
+         verdict's reasoning; everything structural is grotesk. --- */
   --font-sans:
     var(--font-inter), ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
     sans-serif;
   --font-serif: var(--font-newsreader), Georgia, 'Times New Roman', serif;
 
-  --text-hero: clamp(2.5rem, 1.6rem + 4.4vw, 5.25rem);
-  --text-hero--line-height: 0.98;
-  --text-hero--letter-spacing: -0.032em;
+  --text-hero: clamp(2.75rem, 1.7rem + 5vw, 6rem);
+  --text-hero--line-height: 0.96;
+  --text-hero--letter-spacing: -0.035em;
 
-  --text-statement: clamp(1.75rem, 1.25rem + 2.4vw, 3.25rem);
-  --text-statement--line-height: 1.08;
-  --text-statement--letter-spacing: -0.024em;
+  --text-statement: clamp(2rem, 1.35rem + 3vw, 4rem);
+  --text-statement--line-height: 1.04;
+  --text-statement--letter-spacing: -0.028em;
 
-  --text-heading: clamp(1.25rem, 1.1rem + 0.7vw, 1.625rem);
-  --text-heading--line-height: 1.2;
-  --text-heading--letter-spacing: -0.014em;
+  --text-heading: clamp(1.3rem, 1.12rem + 0.8vw, 1.75rem);
+  --text-heading--line-height: 1.18;
+  --text-heading--letter-spacing: -0.016em;
 
-  /* In-app page titles. Smaller than a marketing statement — a dashboard
-     heading is a signpost, not an argument. */
   --text-page: clamp(1.5rem, 1.32rem + 0.9vw, 2rem);
   --text-page--line-height: 1.15;
   --text-page--letter-spacing: -0.018em;
 
-  --text-lead: clamp(1rem, 0.95rem + 0.35vw, 1.1875rem);
-  --text-lead--line-height: 1.55;
+  --text-lead: clamp(1.0625rem, 1rem + 0.4vw, 1.25rem);
+  --text-lead--line-height: 1.5;
 
-  /* Money and scores. The product is numbers; they get their own scale. */
   --text-figure: clamp(2.75rem, 1.9rem + 4.6vw, 5rem);
   --text-figure--line-height: 0.9;
   --text-figure--letter-spacing: -0.045em;
@@ -82,18 +89,19 @@
   --text-figure-sm--line-height: 1;
   --text-figure-sm--letter-spacing: -0.035em;
 
-  --text-score: clamp(4rem, 2.6rem + 7vw, 8rem);
-  --text-score--line-height: 0.84;
-  --text-score--letter-spacing: -0.055em;
+  --text-score: clamp(4.5rem, 2.8rem + 8vw, 9.5rem);
+  --text-score--line-height: 0.82;
+  --text-score--letter-spacing: -0.06em;
 
-  /* --- Shape. Evidence modules are square-ish and flat: an investigation
-         note, not a UI card. Only true product objects get real radius. --- */
-  --radius-note: 0.25rem;
-  --radius-input: 0.75rem;
-  --radius-object: 1.125rem;
+  /* --- Shape --- */
+  --radius-note: 0.375rem;
+  --radius-input: 0.875rem;
+  --radius-object: 1.25rem;
+  --radius-stage: 1.75rem;
 
-  --shadow-object: 0 1px 2px rgba(17, 19, 24, 0.04), 0 12px 28px -18px rgba(17, 19, 24, 0.22);
-  --shadow-lift: 0 18px 48px -24px rgba(17, 19, 24, 0.32);
+  --shadow-object: 0 1px 2px rgba(18, 18, 26, 0.04), 0 14px 34px -20px rgba(18, 18, 26, 0.24);
+  --shadow-lift: 0 24px 64px -28px rgba(18, 18, 26, 0.36);
+  --shadow-violet: 0 20px 60px -24px rgba(91, 61, 245, 0.45);
 }
 
 @layer base {
@@ -110,7 +118,7 @@
   }
 
   body {
-    background-color: var(--color-ivory);
+    background-color: var(--color-paper);
     color: var(--color-ink);
     font-family: var(--font-sans);
     overflow-x: clip;
@@ -118,7 +126,6 @@
     text-rendering: optimizeLegibility;
   }
 
-  /* Digits that get compared must line up. */
   .tnum {
     font-variant-numeric: tabular-nums;
     font-feature-settings: 'tnum' 1;
@@ -131,9 +138,9 @@
   }
 
   :focus-visible {
-    outline: 2px solid var(--color-worth);
+    outline: 2px solid var(--color-violet);
     outline-offset: 2px;
-    border-radius: 3px;
+    border-radius: 4px;
   }
 
   /* Under 16px, iOS Safari zooms the viewport on focus. */
@@ -144,29 +151,29 @@
   }
 
   ::selection {
-    background: var(--color-worth);
+    background: var(--color-violet);
     color: #fff;
   }
 }
 
 @layer utilities {
-  /* --- Brand marks ------------------------------------------------------- */
-
-  /* The uppercase micro-label used on every evidence module and section.
-     Repeating this exact treatment is part of what makes the page cohere. */
+  /* The uppercase micro-label. Repeating this one treatment across every
+     section, evidence module and stage is a large part of what makes the
+     page cohere. */
   .label {
-    font-size: 0.625rem;
+    font-size: 0.6875rem;
     font-weight: 600;
-    letter-spacing: 0.16em;
+    letter-spacing: 0.15em;
     text-transform: uppercase;
     line-height: 1;
   }
 
-  /* Ruled grid lines used to join compositions across the page. */
-  .rule-x {
-    background-image: linear-gradient(to right, var(--color-line) 0 100%);
-    background-size: 100% 1px;
-    background-repeat: no-repeat;
+  /* Violet stage lighting for dark sections: a soft pool of brand colour
+     behind the content, not a gradient wash over the whole page. */
+  .stage-light {
+    background-image:
+      radial-gradient(60% 55% at 50% 0%, rgba(91, 61, 245, 0.32) 0%, transparent 70%),
+      radial-gradient(40% 40% at 85% 20%, rgba(160, 143, 255, 0.14) 0%, transparent 70%);
   }
 
   .pb-safe {
@@ -186,35 +193,26 @@
     display: none;
   }
 
-  /* --- Motion -------------------------------------------------------------
-     There is no generic scroll-fade here on purpose. Every animation below
-     depicts a specific product event: a check completing, a score settling,
-     a price dropping. If motion isn't saying something, it isn't used. */
+  /* --- Motion ------------------------------------------------------------
+     Each animation depicts one product event: a finding landing, a score
+     settling, a price counting down. There is deliberately no generic
+     scroll-fade. All of it is off under prefers-reduced-motion. */
 
-  @keyframes worth-check-in {
+  @keyframes worth-land {
     from {
       opacity: 0;
-      transform: translateY(6px);
+      transform: translateY(8px) scale(0.985);
     }
     to {
       opacity: 1;
       transform: none;
-    }
-  }
-
-  @keyframes worth-scan {
-    0% {
-      transform: translateX(-100%);
-    }
-    100% {
-      transform: translateX(320%);
     }
   }
 
   @keyframes worth-settle {
     from {
       opacity: 0;
-      transform: scale(0.97);
+      transform: scale(0.96);
     }
     to {
       opacity: 1;
@@ -222,27 +220,36 @@
     }
   }
 
-  .anim-check {
-    animation: worth-check-in 0.42s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  @keyframes worth-sweep {
+    0% {
+      transform: translateX(-110%);
+    }
+    100% {
+      transform: translateX(360%);
+    }
+  }
+
+  .anim-land {
+    animation: worth-land 0.45s cubic-bezier(0.22, 1, 0.36, 1) backwards;
   }
   .anim-settle {
-    animation: worth-settle 0.5s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+    animation: worth-settle 0.55s cubic-bezier(0.22, 1, 0.36, 1) backwards;
   }
-  .anim-scan::after {
+  .anim-sweep::after {
     content: '';
     position: absolute;
     inset: 0 auto 0 0;
-    width: 30%;
-    background: linear-gradient(90deg, transparent, var(--color-worth-wash), transparent);
-    animation: worth-scan 1.6s linear infinite;
+    width: 28%;
+    background: linear-gradient(90deg, transparent, rgba(91, 61, 245, 0.16), transparent);
+    animation: worth-sweep 1.7s linear infinite;
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .anim-check,
+    .anim-land,
     .anim-settle {
       animation: none;
     }
-    .anim-scan::after {
+    .anim-sweep::after {
       display: none;
     }
     *,

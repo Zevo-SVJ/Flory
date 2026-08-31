@@ -2,51 +2,113 @@ import type { ReactNode } from 'react'
 import { cn } from '@/lib/utils/cn'
 
 /**
- * Sections share one ivory ground and are separated by a hairline rather than
- * by alternating background blocks. The page should read as one continuous
- * surface that occasionally arrives somewhere important, not as a stack of
- * marketing panels.
+ * A section is a stage.
+ *
+ * `light` is the consumer/editorial register — the thing you're considering.
+ * `dark` is Worth working: analysis, evidence, verdict, the shared result.
+ * The page changes stage when the content changes register, not on a fixed
+ * alternating cadence.
  */
 export function Section({
   id,
   children,
+  tone = 'light',
+  glow = false,
   className,
-  rule = true,
-  tone = 'ivory',
+  width = 'default',
 }: {
   id?: string
   children: ReactNode
+  tone?: 'light' | 'dark' | 'sunk'
+  /** Violet stage lighting. Dark sections only. */
+  glow?: boolean
   className?: string
-  rule?: boolean
-  tone?: 'ivory' | 'ink'
+  width?: 'default' | 'wide'
 }) {
   return (
     <section
       id={id}
       className={cn(
-        rule && tone === 'ivory' && 'border-line border-t',
-        tone === 'ink' && 'bg-ink text-white',
+        'relative overflow-hidden',
+        tone === 'light' && 'bg-paper text-ink',
+        tone === 'sunk' && 'bg-paper-2 text-ink',
+        tone === 'dark' && 'bg-midnight text-white',
+        glow && tone === 'dark' && 'stage-light',
         className,
       )}
     >
-      <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-24">{children}</div>
+      <div
+        className={cn(
+          'relative mx-auto px-5 py-20 sm:px-6 sm:py-28 lg:py-32',
+          width === 'wide' ? 'max-w-7xl' : 'max-w-6xl',
+        )}
+      >
+        {children}
+      </div>
     </section>
   )
 }
 
 /**
- * The numbered story beat. Numbering is real here — the landing page follows
- * one purchase from doubt to decision — so the index carries information.
+ * The section eyebrow. Numbering is real — the page follows one purchase from
+ * doubt to decision — so the index carries information.
  */
-export function Beat({ index, children }: { index: string; children: ReactNode }) {
+export function Eyebrow({
+  index,
+  children,
+  tone = 'light',
+}: {
+  index?: string
+  children: ReactNode
+  tone?: 'light' | 'dark'
+}) {
   return (
     <div className="flex items-baseline gap-3">
-      <span className="tnum label text-worth">{index}</span>
-      <span className="label text-graphite">{children}</span>
+      {index && <span className="tnum label text-violet">{index}</span>}
+      <span className={cn('label', tone === 'dark' ? 'text-white/45' : 'text-graphite')}>
+        {children}
+      </span>
     </div>
   )
 }
 
-export function Statement({ children, className }: { children: ReactNode; className?: string }) {
-  return <h2 className={cn('text-statement font-serif font-medium', className)}>{children}</h2>
+export function Statement({
+  children,
+  tone = 'light',
+  className,
+}: {
+  children: ReactNode
+  tone?: 'light' | 'dark'
+  className?: string
+}) {
+  return (
+    <h2
+      className={cn(
+        'text-statement font-serif font-medium',
+        tone === 'dark' ? 'text-white' : 'text-ink',
+        className,
+      )}
+    >
+      {children}
+    </h2>
+  )
+}
+
+/** The illustrative-data disclosure. Every example on the page carries one. */
+export function Disclosure({
+  children = 'Illustrative example — Worth’s research engine isn’t connected yet.',
+  tone = 'light',
+  className,
+}: {
+  children?: ReactNode
+  tone?: 'light' | 'dark'
+  className?: string
+}) {
+  return (
+    <p
+      className={cn('text-[0.75rem]', tone === 'dark' ? 'text-white/35' : 'text-faint', className)}
+    >
+      {children}
+    </p>
+  )
 }

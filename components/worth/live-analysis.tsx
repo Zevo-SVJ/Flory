@@ -98,7 +98,7 @@ export function LiveAnalysis({ className }: { className?: string }) {
                 <span className="relative min-w-0 flex-1 overflow-hidden">
                   <span
                     className={cn(
-                      'bg-ivory-deep relative block h-2 w-full max-w-[11rem] overflow-hidden rounded-full',
+                      'bg-paper-2 relative block h-2 w-full max-w-[11rem] overflow-hidden rounded-full',
                       active && 'anim-scan',
                     )}
                   />
@@ -112,7 +112,7 @@ export function LiveAnalysis({ className }: { className?: string }) {
       {/* The conclusion. */}
       <div
         className={cn(
-          'border-line bg-ivory/60 border-t p-4 transition-opacity duration-500 sm:p-5',
+          'border-line bg-paper/60 border-t p-4 transition-opacity duration-500 sm:p-5',
           'motion-reduce:transition-none',
           resolved ? 'opacity-100' : 'opacity-0',
         )}
@@ -157,7 +157,7 @@ export function LiveAnalysis({ className }: { className?: string }) {
  */
 function ProductTile() {
   return (
-    <span className="rounded-note border-line bg-ivory flex size-11 shrink-0 items-center justify-center border sm:size-12">
+    <span className="rounded-note border-line bg-paper flex size-11 shrink-0 items-center justify-center border sm:size-12">
       <svg
         width="22"
         height="22"
