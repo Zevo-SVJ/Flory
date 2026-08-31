@@ -9,7 +9,7 @@ import { AnalyzeInput } from '@/components/worth/analyze-input'
  */
 export function FinalCta() {
   return (
-    <section className="stage-light bg-midnight relative overflow-hidden">
+    <section className="scene scene-in relative overflow-hidden">
       <div className="relative mx-auto max-w-6xl px-5 py-24 sm:px-6 sm:py-32">
         <div className="mx-auto flex max-w-[42rem] flex-col items-center text-center">
           <h2 className="text-statement font-serif font-medium text-white">

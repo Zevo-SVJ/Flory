@@ -207,19 +207,19 @@
     content: '';
     position: absolute;
     inset-inline: 0;
-    height: 9rem;
+    height: 3.5rem;
     pointer-events: none;
     z-index: 2;
   }
-  /* Eased stops rather than a straight ramp: a linear fade between a near-black
-     scene and warm white reads as a grey smear across the page. */
+  /* Short and front-loaded. Any cross-fade between warm white and near-black
+     passes through grey, so the fade is kept to an edge treatment rather than
+     a band: paper is already gone by a third of the way in. */
   .scene-in::before {
     top: 0;
     background: linear-gradient(
       to bottom,
       var(--color-paper) 0%,
-      color-mix(in srgb, var(--color-paper) 55%, transparent) 34%,
-      color-mix(in srgb, var(--color-paper) 18%, transparent) 62%,
+      color-mix(in srgb, var(--color-paper) 30%, transparent) 38%,
       transparent 100%
     );
   }
@@ -228,8 +228,7 @@
     background: linear-gradient(
       to top,
       var(--color-paper) 0%,
-      color-mix(in srgb, var(--color-paper) 55%, transparent) 34%,
-      color-mix(in srgb, var(--color-paper) 18%, transparent) 62%,
+      color-mix(in srgb, var(--color-paper) 30%, transparent) 38%,
       transparent 100%
     );
   }
@@ -252,16 +251,6 @@
   }
   .pt-safe {
     padding-top: env(safe-area-inset-top, 0px);
-  }
-
-  .scroll-strip {
-    overflow-x: auto;
-    scrollbar-width: none;
-    -webkit-overflow-scrolling: touch;
-    overscroll-behavior-x: contain;
-  }
-  .scroll-strip::-webkit-scrollbar {
-    display: none;
   }
 
   /* --- Motion ------------------------------------------------------------
