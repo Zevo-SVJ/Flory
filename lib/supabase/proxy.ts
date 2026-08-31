@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import type { Database } from '@/types/database'
 import { readSupabaseEnv } from './env'
-import { loginWithNext } from '@/lib/auth/redirects'
+import { loginWithNext, signupWithNext } from '@/lib/auth/redirects'
 
 /** Routes that require a signed-in user. */
 const PROTECTED_PREFIXES = ['/dashboard', '/analyze', '/history', '/settings', '/onboarding']
@@ -62,7 +62,13 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
 
   if (!user && isMatch(pathname, PROTECTED_PREFIXES)) {
     const url = request.nextUrl.clone()
-    const target = loginWithNext(`${pathname}${search}`)
+    const intended = `${pathname}${search}`
+    // Someone who just pasted a link is almost always new, so send them to
+    // sign-up ("Create your Worth profile") rather than a sign-in form. Every
+    // other protected route is somewhere only a returning user would go.
+    const target = isMatch(pathname, ['/analyze'])
+      ? signupWithNext(intended)
+      : loginWithNext(intended)
     url.pathname = target.split('?')[0] as string
     url.search = target.includes('?') ? `?${target.split('?')[1]}` : ''
     return NextResponse.redirect(url)
