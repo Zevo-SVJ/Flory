@@ -33,13 +33,11 @@ export function FoundSomething() {
               </span>
             </div>
 
-            <div className="bg-paper-2 p-6">
-              <ProductImage
-                asset="headphones"
-                sizes="(max-width: 1024px) 70vw, 360px"
-                className="mx-auto aspect-[4/3] w-full max-w-[16rem]"
-              />
-            </div>
+            <ProductImage
+              asset="headphones"
+              sizes="(max-width: 1024px) 90vw, 420px"
+              className="aspect-[4/3] w-full border-b border-line"
+            />
 
             <div className="flex flex-col gap-3 p-5">
               <div>

@@ -235,6 +235,41 @@
   .anim-settle {
     animation: worth-settle 0.55s cubic-bezier(0.22, 1, 0.36, 1) backwards;
   }
+  /* The inspection pass over the hero product: one violet beam travelling
+     down the object while Worth's checks resolve. It depicts the act of
+     looking, so it stops the moment the verdict lands. */
+  @keyframes worth-scan {
+    0% {
+      transform: translateY(-120%);
+      opacity: 0;
+    }
+    12% {
+      opacity: 1;
+    }
+    88% {
+      opacity: 1;
+    }
+    100% {
+      transform: translateY(520%);
+      opacity: 0;
+    }
+  }
+
+  .anim-scan::after {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 18%;
+    background: linear-gradient(
+      180deg,
+      transparent,
+      rgba(160, 143, 255, 0.32) 45%,
+      rgba(91, 61, 245, 0.5) 60%,
+      transparent
+    );
+    animation: worth-scan 1.5s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+  }
+
   .anim-sweep::after {
     content: '';
     position: absolute;
@@ -249,7 +284,8 @@
     .anim-settle {
       animation: none;
     }
-    .anim-sweep::after {
+    .anim-sweep::after,
+    .anim-scan::after {
       display: none;
     }
     *,

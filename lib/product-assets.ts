@@ -7,17 +7,32 @@
  * current assets for real product photography is a one-line change per entry
  * and touches no component.
  *
- * The assets shipped today are locally authored SVG product renders, not
- * photographs. This build environment's network policy blocks every image host
- * (Wikimedia, Unsplash and any CDN all return 403 at the egress gateway), so
- * no real photograph could be downloaded into the repository.
+ * PROVENANCE
+ * ----------
+ * `headphones.webp` is a real photograph, not a render:
+ *   Source: Wikimedia Commons, "Headphones (56330).jpg"
+ *   Licence: CC0 1.0 (public domain dedication) — commercial use and
+ *            modification permitted, no attribution required.
+ *   Processing: the original is shot on a saturated yellow seamless. The
+ *            background was keyed out in HSV (hue ~47deg, saturated, bright)
+ *            and replaced with the warm neutral the Worth paper surface uses,
+ *            so the product sits in the palette instead of fighting it. The
+ *            headphones were then recentred on a 4:3 canvas of the same
+ *            neutral and resized to 480x360, WebP q78 (5.5 kB).
+ *   Why this product: the example analysis is about unbranded over-ear
+ *            noise-cancelling headphones. Attaching an invented verdict to an
+ *            identifiable brand would be unfair to that brand, so the photo is
+ *            deliberately one with no legible logo.
  *
- * TO USE REAL PHOTOGRAPHY
- * -----------------------
- *   1. Drop the file into `public/images/products/` (e.g. `headphones.jpg`).
- *   2. Change `src` below and set `kind: 'photo'`.
- * Nothing else needs to change — `<ProductImage>` handles both, and `photo`
- * assets get object-cover framing while `render` assets get object-contain.
+ * `course.svg` is a locally authored render, used because a photograph adds
+ * nothing to "an online course" — the thing being sold is the interface.
+ *
+ * TO SWAP AN ASSET
+ * ----------------
+ *   1. Drop the file into `public/images/products/`.
+ *   2. Change `src` and `kind` below.
+ * Nothing else changes — `photo` assets get object-cover framing, `render`
+ * assets get object-contain.
  */
 
 export interface ProductAsset {
@@ -35,11 +50,11 @@ export type ProductAssetKey = 'headphones' | 'course'
    a component can still branch on photo vs render after a swap. */
 export const PRODUCT_ASSETS: Record<ProductAssetKey, ProductAsset> = {
   headphones: {
-    src: '/images/products/headphones.svg',
+    src: '/images/products/headphones.webp',
     alt: 'Over-ear noise-cancelling headphones',
-    kind: 'render',
-    width: 440,
-    height: 420,
+    kind: 'photo',
+    width: 480,
+    height: 360,
   },
   course: {
     src: '/images/products/course.svg',
