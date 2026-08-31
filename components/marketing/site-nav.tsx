@@ -58,12 +58,8 @@ export function SiteNav({
         </Link>
 
         <nav aria-label="Main" className="flex items-center gap-0.5 sm:gap-1">
-          <NavLink href="/#how-it-works" dark={dark} desktopOnly>
-            How it works
-          </NavLink>
-          <NavLink href="/#pricing" dark={dark} desktopOnly>
-            Pricing
-          </NavLink>
+          {/* Three things, at every width. A landing page with one action
+              does not need a menu, and section links only compete with it. */}
           <NavLink href="/login" dark={dark}>
             Sign in
           </NavLink>

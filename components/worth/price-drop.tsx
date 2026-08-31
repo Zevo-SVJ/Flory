@@ -3,7 +3,7 @@ import { cn } from '@/lib/utils/cn'
 /**
  * The price drop — Worth's second brand object.
  *
- * "€399 → €329, save €70" is the single most repeatable idea in the product,
+ * "€1,007 → €724, save €283" is the single most repeatable idea in the product,
  * so it gets one fixed treatment: struck original, blue arrow (the brand
  * *doing* something), destination in ink, saving in verdict green. It appears
  * in the hero, the money moment, the share card and every result.

@@ -1,114 +1,153 @@
+'use client'
+
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Disclosure } from './section'
+import { PRIMARY_EXAMPLE } from '@/lib/analysis/fixtures'
 import { cn } from '@/lib/utils/cn'
 
 /**
- * Beat 05 — the verdict, and why.
+ * Beat 03 — the verdict.
  *
- * The page's centre of gravity. A full-bleed scene rather than a section with
- * columns: the score arrives at display scale, dead centre, on a banded rule
- * that shows 61 sitting inside "think twice" rather than asserting it. Then the
- * six things Worth actually weighed, full width and legible, so the number is
- * visibly the conclusion of an argument rather than a mood.
+ * An evidence field, not a list. The six dimensions sit around the score and
+ * arrive from where they were found, one at a time; the number counts up only
+ * once they are all in. That order is the whole claim: the verdict is what the
+ * evidence adds up to, not a mood attached to it.
  *
- * The hero shows this reveal in miniature as the launch shot. This is where it
- * gets the room to be the point of the page.
+ * The score is the largest thing on the page, and the verdict word lands after
+ * it rather than with it, because the payoff is the conclusion — not the
+ * arithmetic.
  */
 
-const SIGNALS = [
-  ['Price', '€70 above the best verified price', 'negative'],
-  ['Reviews', 'Battery and call quality consistently praised', 'positive'],
-  ['Trust', 'Verified seller, 30-day returns, 2-year warranty', 'positive'],
-  ['Value', 'Top of its class for noise cancelling', 'positive'],
-  ['Risk', 'A refresh is expected within six months', 'caution'],
-  ['Alternatives', 'Identical model, verified retailer, €329', 'positive'],
-] as const
-
-const DOT = {
-  positive: 'bg-buy-lift',
-  negative: 'bg-skip-lift',
-  caution: 'bg-think-lift',
+const TONE = {
+  positive: 'text-buy-lift',
+  caution: 'text-think-lift',
+  negative: 'text-skip-lift',
+  neutral: 'text-white/60',
 } as const
 
+/* Where each dimension sits around the score on a wide screen, and where it
+   travels in from. Two columns on a phone, in the same order. */
+const PLACE = [
+  'lg:col-start-1 lg:row-start-1',
+  'lg:col-start-1 lg:row-start-2',
+  'lg:col-start-1 lg:row-start-3',
+  'lg:col-start-3 lg:row-start-1',
+  'lg:col-start-3 lg:row-start-2',
+  'lg:col-start-3 lg:row-start-3',
+]
+
+const FROM = ['-16px,-8px', '-20px,0px', '-16px,8px', '16px,-8px', '20px,0px', '16px,8px']
+
 export function VerdictMoment() {
-  const score = 61
+  const ref = useRef<HTMLElement>(null)
+  const [shown, setShown] = useState(0)
+  const [score, setScore] = useState(0)
+  const started = useRef(false)
+
+  const signals = useMemo(() => PRIMARY_EXAMPLE.result?.signals ?? [], [])
+  const target = PRIMARY_EXAMPLE.score ?? 68
+  const scored = shown >= signals.length
+
+  useEffect(() => {
+    const node = ref.current
+    if (!node || started.current) return
+
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      started.current = true
+      const skip = window.setTimeout(() => {
+        setShown(signals.length)
+        setScore(target)
+      }, 0)
+      return () => window.clearTimeout(skip)
+    }
+
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (!entries[0]?.isIntersecting || started.current) return
+        started.current = true
+        io.disconnect()
+        signals.forEach((_, i) => window.setTimeout(() => setShown(i + 1), 220 + i * 150))
+      },
+      { threshold: 0.3 },
+    )
+    io.observe(node)
+    return () => io.disconnect()
+  }, [signals, target])
+
+  useEffect(() => {
+    if (!scored || score >= target) return
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      const skip = window.setTimeout(() => setScore(target), 0)
+      return () => window.clearTimeout(skip)
+    }
+    const tick = window.setInterval(() => setScore((c) => Math.min(c + 4, target)), 18)
+    return () => window.clearInterval(tick)
+  }, [scored, score, target])
 
   return (
-    <section className="scene scene-in scene-out relative overflow-hidden py-24 sm:py-32">
-      <div className="relative mx-auto max-w-4xl px-5 text-center sm:px-6">
-        <p className="label text-white/40">05 · The answer</p>
+    <section
+      ref={ref}
+      className="scene scene-in scene-out relative overflow-hidden py-24 sm:py-32"
+    >
+      <div className="relative mx-auto max-w-6xl px-5 sm:px-6">
+        <p className="label text-center text-white/40">05 · The answer</p>
 
-        <p className="tnum text-display mt-8 font-semibold text-white">
-          {score}
-          <span className="text-[0.2em] font-normal tracking-normal text-white/30"> /100</span>
-        </p>
-
-        <Scale score={score} />
-
-        <p className="text-think-lift text-statement mt-10 font-serif font-medium">Think twice</p>
-
-        <p className="text-statement mx-auto mt-4 max-w-[18ch] font-serif font-medium text-white">
-          The product is good. The price isn’t.
-        </p>
-      </div>
-
-      {/* The reasoning, full width. */}
-      <div className="relative mx-auto mt-20 max-w-4xl px-5 sm:px-6">
-        <p className="label border-b border-white/10 pb-4 text-white/40">
-          What Worth weighed
-        </p>
-        <ul className="flex flex-col divide-y divide-white/8">
-          {SIGNALS.map(([label, detail, tone]) => (
-            <li key={label} className="flex items-baseline gap-4 py-5 sm:gap-6">
-              <span
-                className={cn('size-2 shrink-0 translate-y-[-1px] rounded-full', DOT[tone])}
-                aria-hidden
-              />
-              <span className="text-page w-[6.5rem] shrink-0 font-medium text-white sm:w-40">
-                {label}
-              </span>
-              <span className="text-lead text-white/55">{detail}</span>
-            </li>
+        <div className="mt-14 grid grid-cols-2 items-center gap-x-6 gap-y-7 sm:gap-x-10 lg:mt-16 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)_minmax(0,1fr)] lg:gap-x-14 lg:gap-y-9">
+          {signals.map((s, i) => (
+            <div
+              key={s.kind}
+              style={
+                {
+                  '--from-x': FROM[i]?.split(',')[0],
+                  '--from-y': FROM[i]?.split(',')[1],
+                } as React.CSSProperties
+              }
+              className={cn(
+                'border-t border-white/12 pt-3.5',
+                PLACE[i],
+                i < shown ? 'motion-safe:anim-converge' : 'invisible',
+              )}
+            >
+              <p className="label text-white/40">{s.label}</p>
+              <p className={cn('mt-2 text-[0.9375rem] leading-snug', TONE[s.tone])}>{s.detail}</p>
+            </div>
           ))}
-        </ul>
 
-        <Disclosure tone="dark" className="mt-10">
-          Illustrative analysis — not a real product evaluation.
+          {/* The score sits in the middle of its own evidence. */}
+          <div className="col-span-2 py-4 text-center lg:col-span-1 lg:col-start-2 lg:row-span-3 lg:row-start-1 lg:py-0">
+            {/* `/100` carries its own size: an em-relative size here resolves
+                against the paragraph, not against the score beside it. */}
+            <p className="tnum flex items-start justify-center text-white">
+              <span className="text-display font-semibold">{score}</span>
+              <span className="mt-3 ml-1.5 text-[1rem] text-white/35 sm:mt-6 sm:text-[1.375rem]">
+                /100
+              </span>
+            </p>
+
+            <p
+              className={cn(
+                'text-think-lift text-statement mt-2 font-serif font-medium',
+                scored ? 'motion-safe:anim-wipe' : 'invisible',
+              )}
+            >
+              Think twice
+            </p>
+
+            <p
+              className={cn(
+                'text-lead mx-auto mt-6 max-w-[26ch] text-white/60',
+                scored ? 'motion-safe:anim-land' : 'invisible',
+              )}
+            >
+              {PRIMARY_EXAMPLE.summary}
+            </p>
+          </div>
+        </div>
+
+        <Disclosure tone="dark" className="mt-16 text-center">
+          Illustrative analysis — not a real evaluation of a real seller.
         </Disclosure>
       </div>
     </section>
-  )
-}
-
-/**
- * The banded scale. The verdict thresholds are drawn, so 61 is visibly inside
- * "think twice" rather than being told it is.
- */
-function Scale({ score }: { score: number }) {
-  const ticks = Array.from({ length: 21 }, (_, i) => i * 5)
-  return (
-    <div className="mx-auto mt-8 max-w-lg">
-      <div className="relative h-8">
-        <div className="absolute inset-x-0 top-4 flex justify-between">
-          {ticks.map((tick) => (
-            <span
-              key={tick}
-              className={cn(
-                'w-px',
-                tick % 25 === 0 ? 'h-4' : 'h-2',
-                tick <= score ? 'bg-white/55' : 'bg-white/15',
-              )}
-            />
-          ))}
-        </div>
-        <div className="absolute top-0 -translate-x-1/2" style={{ left: `${score}%` }}>
-          <span className="bg-think-lift block h-8 w-[3px] rounded-full" />
-        </div>
-      </div>
-      <div className="label mt-2 flex text-white/30">
-        <span className="flex-1 text-left">Skip</span>
-        <span className="text-think-lift flex-1 text-center">Think twice</span>
-        <span className="flex-1 text-right">Buy</span>
-      </div>
-    </div>
   )
 }

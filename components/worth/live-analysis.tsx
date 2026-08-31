@@ -24,10 +24,10 @@ import { cn } from '@/lib/utils/cn'
  */
 
 const CHECKS = [
-  { label: 'Price', finding: '€399 here · €329 elsewhere', tone: 'negative' as const },
-  { label: 'Reviews', finding: '2,140 read · battery praised', tone: 'positive' as const },
+  { label: 'Price', finding: 'Advertised €892', tone: 'caution' as const },
+  { label: 'Reviews', finding: '1,284 read · support praised', tone: 'positive' as const },
   { label: 'Trust', finding: 'Authorised seller · 30-day returns', tone: 'positive' as const },
-  { label: 'Alternatives', finding: 'Same model found for €329', tone: 'positive' as const },
+  { label: 'Alternatives', finding: 'Equivalent plan for €724', tone: 'positive' as const },
 ]
 
 const TONE_DOT = {
@@ -67,7 +67,7 @@ export function LiveAnalysis({ className }: { className?: string }) {
           <p className="label text-graphite">Analysing</p>
           <p className="text-ink mt-1.5 truncate font-medium">{PRIMARY_EXAMPLE.title}</p>
         </div>
-        <span className="tnum text-ink shrink-0 text-lg font-semibold sm:text-xl">€399</span>
+        <span className="tnum text-ink shrink-0 text-lg font-semibold sm:text-xl">€1,007</span>
       </div>
 
       {/* The investigation. */}
@@ -142,7 +142,7 @@ export function LiveAnalysis({ className }: { className?: string }) {
             </p>
 
             <div className="border-line border-t pt-3.5">
-              <PriceDrop from="€399" to="€329" saving="€70" size="sm" />
+              <PriceDrop from="€1,007" to="€724" saving="€283" size="sm" />
             </div>
           </div>
         )}

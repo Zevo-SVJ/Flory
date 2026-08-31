@@ -1,14 +1,11 @@
 import { SiteNav } from '@/components/marketing/site-nav'
 import { Hero } from '@/components/marketing/hero'
-import { FoundSomething } from '@/components/marketing/found-something'
-import { ShouldYouBuy } from '@/components/marketing/should-you-buy'
-import { WorthChecks } from '@/components/marketing/worth-checks'
-import { PurchaseTypes } from '@/components/marketing/purchase-types'
+import { HowItWorks } from '@/components/marketing/how-it-works'
+import { WhyBother } from '@/components/marketing/why-bother'
 import { VerdictMoment } from '@/components/marketing/verdict-moment'
-import { MoneyMoment } from '@/components/marketing/money-moment'
+import { PurchaseTypes } from '@/components/marketing/purchase-types'
 import { ProductDemo } from '@/components/marketing/product-demo'
 import { ShareMoment } from '@/components/marketing/share-moment'
-import { WhyWorth } from '@/components/marketing/why-worth'
 import { PreLaunch } from '@/components/marketing/pre-launch'
 import { PricingSection } from '@/components/marketing/pricing-section'
 import { Faq } from '@/components/marketing/faq'
@@ -18,18 +15,32 @@ import { StickyAnalyzeBar } from '@/components/marketing/sticky-analyze-bar'
 /**
  * The Worth landing page.
  *
- * One purchase followed from doubt to decision. The same €399 headphones run
- * through every section, so the page reads as a single investigation rather
- * than a stack of unrelated feature demos.
+ * One decision, followed from doubt to conclusion. The same checkout runs
+ * through every section — advertised at €892, actually €1,007, available
+ * elsewhere at €724 — so the page reads as a single investigation rather than
+ * a stack of unrelated feature demos.
  *
- * The stage alternates between light (the consumer register — the thing you're
- * considering) and dark with violet lighting (Worth working — analysis,
- * evidence, verdict, the shared result). The switch happens when the content
+ * The narrative, in order:
+ *
+ *   hero          I am about to pay for something.
+ *   how it works  Paste it. Worth investigates. You decide.
+ *   why bother    I would otherwise do this research myself:
+ *                   01 the research      chaos becomes one answer
+ *                   02 the real price    what actually leaves my account
+ *                   03 the alternative   something better exists
+ *   the answer    the six dimensions, and what they add up to
+ *   anywhere      it works on more than one kind of spend
+ *   using it      this is the product, on a phone
+ *   it travels    the result is worth posting
+ *   honesty       nothing here has launched yet
+ *   pricing, questions, and the field again
+ *
+ * Colour worlds change on hard edges, never on a fade: dark is Worth working,
+ * light is the visitor's own register. The switch happens when the content
  * changes register, not on a fixed cadence.
  *
- * Fully static: no session lookup and no database call, so it's fast on a phone
- * over a mobile network. The only client JavaScript is the field, the hero
- * analysis, the price count-down and the sticky mobile bar.
+ * Fully static: no session lookup and no database call, so it's fast on a
+ * phone over a mobile network.
  */
 export default function LandingPage() {
   return (
@@ -39,15 +50,12 @@ export default function LandingPage() {
       <SiteNav analyzeHref="/#analyze" over="scene" />
 
       <Hero />
-      <FoundSomething />
-      <ShouldYouBuy />
-      <WorthChecks />
-      <PurchaseTypes />
+      <HowItWorks />
+      <WhyBother />
       <VerdictMoment />
-      <MoneyMoment />
+      <PurchaseTypes />
       <ProductDemo />
       <ShareMoment />
-      <WhyWorth />
       <PreLaunch />
       <PricingSection />
       <div id="faq" className="scroll-mt-24">

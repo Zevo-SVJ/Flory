@@ -9,13 +9,15 @@ import type { Analysis, Verdict } from './types'
  *
  * They are written to be *plausible* rather than random, because the landing
  * page's job is to show what a Worth result looks like. A verdict of "think
- * twice on a genuinely good product, because of the price" demonstrates the
- * product's actual point far better than a generic low score does.
+ * twice on something that looked fine, because the real cost is higher than
+ * the advertised one" demonstrates the product's actual point far better than
+ * a generic low score does.
  *
- * The example product is deliberately unbranded. Publishing an evaluative
- * verdict with invented prices against a real, named commercial product would
- * be a fabricated review of someone's actual product, however clearly the page
- * labels it — so the illustration keeps the shape and drops the brand.
+ * The example is an online checkout rather than a named product. Two reasons:
+ * the decision Worth is about is the moment before you pay, not any particular
+ * object; and publishing an evaluative verdict with invented prices against a
+ * real, named commercial product would be a fabricated review of someone's
+ * actual product, however clearly the page labels it.
  */
 
 const BASE = {
@@ -39,85 +41,126 @@ const BASE = {
 export const PRIMARY_EXAMPLE: Analysis = {
   ...BASE,
   id: 'example-primary',
-  category: 'product',
-  title: 'Over-ear noise-cancelling headphones',
-  score: 61,
+  category: 'software',
+  title: 'Annual plan, paid upfront',
+  score: 68,
   verdict: 'think_twice',
-  summary: 'The headphones are good. The price isn’t.',
-  priceMinor: 39900,
-  bestPriceMinor: 32900,
+  summary: 'The deal looks good at first. The actual cost changes the picture.',
+  priceMinor: 100700,
+  bestPriceMinor: 72400,
   result: {
     valueSummary:
-      'Class-leading noise cancelling and a 30-hour battery. Nothing wrong with the product — three other retailers are simply selling the same model for less.',
+      'Nothing wrong with the service. The advertised €892 becomes €1,007 once the platform fee and the onboarding add-on are counted, and an equivalent plan is available monthly at €724 a year with better terms.',
     signals: [
       {
         kind: 'price',
-        tone: 'negative',
+        tone: 'caution',
         label: 'Price',
-        detail: '€70 above the best price found for the same model.',
+        detail: 'Advertised at €892. €1,007 is what actually leaves your account.',
+      },
+      {
+        kind: 'fees',
+        tone: 'negative',
+        label: 'Fees',
+        detail: '€84 platform fee and a €31 onboarding add-on, both added at checkout.',
       },
       {
         kind: 'reviews',
         tone: 'positive',
         label: 'Reviews',
-        detail: 'Battery life and call quality are consistently praised.',
+        detail: 'Rated 4.5. Support response times are consistently praised.',
       },
       {
         kind: 'trust',
         tone: 'positive',
         label: 'Trust',
-        detail: 'Authorised seller, 30-day returns, 2-year warranty.',
-      },
-      {
-        kind: 'value',
-        tone: 'positive',
-        label: 'Value',
-        detail: 'Top of its class for noise cancelling at this tier.',
+        detail: 'Established seller, clear terms, refunds honoured within 14 days.',
       },
       {
         kind: 'risk',
-        tone: 'caution',
+        tone: 'negative',
         label: 'Risk',
-        detail: 'A refresh is expected within about six months.',
+        detail: 'Annual billing locks you in. No refund after the first 14 days.',
       },
       {
         kind: 'alternative',
         tone: 'positive',
         label: 'Alternatives',
-        detail: 'Identical model, authorised retailer, €329.',
+        detail: 'Equivalent plan, monthly, cancel any time — €724 a year.',
       },
     ],
     evidence: [
       {
         id: 'p1',
-        kind: 'price',
-        claim: 'Listed at €399 while three other authorised retailers carry it at €329–€349.',
+        kind: 'fees',
+        claim: 'The €84 platform fee and €31 add-on appear only on the final checkout step.',
         source: { label: 'Illustrative example — not a real source' },
       },
       {
         id: 'p2',
         kind: 'reviews',
-        claim: '“Battery life is genuinely 30 hours” appears across long-term reviews.',
+        claim: '“Support answered in under an hour” recurs across long-term reviews.',
         source: { label: 'Illustrative example — not a real source' },
       },
       {
         id: 'p3',
         kind: 'risk',
-        claim: 'The previous two generations were replaced on an 18-month cycle.',
+        claim: 'Annual plans are non-refundable after 14 days under the published terms.',
         source: { label: 'Illustrative example — not a real source' },
       },
     ],
     alternatives: [
       {
         id: 'p-alt-1',
-        title: 'Same model, authorised retailer',
-        priceMinor: 32900,
+        title: 'Equivalent plan, monthly billing',
+        priceMinor: 72400,
         currency: 'EUR',
-        reason: 'Identical product and warranty, €70 less.',
+        reason: 'Same capability, cancel any time, €283 less over a year.',
       },
     ],
   },
 }
+
+/**
+ * The money story, as the landing page tells it: what you think you are
+ * paying, what you actually pay, and what Worth found instead.
+ */
+export const MONEY_EXAMPLE = {
+  base: { label: 'Advertised', amount: '€892' },
+  additions: [
+    { label: 'Platform fee', amount: '€84' },
+    { label: 'Onboarding add-on', amount: '€31' },
+  ],
+  actual: { label: 'What actually leaves your account', amount: '€1,007' },
+  better: { label: 'Worth found', amount: '€724' },
+  saving: '€283',
+} as const
+
+/**
+ * The comparison: the option you found against the one Worth found. Same three
+ * attributes on both sides, so the difference is legible at a glance.
+ */
+export const COMPARISON_EXAMPLE = {
+  found: {
+    heading: 'What you found',
+    price: '€1,007',
+    rows: [
+      ['Rating', '4.5'],
+      ['Billing', 'Annual, upfront'],
+      ['Cancellation', '14 days, then locked in'],
+    ],
+  },
+  worth: {
+    heading: 'What Worth found',
+    price: '€724',
+    rows: [
+      ['Rating', '4.7'],
+      ['Billing', 'Monthly'],
+      ['Cancellation', 'Any time'],
+    ],
+  },
+  saving: '€283',
+} as const
 
 /* ------------------------------------------------------------------------ */
 /* Worth works wherever money is about to be spent — not just retail.        */
@@ -137,26 +180,26 @@ export interface CategoryExample {
 
 export const CATEGORY_EXAMPLES: CategoryExample[] = [
   {
-    id: 'physical',
-    kind: 'Physical product',
-    title: 'Over-ear noise-cancelling headphones',
-    meta: 'Over-ear headphones',
-    price: '€399',
-    bestPrice: '€329',
-    score: 61,
+    id: 'subscription',
+    kind: 'Subscription',
+    title: 'Annual plan, paid upfront',
+    meta: 'Checkout, fees added at the last step',
+    price: '€1,007',
+    bestPrice: '€724',
+    score: 68,
     verdict: 'think_twice',
-    line: 'Good product, wrong price. Same model for €329.',
+    line: 'Fine service. The advertised price isn’t the price.',
   },
   {
     id: 'software',
     kind: 'Software',
-    title: 'Project tool, annual plan',
-    meta: 'Team subscription',
+    title: 'Design tool, team seats',
+    meta: 'Per seat, billed yearly',
     price: '€96/yr',
     bestPrice: null,
     score: 82,
     verdict: 'buy',
-    line: 'Priced fairly for what you use, and easy to leave.',
+    line: 'Priced fairly for the seats you use, and easy to leave.',
   },
   {
     id: 'course',
@@ -171,15 +214,17 @@ export const CATEGORY_EXAMPLES: CategoryExample[] = [
   },
 ]
 
-/* The evidence wall: real-shaped fragments from the primary investigation. */
-export const EVIDENCE_WALL = {
-  priceFound: '€329',
-  priceListed: '€399',
-  retailersChecked: 11,
-  reviewPositive: '“Battery life is genuinely 30 hours.”',
-  reviewNegative: '“The case is bulkier than the last generation.”',
-  reviewsRead: 2140,
-  sellerReturns: '30-day returns',
-  sellerWarranty: '2-year warranty',
-  riskNote: 'A refresh is expected within about six months.',
-}
+/* The research a person would otherwise do themselves: the fragments that end
+   up spread across fifteen tabs before any decision gets made. */
+export const RESEARCH_FRAGMENTS = [
+  { text: '€892', sub: 'advertised' },
+  { text: '4.5 ★', sub: '1,284 reviews' },
+  { text: '“fees at checkout”', sub: 'review, 2025' },
+  { text: '€84', sub: 'platform fee' },
+  { text: 'Annual only', sub: 'billing terms' },
+  { text: '€31', sub: 'onboarding add-on' },
+  { text: '14 days', sub: 'refund window' },
+  { text: '€724', sub: 'another provider' },
+  { text: '4.7 ★', sub: '860 reviews' },
+  { text: '“cancel any time”', sub: 'competitor terms' },
+] as const

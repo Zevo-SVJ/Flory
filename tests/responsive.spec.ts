@@ -4,7 +4,7 @@ import { test, expect } from '@playwright/test'
  * Every width Worth is expected to work at. 390 is the primary reference
  * (iPhone 13/14/15/16); 320 is the smallest supported.
  */
-const WIDTHS = [320, 375, 390, 430, 768, 1280]
+const WIDTHS = [320, 375, 390, 430, 768, 1024, 1280]
 
 /** Routes reachable without a Supabase session. */
 const PUBLIC_ROUTES = ['/', '/pricing', '/login', '/signup', '/forgot-password']
@@ -26,6 +26,52 @@ for (const path of PUBLIC_ROUTES) {
       ).toBeLessThanOrEqual(clientWidth)
     })
   }
+}
+
+/**
+ * The landing page runs several timed sequences, and a transform that pushes a
+ * column past the viewport is an overflow for as long as it runs even when a
+ * parent clips it. So the landing page is measured *while* it animates, after
+ * it settles, and at every scroll depth — and both the documentElement and the
+ * body are checked, since a stray element can widen either one.
+ */
+for (const width of WIDTHS) {
+  test(`the landing page never moves sideways at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 })
+    await page.goto('/', { waitUntil: 'domcontentloaded' })
+
+    const measure = () =>
+      page.evaluate(() => ({
+        doc: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        body: document.body.scrollWidth - document.body.clientWidth,
+      }))
+
+    const samples: { at: string; doc: number; body: number }[] = []
+
+    // While the hero sequence is running, and once it has settled.
+    for (const at of [250, 900, 1700, 2800]) {
+      await page.waitForTimeout(at === 250 ? 250 : 650)
+      samples.push({ at: `hero+${at}ms`, ...(await measure()) })
+    }
+
+    // And at every screen down the page, where the scroll-triggered scenes run.
+    const height = await page.evaluate(() => document.body.scrollHeight)
+    for (let y = 0; y < height; y += 700) {
+      await page.evaluate((v) => window.scrollTo(0, v), y)
+      await page.waitForTimeout(120)
+      samples.push({ at: `y=${y}`, ...(await measure()) })
+    }
+
+    const worst = samples.reduce(
+      (acc, s) => (Math.max(s.doc, s.body) > Math.max(acc.doc, acc.body) ? s : acc),
+      samples[0]!,
+    )
+
+    expect(
+      Math.max(worst.doc, worst.body),
+      `landing page scrolls sideways at ${width}px (${worst.at}: doc +${worst.doc}, body +${worst.body})`,
+    ).toBeLessThanOrEqual(0)
+  })
 }
 
 test('interactive targets on the landing page clear 44px', async ({ page }) => {

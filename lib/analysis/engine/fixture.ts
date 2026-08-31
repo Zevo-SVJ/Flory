@@ -34,7 +34,7 @@ function pick<T>(items: readonly T[], seed: number): T {
 }
 
 const TITLES = [
-  'Wireless noise-cancelling headphones',
+  'Annual plan, paid upfront',
   'Robot vacuum with mapping',
   '4K portable monitor',
   'Ergonomic mesh office chair',

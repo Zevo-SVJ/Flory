@@ -21,7 +21,7 @@ export function PricingSection({ heading = true }: { heading?: boolean }) {
           <Eyebrow index="10">What it costs</Eyebrow>
           <Statement className="mt-5 max-w-[20ch]">Three plans. All paid.</Statement>
           <p className="text-lead text-graphite mt-6">
-            Worth catches a €70 overpayment or it doesn’t. That’s a straightforward thing to charge
+            Worth catches a €283 overpayment or it doesn’t. That’s a straightforward thing to charge
             for — so there’s no free tier, and no ad money quietly changing whose side we’re on.
           </p>
         </div>

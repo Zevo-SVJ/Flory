@@ -200,37 +200,34 @@
     color: #ffffff;
   }
 
-  /* Feathered edges, so a scene dissolves into the section above and below
-     instead of drawing a hard horizontal rule across the page. */
+  /* Colour worlds change on a hard edge, never on a fade. A cross-fade between
+     warm white and near-black spends its whole distance in grey, which reads as
+     a rendering artefact; a clean boundary reads as turning a page. `.scene-in`
+     and `.scene-out` therefore draw a thin brand rule at the boundary rather
+     than a gradient. */
   .scene-in::before,
   .scene-out::after {
     content: '';
     position: absolute;
     inset-inline: 0;
-    height: 3.5rem;
+    height: 2px;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      var(--color-violet) 22%,
+      var(--color-violet-lift) 50%,
+      var(--color-violet) 78%,
+      transparent
+    );
+    opacity: 0.55;
     pointer-events: none;
-    z-index: 2;
+    z-index: 3;
   }
-  /* Short and front-loaded. Any cross-fade between warm white and near-black
-     passes through grey, so the fade is kept to an edge treatment rather than
-     a band: paper is already gone by a third of the way in. */
   .scene-in::before {
     top: 0;
-    background: linear-gradient(
-      to bottom,
-      var(--color-paper) 0%,
-      color-mix(in srgb, var(--color-paper) 30%, transparent) 38%,
-      transparent 100%
-    );
   }
   .scene-out::after {
     bottom: 0;
-    background: linear-gradient(
-      to top,
-      var(--color-paper) 0%,
-      color-mix(in srgb, var(--color-paper) 30%, transparent) 38%,
-      transparent 100%
-    );
   }
 
   /* A floating fact over a scene. Not a card: no fill of its own beyond the
@@ -339,9 +336,50 @@
     animation: worth-sweep 1.7s linear infinite;
   }
 
+  /* A masked reveal: the line wipes up from behind its own baseline. Used for
+     major headlines only — it is the one motion on the page that draws
+     attention to type rather than to information. */
+  @keyframes worth-wipe {
+    from {
+      clip-path: inset(105% 0 -10% 0);
+      transform: translateY(0.32em);
+    }
+    to {
+      clip-path: inset(-10% 0 -10% 0);
+      transform: none;
+    }
+  }
+
+  /* Evidence arriving at the verdict: it comes in from where it was found. */
+  @keyframes worth-converge {
+    from {
+      opacity: 0;
+      transform: translate3d(var(--from-x, 0), var(--from-y, 12px), 0) scale(0.94);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  .anim-wipe {
+    animation: worth-wipe 0.72s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+  }
+  .anim-converge {
+    animation: worth-converge 0.62s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  }
+
+  /* Staggers. Related elements are 110ms apart — enough to read as a sequence,
+     short enough that the whole group still feels like one gesture. */
+  .stagger > * {
+    animation-delay: calc(var(--i, 0) * 110ms);
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .anim-land,
-    .anim-settle {
+    .anim-settle,
+    .anim-wipe,
+    .anim-converge {
       animation: none;
     }
     .anim-sweep::after,

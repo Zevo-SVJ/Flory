@@ -33,7 +33,7 @@ export function ShareMoment() {
           A verdict is a good story.
         </p>
         <p className="text-lead mx-auto mt-6 max-w-[42ch] text-white/55">
-          “I almost spent €399 on these” is a better opening line than any ad Worth could buy.
+          “I almost spent €1,007 on this” is a better opening line than any ad Worth could buy.
         </p>
       </div>
 

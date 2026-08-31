@@ -50,6 +50,7 @@ export const VERDICT_STYLE: Record<
 
 export const SIGNAL_LABEL: Record<SignalKind, string> = {
   price: 'Price',
+  fees: 'Fees',
   value: 'Value',
   reviews: 'Reviews',
   trust: 'Trust',
@@ -60,6 +61,7 @@ export const SIGNAL_LABEL: Record<SignalKind, string> = {
 /** What each dimension answers. Used on the landing page and the result page. */
 export const SIGNAL_QUESTION: Record<SignalKind, string> = {
   price: 'Is this a good price?',
+  fees: 'What does it cost once everything is added?',
   value: 'What are you actually getting?',
   reviews: 'What do buyers consistently report?',
   trust: 'Who is selling it, and can they be trusted?',
@@ -76,6 +78,7 @@ export const TONE_STYLE: Record<SignalTone, { text: string; dot: string }> = {
 
 export const SIGNAL_ORDER: SignalKind[] = [
   'price',
+  'fees',
   'value',
   'reviews',
   'trust',

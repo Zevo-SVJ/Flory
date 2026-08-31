@@ -62,78 +62,76 @@ export function ShareCard({
         className,
       )}
     >
-      <div className="flex items-center justify-between px-6 pt-6 pb-4">
+      {/* Brand first: this has to be recognisable as Worth in a feed, at
+          thumbnail size, before a word of it is read. */}
+      <div className="flex items-center justify-between px-6 pt-6 pb-2">
         <span className="font-serif text-xl font-medium tracking-[-0.01em] text-white">
           Worth<span className="text-violet-lift">.</span>
         </span>
         <span className="label text-white/30">Illustrative</span>
       </div>
 
-      <div className="flex flex-1 flex-col justify-center gap-5 px-6">
-        <div className="flex items-end gap-3">
-          <span
-            className={cn(
-              'tnum text-[4.75rem] leading-[0.8] font-semibold tracking-[-0.06em] sm:text-[5.5rem]',
-              ACCENT[verdict],
-            )}
-          >
-            {score}
-          </span>
-          <div className="pb-2">
-            <span className="tnum block text-sm font-medium text-white/30">/100</span>
+      {/* The story, in the order someone would tell it out loud: what I was
+          about to pay, what Worth found, what that saves. The verdict closes
+          it. Nothing else is on the card. */}
+      <div className="flex flex-1 flex-col justify-center gap-1 px-6">
+        <span className="label text-white/40">I almost spent</span>
+        {price && (
+          <p className="tnum text-[2.75rem] leading-none font-semibold tracking-[-0.05em] text-white/35 line-through decoration-2 sm:text-[3.25rem]">
+            {price}
+          </p>
+        )}
+
+        <span className="label mt-6 text-white/40">Worth found</span>
+        {best && (
+          <p className="tnum text-[3.75rem] leading-none font-semibold tracking-[-0.055em] text-white sm:text-[4.5rem]">
+            {best}
+          </p>
+        )}
+
+        {saving && (
+          <p className={cn('tnum mt-3 text-2xl font-semibold sm:text-[1.75rem]', ACCENT.buy)}>
+            {saving} less
+          </p>
+        )}
+      </div>
+
+      <div className="border-t border-white/10 px-6 py-5">
+        <div className="flex items-end justify-between gap-4">
+          <div className="min-w-0">
             <span
               className={cn(
-                'block text-lg leading-none font-semibold tracking-[-0.01em] uppercase sm:text-xl',
+                'block text-[1.25rem] leading-none font-semibold tracking-[-0.015em] uppercase sm:text-[1.375rem]',
                 ACCENT[verdict],
               )}
             >
               {VERDICT_LABEL[verdict]}
             </span>
+            {summary && (
+              <p className="mt-2.5 line-clamp-2 font-serif text-[1rem] leading-snug text-white/75">
+                {summary}
+              </p>
+            )}
           </div>
+
+          <span className="tnum flex shrink-0 items-baseline gap-1">
+            <span
+              className={cn(
+                'text-[2.5rem] leading-none font-semibold tracking-[-0.05em]',
+                ACCENT[verdict],
+              )}
+            >
+              {score}
+            </span>
+            <span className="text-[0.75rem] text-white/30">/100</span>
+          </span>
         </div>
 
-        {summary && (
-          <p className="font-serif text-[1.375rem] leading-[1.15] text-white sm:text-2xl">
-            {summary}
-          </p>
-        )}
+        {title && <p className="mt-4 truncate text-[0.75rem] text-white/35">{title}</p>}
 
-        {price && best && (
-          <div className="flex items-baseline gap-2.5">
-            <span className="tnum text-xl font-medium text-white/30 line-through decoration-1">
-              {price}
-            </span>
-            <svg
-              width="20"
-              height="11"
-              viewBox="0 0 22 12"
-              fill="none"
-              aria-hidden
-              className="self-center"
-            >
-              <path
-                d="M0 6h19M14.5 1.5 19.5 6l-5 4.5"
-                stroke="var(--color-violet-lift)"
-                strokeWidth="2"
-                strokeLinecap="square"
-              />
-            </svg>
-            <span className="tnum text-2xl font-semibold tracking-[-0.03em] text-white sm:text-3xl">
-              {best}
-            </span>
-          </div>
-        )}
-
-        {saving && (
-          <p className={cn('tnum text-base font-semibold', ACCENT.buy)}>
-            {saving} potential saving
-          </p>
-        )}
-      </div>
-
-      <div className="px-6 pb-6">
-        {title && <p className="mb-3.5 truncate text-[0.8125rem] text-white/40">{title}</p>}
-        <div className="relative h-4">
+        {/* The same banded scale as the product itself, so a shared card and a
+            real result are visibly one object. */}
+        <div className="relative mt-3 h-4">
           <div className="absolute inset-x-0 top-2 flex justify-between">
             {Array.from({ length: 21 }, (_, i) => i * 5).map((tick) => (
               <span

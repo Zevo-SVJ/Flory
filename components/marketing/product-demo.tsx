@@ -115,7 +115,7 @@ function ScreenPaste() {
       <p className="text-ink font-serif text-[1.5rem] leading-tight">Is it worth your money?</p>
 
       <div className="border-violet flex items-center gap-2 rounded-full border bg-white px-3 py-2.5 shadow-[0_0_0_4px_var(--color-violet-wash)]">
-        <span className="text-ink truncate text-[0.75rem]">audio-store.example/…</span>
+        <span className="text-ink truncate text-[0.75rem]">example.com/checkout…</span>
         <span className="bg-violet ml-auto shrink-0 rounded-full px-3 py-1.5 text-[0.6875rem] font-semibold text-white">
           Analyze
         </span>
@@ -125,7 +125,7 @@ function ScreenPaste() {
       <span className="label text-faint mt-3">Recent</span>
       <div className="flex flex-col gap-2">
         {[
-          ['82', 'Design tool, annual', 'text-buy'],
+          ['82', 'Design tool, team seats', 'text-buy'],
           ['28', 'Online course', 'text-skip'],
         ].map(([score, name, tone]) => (
           <div
@@ -144,7 +144,7 @@ function ScreenPaste() {
 function ScreenChecking() {
   return (
     <div className="anim-land flex h-full flex-col gap-4 px-5 pt-12">
-      <p className="text-ink font-serif text-[1.375rem] leading-tight">Checking six things…</p>
+      <p className="text-ink font-serif text-[1.375rem] leading-tight">Reading the checkout…</p>
 
       <div className="bg-line h-1 overflow-hidden rounded-full">
         <div className="bg-violet h-full w-1/2 rounded-full" />
@@ -153,9 +153,9 @@ function ScreenChecking() {
       <ul className="mt-2 flex flex-col gap-3">
         {[
           ['Price', true],
+          ['Fees', true],
           ['Reviews', true],
-          ['Trust', true],
-          ['Value', false],
+          ['Trust', false],
           ['Risk', false],
           ['Alternatives', false],
         ].map(([name, done]) => (
@@ -177,14 +177,14 @@ function ScreenChecking() {
       <span className="label text-faint mt-3">Found so far</span>
       <div className="flex flex-col gap-2">
         {[
-          ['€329', 'at a verified retailer'],
-          ['2,140', 'reviews read'],
+          ['€115', 'in fees at checkout'],
+          ['€724', 'the same thing elsewhere'],
         ].map(([v, k]) => (
           <div
             key={k}
             className="border-line flex items-baseline gap-2 rounded-xl border bg-white px-3 py-2.5"
           >
-            <span className="tnum text-buy text-[0.875rem] font-semibold">{v}</span>
+            <span className="tnum text-ink text-[0.875rem] font-semibold">{v}</span>
             <span className="text-graphite text-[0.6875rem]">{k}</span>
           </div>
         ))}
@@ -199,7 +199,7 @@ function ScreenVerdict() {
       <span className="label text-faint">Worth verdict</span>
 
       <p className="tnum text-think flex items-baseline gap-1">
-        <span className="text-[3.5rem] leading-none font-semibold tracking-[-0.05em]">61</span>
+        <span className="text-[3.5rem] leading-none font-semibold tracking-[-0.05em]">68</span>
         <span className="text-faint text-[0.75rem]">/100</span>
       </p>
       <p className="text-think text-[1.25rem] leading-none font-semibold tracking-[-0.02em] uppercase">
@@ -207,22 +207,22 @@ function ScreenVerdict() {
       </p>
 
       <p className="text-ink mt-1 font-serif text-[1.0625rem] leading-snug">
-        The product is good. The price isn’t.
+        The deal looks good at first. The actual cost changes the picture.
       </p>
 
       <div className="bg-buy-wash mt-2 flex items-baseline gap-2 rounded-xl px-3 py-3">
-        <span className="tnum text-faint text-[0.75rem] line-through">€399</span>
-        <span className="tnum text-ink text-[1.125rem] font-semibold">€329</span>
-        <span className="tnum text-buy ml-auto text-[0.8125rem] font-semibold">−€70</span>
+        <span className="tnum text-faint text-[0.75rem] line-through">€1,007</span>
+        <span className="tnum text-ink text-[1.125rem] font-semibold">€724</span>
+        <span className="tnum text-buy ml-auto text-[0.8125rem] font-semibold">−€283</span>
       </div>
 
       <span className="label text-faint mt-2">Why</span>
       <ul className="flex flex-col gap-2">
         {[
-          ['Price', '€70 above best', 'bg-skip'],
-          ['Reviews', 'Battery praised', 'bg-buy'],
-          ['Trust', 'Verified seller', 'bg-buy'],
-          ['Risk', 'Refresh expected', 'bg-think'],
+          ['Fees', '€115 at checkout', 'bg-skip'],
+          ['Reviews', '4.5 · 1,284', 'bg-buy'],
+          ['Trust', 'Established seller', 'bg-buy'],
+          ['Risk', 'Locked in at 14 days', 'bg-skip'],
         ].map(([k, v, dot]) => (
           <li key={String(k)} className="flex items-center gap-2 text-[0.75rem]">
             <span aria-hidden className={cn('size-1.5 shrink-0 rounded-full', dot)} />
