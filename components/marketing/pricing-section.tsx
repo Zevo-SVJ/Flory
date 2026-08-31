@@ -27,7 +27,11 @@ export function PricingSection({ heading = true }: { heading?: boolean }) {
         </div>
       )}
 
-      <div className="mt-12 grid grid-cols-1 gap-4 sm:mt-16 lg:grid-cols-3 lg:items-center">
+      {/* Stretch, not centre: centring three cards of unequal content height
+          leaves their tops and their price rows on different baselines, which
+          reads as a rendering fault rather than as emphasis. The featured plan
+          is lifted by scale instead. */}
+      <div className="mt-12 grid grid-cols-1 gap-4 sm:mt-16 lg:grid-cols-3 lg:items-stretch">
         {PLANS.map((plan, index) => (
           <PlanPanel key={plan.id} plan={plan} index={index} />
         ))}
@@ -68,9 +72,11 @@ function PlanPanel({ plan, index }: { plan: Plan; index: number }) {
             {String(index + 1).padStart(2, '0')}
           </span>
         </div>
+        {/* Two lines' worth of room whatever the plan says, so the rule under
+            the header lands at the same height in all three cards. */}
         <p
           className={cn(
-            'text-[0.9375rem] leading-snug',
+            'text-[0.9375rem] leading-snug lg:min-h-[2.625rem]',
             featured ? 'text-white/55' : 'text-graphite',
           )}
         >
