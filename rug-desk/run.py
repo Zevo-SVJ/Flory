@@ -38,7 +38,7 @@ def main():
                     results = []
                 for v in results:
                     reason = v.get("reason") or ""
-                    for src in ("rugcheck", "dexscreener", "grok"):
+                    for src in ("facts", "dexscreener", "grok"):
                         if reason.startswith(f"{src} failed"):
                             if src not in down:
                                 post(f"{src} is down, skipping its tokens: {reason}")
@@ -46,7 +46,7 @@ def main():
                             break
                     else:
                         if v["stage"] in ("facts", "pool"):
-                            down.discard("rugcheck")
+                            down.discard("facts")
                         if v["stage"] == "pool":
                             down.discard("dexscreener")
                     if v["verdict"] in ("BUY", "PASS"):

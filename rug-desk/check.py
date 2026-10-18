@@ -3,7 +3,7 @@
 # the first one that says no ends it.
 import csv, json, os, sys, time
 from config import (DATA, LOG, JUDGE, MIN_CONFIDENCE, PAPER, PAPER_BUY_ON_PASS, TICKET_USD)
-from rugcheck import report, fact_kill
+from facts import report, fact_kill
 from market import pool, market_kill
 import book
 
@@ -23,7 +23,7 @@ def log(row: dict):
 def judge(token: dict, m: dict) -> dict:
     if JUDGE == "none":       # free desk: no X read. a PASS means "survived 13 checks", nothing more
         return {"stage": "judge", "verdict": "PASS",
-                "reason": "passed 13 code checks, no X read (JUDGE=none)"}
+                "reason": "passed every code check, no X read (JUDGE=none)"}
     from grok import ask      # imported here so the free desk never needs a key
     from prompts import JUDGE_PROMPT
     try:
@@ -43,7 +43,7 @@ def check(mint: str) -> dict:
         return {"stage": "limits", "verdict": "SKIP", "reason": g}
 
     # pool first: same checks as the article, but most leads die here (thin or fresh pools)
-    # in one fast call, so Rugcheck and its rate limit only see tokens worth a report
+    # in one fast call, so the slower fact sources only see tokens worth a report
     try:
         m = pool(mint)                                           # pool, free
     except Exception as e:
@@ -52,9 +52,9 @@ def check(mint: str) -> dict:
         return {"stage": "pool", "verdict": "SKIP", "reason": k, "symbol": (m or {}).get("symbol")}
 
     try:
-        token = report(mint)                                     # rug filter, free
+        token = report(mint, m)                                  # rug filter, free
     except Exception as e:
-        return {"stage": "facts", "verdict": "SKIP", "reason": f"rugcheck failed: {e}",
+        return {"stage": "facts", "verdict": "SKIP", "reason": f"facts failed: {e}",
                 "symbol": m["symbol"]}
     if (k := fact_kill(token)):
         return {"stage": "facts", "verdict": "SKIP", "reason": k, "symbol": m["symbol"] or token["symbol"]}

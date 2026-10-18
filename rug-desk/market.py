@@ -7,11 +7,7 @@ from config import FACTS, TICKET_USD
 DS = "https://api.dexscreener.com/tokens/v1/solana"
 
 
-def pool(mint: str) -> dict | None:
-    r = requests.get(f"{DS}/{mint}", timeout=15)
-    r.raise_for_status()
-    data = r.json()
-    pairs = data if isinstance(data, list) else (data.get("pairs") or [])
+def _best(pairs: list, mint: str) -> dict | None:
     pairs = [p for p in pairs if (p.get("baseToken") or {}).get("address") == mint]
     if not pairs:
         return None
@@ -20,6 +16,8 @@ def pool(mint: str) -> dict | None:
     born = p.get("pairCreatedAt")
     return {
         "symbol": (p.get("baseToken") or {}).get("symbol"),
+        "dex": p.get("dexId"),
+        "pair": p.get("pairAddress"),
         "price": float(p.get("priceUsd") or 0),
         "liq_usd": (p.get("liquidity") or {}).get("usd") or 0,
         "age_min": round((time.time() * 1000 - born) / 60000) if born else None,
@@ -28,6 +26,23 @@ def pool(mint: str) -> dict | None:
         "vol_1h": (p.get("volume") or {}).get("h1"),
         "url": p.get("url"),
     }
+
+
+def pools(mints: list[str]) -> dict[str, dict | None]:
+    """Up to 30 tokens per call. The scanner uses this to drop thin pools before any real check."""
+    out = {}
+    for i in range(0, len(mints), 30):
+        chunk = mints[i:i + 30]
+        r = requests.get(f"{DS}/{','.join(chunk)}", timeout=15)
+        r.raise_for_status()
+        data = r.json()
+        pairs = data if isinstance(data, list) else (data.get("pairs") or [])
+        out.update({m: _best(pairs, m) for m in chunk})
+    return out
+
+
+def pool(mint: str) -> dict | None:
+    return pools([mint])[mint]
 
 
 def market_kill(m: dict | None) -> str | None:

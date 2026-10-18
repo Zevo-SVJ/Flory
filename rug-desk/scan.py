@@ -4,12 +4,13 @@
 import csv, json, os, time
 import requests
 from config import LOG, SCHEDULE
-import check
+import check, market
+from market import market_kill
 
 SOURCES = ["token-profiles/latest/v1", "token-boosts/latest/v1", "token-boosts/top/v1"]
 # kills that can change with time: a pool grows up, a source comes back. retried after this long
 RETRY_AFTER_MIN = 30
-RETRYABLE = ("too_fresh", "thin_pool", "no_pool", "no_price", "no_report")
+RETRYABLE = ("too_fresh", "thin_pool", "no_pool", "no_price", "no_holders")
 
 
 def _done() -> set[str]:
@@ -45,7 +46,10 @@ def leads() -> list[str]:
                 out.append(a)
     if len(errors) == len(SOURCES):
         raise RuntimeError("; ".join(errors))
-    return out[:SCHEDULE["scan_per_run"]]
+    # one batched pool read for every lead: most are bonding-curve tokens with no real pool yet.
+    # they are not logged, they just come back next run, so the slots go to tokens that can pass
+    live = market.pools(out)
+    return [m for m in out if not market_kill(live[m])][:SCHEDULE["scan_per_run"]]
 
 
 def scan() -> list[dict]:

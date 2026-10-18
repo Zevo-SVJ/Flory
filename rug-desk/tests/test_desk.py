@@ -9,30 +9,67 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import config, book, check, watch, report  # noqa: E402
 
 MINT = "Mint111111111111111111111111111111111111111"
-CREATOR = "Dev1111111111111111111111111111111111111111"
-VAULT = "Vault11111111111111111111111111111111111111"
+PAIR = "Pair111111111111111111111111111111111111111"
+VAULT_OWNER = PAIR
+
+import base64, struct, facts  # noqa: E402
 
 
-def rc_report(**over):
-    d = {
-        "token": {"mintAuthority": None, "freezeAuthority": None, "supply": 1_000_000_000},
-        "tokenMeta": {"symbol": "TEST"},
-        "rugged": False, "score_normalised": 10, "risks": [{"name": "Low holders", "level": "warn"}],
-        "markets": [{"lp": {"lpLockedPct": 100, "baseUSD": 40000, "quoteUSD": 40000}}],
-        "topHolders": [{"address": VAULT, "owner": VAULT, "pct": 60, "insider": False}]
-                      + [{"address": f"W{i}", "owner": f"O{i}", "pct": 2, "insider": False} for i in range(12)],
-        "knownAccounts": {VAULT: {"name": "Raydium", "type": "AMM"}},
-        "creator": CREATOR, "creatorBalance": 0, "graphInsidersDetected": 0, "totalHolders": 900,
-    }
-    d.update(over)
-    return d
+def wallets(n=10, pct=0.02):
+    """Organic-looking holders: each bag 10% smaller than the one before."""
+    return [{"account": f"W{i}", "percent": str(pct * (1 - 0.1 * i)), "is_locked": 0, "tag": ""}
+            for i in range(n)]
 
 
-def ds_pairs(price=0.001, liq=80000, age_min=120, buys=50, sells=30):
+def goplus(**over):
+    g = {"mintable": {"status": "0"}, "freezable": {"status": "0"}, "closable": {"status": "0"},
+         "balance_mutable_authority": {"status": "0"}, "transfer_fee_upgradable": {"status": "0"},
+         "transfer_hook_upgradable": {"status": "0"}, "default_account_state_upgradable": {"status": "0"},
+         "non_transferable": "0", "transfer_fee": {}, "transfer_hook": [], "default_account_state": "1",
+         "metadata": {"symbol": "TEST"}, "holder_count": "900",
+         "holders": [{"account": VAULT_OWNER, "percent": "0.6", "is_locked": 0, "tag": ""}] + wallets(9)}
+    g.update(over)
+    return g
+
+
+def pool_account(lp_minted=1000, base_mint=MINT):
+    d = bytearray(301)
+    n = 0
+    for c in base_mint:
+        n = n * 58 + facts.B58.index(c)
+    d[43:75] = n.to_bytes(32, "big")
+    d[107:139] = bytes(range(1, 33))
+    d[203:211] = struct.pack("<Q", lp_minted)
+    return {"owner": facts.PUMPSWAP, "data": [base64.b64encode(bytes(d)).decode(), "base64"]}
+
+
+class Chain:
+    """Fake Solana RPC. Every holder is a funded wallet except the pool, which a program owns."""
+    def __init__(self, mint_auth=None, freeze_auth=None, lp_live=0, lamports=None):
+        self.mint_auth, self.freeze_auth, self.lp_live = mint_auth, freeze_auth, lp_live
+        self.lamports = lamports or {}
+
+    def __call__(self, url, timeout=None, json=None):
+        m, p = json["method"], json["params"]
+        if m == "getAccountInfo" and p[0] == MINT:
+            res = {"value": {"data": {"parsed": {"info": {"mintAuthority": self.mint_auth,
+                                                          "freezeAuthority": self.freeze_auth}}}}}
+        elif m == "getAccountInfo":
+            res = {"value": pool_account()}
+        elif m == "getTokenSupply":
+            res = {"value": {"amount": str(self.lp_live)}}
+        elif m == "getMultipleAccounts":
+            res = {"value": [{"owner": facts.PUMPSWAP, "lamports": 1} if a == VAULT_OWNER else
+                             {"owner": facts.SYSTEM_PROGRAM, "lamports": self.lamports.get(a, 10**9 + i * 12345)}
+                             for i, a in enumerate(p[0])]}
+        return Resp({"jsonrpc": "2.0", "id": 1, "result": res})
+
+
+def ds_pairs(price=0.001, liq=80000, age_min=120, buys=50, sells=30, dex="pumpswap"):
     return [{"baseToken": {"address": MINT, "symbol": "TEST"}, "priceUsd": str(price),
              "liquidity": {"usd": liq}, "pairCreatedAt": (time.time() - age_min * 60) * 1000,
              "txns": {"h1": {"buys": buys, "sells": sells}}, "volume": {"h1": 1000},
-             "url": "https://dexscreener.com/solana/x"}]
+             "dexId": dex, "pairAddress": PAIR, "url": "https://dexscreener.com/solana/x"}]
 
 
 class Resp:
@@ -47,12 +84,23 @@ class Resp:
             raise RuntimeError(f"HTTP {self.status_code}")
 
 
-def fake_get(rc=None, ds=None, rc_code=200):
-    def get(url, timeout=None):
-        if "rugcheck" in url:
-            return Resp(rc if rc is not None else rc_report(), rc_code)
+def fake_get(gp=None, ds=None, gp_code=200):
+    def get(url, timeout=None, params=None):
+        if "gopluslabs" in url:
+            return Resp({"code": 1, "message": "ok", "result": {MINT: gp if gp is not None else goplus()}}, gp_code)
         return Resp(ds if ds is not None else ds_pairs())
     return get
+
+
+def net(gp=None, ds=None, chain=None, gp_code=200):
+    """Patch every network call the desk makes."""
+    stack = mock.patch("requests.get", fake_get(gp, ds, gp_code)), mock.patch("requests.post", chain or Chain())
+    class Both:
+        def __enter__(self):
+            for s in stack: s.__enter__()
+        def __exit__(self, *a):
+            for s in stack: s.__exit__(*a)
+    return Both()
 
 
 class Base(unittest.TestCase):
@@ -64,39 +112,44 @@ class Base(unittest.TestCase):
 
 class Filter(Base):
     def verdict(self, **kw):
-        with mock.patch("requests.get", fake_get(**kw)):
+        with net(**kw):
             return check.check(MINT)
 
-    def test_clean_token_passes_13_checks(self):
+    def test_clean_token_passes(self):
         v = self.verdict()
         self.assertEqual(v["verdict"], "PASS", v)
         self.assertEqual(v["x_ca"], f"https://x.com/search?q={MINT}&f=live")
 
     def test_pool_vault_not_counted_as_whale(self):
-        # vault holds 60% but is an AMM: top10 = 10 x 2% = 20% < 30%
-        self.assertEqual(self.verdict()["verdict"], "PASS")
+        # the pool holds 60% but a program owns it: top 10 = the 9 wallets + the smallest again
+        with net():
+            t = facts.report(MINT, {"dex": "pumpswap", "pair": PAIR})
+        self.assertEqual(t["top10_pct"], round(sum(2 * (1 - 0.1 * i) for i in range(9)) + 2 * 0.2, 2))
+        self.assertEqual(t["lp_burned_pct"], 100.0)
 
     def test_fact_kills(self):
         cases = {
-            "already_rugged": {"rugged": True},
-            "mint_open": {"token": {"mintAuthority": "X", "freezeAuthority": None, "supply": 1}},
-            "freeze_open": {"token": {"mintAuthority": None, "freezeAuthority": "X", "supply": 1}},
-            "danger:Bad": {"risks": [{"name": "Bad", "level": "danger"}]},
-            "risk_score": {"score_normalised": 41},
-            "lp_unlocked": {"markets": [{"lp": {"lpLockedPct": 50, "baseUSD": 1, "quoteUSD": 1}}]},
-            "top10_heavy": {"topHolders": [{"address": f"W{i}", "pct": 5} for i in range(10)]},
-            "dev_holds": {"creatorBalance": 60_000_000},
-            "insiders": {"graphInsidersDetected": 3},
-            "no_report": {"score_normalised": None},
+            "mint_open": {"chain": Chain(mint_auth="X")},
+            "freeze_open": {"chain": Chain(freeze_auth="X")},
+            "danger:balance_editable": {"gp": goplus(balance_mutable_authority={"status": "1"})},
+            "danger:transfer_hook": {"gp": goplus(transfer_hook=["HookProgram"])},
+            "lp_unlocked": {"chain": Chain(lp_live=500)},
+            "lp_unverified": {"ds": ds_pairs(dex="raydium")},
+            "no_holders": {"gp": goplus(holders=[])},
+            "top10_heavy": {"gp": goplus(holders=wallets(10, 0.07))},
+            "whale": {"gp": goplus(holders=wallets(1, 0.08) + wallets(5, 0.01))},
+            "bundle_same_sol": {"chain": Chain(lamports={"W1": 10_000_000, "W2": 10_000_001, "W3": 10_000_000})},
+            "bundle_ladder": {"gp": goplus(holders=[{"account": f"W{i}", "percent": str(0.0128 - i * 0.00005)}
+                                                     for i in range(10)])},
         }
-        for reason, over in cases.items():
+        for reason, kw in cases.items():
             with self.subTest(reason):
-                v = self.verdict(rc=rc_report(**over))
+                v = self.verdict(**kw)
                 self.assertEqual((v["stage"], v["reason"]), ("facts", reason))
 
-    def test_missing_creator_balance_kills(self):
-        d = rc_report(); del d["creatorBalance"]
-        self.assertEqual(self.verdict(rc=d)["reason"], "dev_holds")
+    def test_goplus_also_says_mintable(self):
+        v = self.verdict(gp=goplus(mintable={"status": "1"}))
+        self.assertEqual(v["reason"], "mint_open")
 
     def test_pool_kills(self):
         cases = {
@@ -112,14 +165,14 @@ class Filter(Base):
                 self.assertEqual((v["stage"], v["reason"]), ("pool", reason))
 
     def test_source_down_is_skip(self):
-        v = self.verdict(rc_code=500)
+        v = self.verdict(gp_code=500)
         self.assertEqual(v["verdict"], "SKIP")
-        self.assertTrue(v["reason"].startswith("rugcheck failed"))
+        self.assertTrue(v["reason"].startswith("facts failed"))
 
 
 class Book(Base):
     def test_paper_buy_and_limits(self):
-        with mock.patch("requests.get", fake_get()):
+        with net():
             v = check.run(MINT)
         self.assertIn("PAPER BUY", v["action"])
         self.assertIn(MINT, book.load())

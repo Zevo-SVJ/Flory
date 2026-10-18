@@ -23,12 +23,16 @@ MAX_ENTRIES_PER_DAY = 6
 DAILY_LOSS_HALT_USD = 50    # realized loss today hits this -> no new entries until tomorrow
 COOLDOWN_HOURS = 24         # no re-entry into a token you just left
 
+SOLANA_RPC = "https://api.mainnet-beta.solana.com"   # free public RPC. a free Helius/QuickNode URL also works
+
 FACTS = {                   # the rug filter. code only, no model
-    "max_risk_score": 40,       # rugcheck score_normalised, 0-100, higher = riskier
-    "min_lp_locked_pct": 90,    # biggest pool: LP locked or burned
-    "max_top10_pct": 30,        # top 10 holders, pools and lockers excluded
-    "max_dev_pct": 5,           # supply still sitting in the creator wallet
-    "max_insiders": 0,          # insider-flagged holders + insider graph hits
+    "min_lp_locked_pct": 90,    # biggest pool: LP burned, read on chain. only PumpSwap pools can be
+                                # verified for now; any other DEX dies as lp_unverified
+    "max_top10_pct": 30,        # top 10 holder wallets, pools and lockers excluded
+    "max_wallet_pct": 5,        # no single wallet over this. covers the dev wallet, which we can't name
+    "bundle_same_sol": 3,       # this many top wallets with the exact same SOL balance -> funded together
+    "bundle_ladder": 5,         # this many big wallets with bags within 2% of each other -> one hand
+    "ladder_min_pct": 0.5,      # a wallet counts in the ladder only above this % of supply
     "min_liquidity_usd": 30000,
     "max_ticket_share": 0.01,   # your ticket is never more than 1% of the pool
     "min_age_min": 30,          # younger than this, every report is still guessing
