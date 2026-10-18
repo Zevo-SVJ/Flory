@@ -52,6 +52,7 @@ def main():
                     if v["verdict"] in ("BUY", "PASS"):
                         post(f"{v['verdict']} {v.get('symbol')} conf={v.get('confidence', '-')} "
                              f"x_read={v.get('x_read', 'none')} {v.get('url', '')}\n"
+                             f"X by CA: {v.get('x_ca')}\nX by ticker: {v.get('x_ticker')}\n"
                              f"{v.get('action', '')}")
 
             today = time.strftime("%Y-%m-%d")

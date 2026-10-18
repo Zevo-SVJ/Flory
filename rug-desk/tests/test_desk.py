@@ -70,6 +70,7 @@ class Filter(Base):
     def test_clean_token_passes_13_checks(self):
         v = self.verdict()
         self.assertEqual(v["verdict"], "PASS", v)
+        self.assertEqual(v["x_ca"], f"https://x.com/search?q={MINT}&f=live")
 
     def test_pool_vault_not_counted_as_whale(self):
         # vault holds 60% but is an AMM: top10 = 10 x 2% = 20% < 30%

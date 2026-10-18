@@ -58,8 +58,11 @@ def check(mint: str) -> dict:
         return {"stage": "pool", "verdict": "SKIP", "reason": k, "symbol": token["symbol"]}
 
     v = judge(token, m)
-    return {**v, "symbol": m["symbol"] or token["symbol"],
-            "price": m["price"], "liq_usd": m["liq_usd"], "url": m["url"]}
+    sym = m["symbol"] or token["symbol"]
+    return {**v, "symbol": sym, "price": m["price"], "liq_usd": m["liq_usd"], "url": m["url"],
+            # the free check 14: two links you open yourself. latest posts, not "top"
+            "x_ca": f"https://x.com/search?q={mint}&f=live",
+            "x_ticker": f"https://x.com/search?q=%24{sym}&f=live"}
 
 
 def run(mint: str) -> dict:
