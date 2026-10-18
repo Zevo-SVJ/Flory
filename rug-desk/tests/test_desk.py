@@ -188,3 +188,14 @@ class Exits(Base):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Scan(Base):
+    def test_retryable_kills_come_back_after_30_min(self):
+        import scan
+        old = time.strftime("%Y-%m-%d %H:%M", time.localtime(time.time() - 3600))
+        check.log({"time": old, "mint": "FRESH", "stage": "pool", "verdict": "SKIP", "reason": "too_fresh"})
+        check.log({"time": old, "mint": "RUG", "stage": "facts", "verdict": "SKIP", "reason": "mint_open"})
+        check.log({"time": time.strftime("%Y-%m-%d %H:%M"), "mint": "NEW", "stage": "pool",
+                   "verdict": "SKIP", "reason": "too_fresh"})
+        self.assertEqual(scan._done(), {"RUG", "NEW"})
