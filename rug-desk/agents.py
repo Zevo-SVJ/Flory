@@ -14,7 +14,7 @@ MARKS = os.path.join(DATA, "marks.json")
 INBOX = os.path.join(DATA, "inbox.txt")      # CAs pasted in the dashboard, checked by GARDE
 from events import emit, set_agent, agents as agent_state
 from notify import post
-import book, watch, scan, check, audit, report, pending
+import book, watch, scan, check, audit, report, pending, exitlab
 
 
 def beat():
@@ -46,7 +46,7 @@ def vigie():
             emit("VIGIE", "error", e["text"])
             continue
         emit("VIGIE", "sell", e["text"], symbol=e["symbol"], mint=e["mint"], pnl=round(e["pnl"], 2),
-             pct=round(e["pct"], 1), reason=e["reason"])
+             pct=round(e["pct"], 1), reason=e["reason"], closed=e.get("closed"))
         post(e["text"])
     log_equity(marks)
     tmp = MARKS + ".tmp"        # live prices for the dashboard, so it never calls an API itself
@@ -148,7 +148,16 @@ def auditor():
                                f"{r['change_pct']:+.0f}% after {r['hours']:.0f}h: {verdict}",
              symbol=r["symbol"], pct=r["change_pct"])
     s = audit.summary()
-    return f"{s['killed']['crashed']}/{s['killed']['n']} éliminés ont chuté, {len(rows)} nouveau(x)"
+    # the exit lab: replay every exit profile on every closed trade's real price path
+    lab = exitlab.run()
+    with open(os.path.join(DATA, "exitlab.json"), "w") as f:
+        json.dump({**lab, "t": time.time()}, f)
+    if lab["switched"]:
+        best = next(r for r in lab["results"] if r["name"] == lab["switched"])
+        emit("AUDIT", "info", f"exit profile switched to '{lab['switched']}': "
+                              f"{best['pnl']:+.2f}$ on {best['n']} replayed trades, better on both halves")
+    return (f"{s['killed']['crashed']}/{s['killed']['n']} éliminés ont chuté · labo : {lab['trades']} trade(s) rejoué(s), "
+            f"profil « {lab['active']} »")
 
 
 def plume():

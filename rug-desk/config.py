@@ -54,14 +54,29 @@ FACTS = {                   # the rug filter. code only, no model
     "max_age_hours": 72,
 }
 
+# exits. no study gives "the" best exit for memecoins (see README, "Exits"), so this is the starting
+# profile and the exit lab (exitlab.py) replays alternatives on your own recorded price paths.
 EXIT = {
+    "liq_drop_pct": 40,                     # pool liquidity down 40% from entry -> out now, always first
     "stop_pct": -35,                        # hard stop from entry
     "ladder": [(100, 0.50), (200, 0.25)],   # +100% sells half, +200% sells a quarter
-    "trail_pct": 30,                        # the rest: out when price falls 30% from its peak
+    "lock_after_pct": 40,                   # once the peak was +40%, a winner may not turn into a loser:
+    "lock_floor_pct": 5,                    #   the floor moves to entry +5%
+    "arm_pct": 40,                          # the trailing stop arms at a +40% peak (or the first take)
+    "trail": "chandelier",                  # "chandelier": k x volatility from the peak; "fixed": trail_pct
+    "trail_k": 3,                           # LeBeau's default multiplier
+    "trail_min_pct": 15,                    # a calm token still gets 15% of room
+    "trail_max_pct": 40,                    # a wild one never more than 40%
+    "trail_pct": 30,                        # the fixed trail, and the fallback before there is enough history
+    "dump_drop_pct": 30,                    # the textbook dump: price 30% under the peak...
+    "dump_volume_ratio": 0.5,               # ...and 5-min volume under half its average of the last hour -> out
+    "stall_min": 45,                        # in profit but no new high for 45 min...
+    "stall_min_pct": 15,                    # ...while up at least 15%...
+    "stall_sell_ratio": 1.5,                # ...and sellers outnumber buyers 1.5:1 over 5 min -> take it
     "time_stop_hours": 6,                   # not up 20% after 6 hours -> out, dead money
     "time_stop_min_pct": 20,
-    "liq_drop_pct": 40,                     # pool liquidity down 40% from entry -> out now
 }
+EXIT_AUTOTUNE = True        # the lab may switch profiles by itself, only past the bar in exitlab.py
 
 SCHEDULE = {                # used by agents.py: one entry per agent
     "vigie_every_s": 20,        # VIGIE: prices every open position, applies exits, logs the balance
@@ -80,3 +95,4 @@ EVENTS = os.path.join(DATA, "events.jsonl")
 AGENTS = os.path.join(DATA, "agents.json")
 EQUITY = os.path.join(DATA, "equity.csv")
 AUDIT = os.path.join(DATA, "audit.csv")
+PATHS = os.path.join(DATA, "paths")          # one price path per traded token, for the exit lab

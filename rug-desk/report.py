@@ -1,6 +1,6 @@
 # report.py
 # the evening report. everything in it comes from checks.csv and trades.csv, nothing from memory.
-import csv, os, time
+import csv, json, os, time
 from collections import Counter
 from config import LOG, PAPER, JUDGE
 import book, audit
@@ -44,6 +44,16 @@ def report() -> str:
             lines.append(f"question: {audit.KNOB.get(worst['reason'], worst['reason'])} in config.py: "
                          f"'{worst['reason']}' killed {worst['n']} tokens and {worst['ran']} still did +100%. "
                          f"look at them before you move it, and write down why")
+    lab = {}
+    lab_path = os.path.join(os.path.dirname(LOG), "exitlab.json")
+    if os.path.exists(lab_path):
+        with open(lab_path) as f:
+            lab = json.load(f)
+    if lab.get("trades"):
+        top = lab["results"][0]
+        act = next(r for r in lab["results"] if r["name"] == "actif")
+        lines.append(f"exit lab on {lab['trades']} trades: best '{top['name']}' {top['pnl']:+.2f}$, "
+                     f"active profile '{lab['active']}' {act['pnl']:+.2f}$")
     a = audit.summary()
     xb, xs = a["x"]["BUY"], a["x"]["SKIP"]
     if xb["n"] or xs["n"]:

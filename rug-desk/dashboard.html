@@ -178,18 +178,21 @@ a { color: #8fb8f0; text-decoration: none; } a:hover { text-decoration: underlin
        border-radius: 10px; padding: 8px 10px; font-family: var(--mono); font-size: 11px; box-shadow: 0 8px 24px rgba(0,0,0,.4); }
 #tip strong { display: block; font-size: 14px; color: var(--ink); }
 #tip span { color: var(--ink-2); }
-#mega { position: fixed; inset: 0; z-index: 30; display: none; place-items: center; background: rgba(8,6,10,.55);
-        backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
-#mega.show { display: grid; animation: fadein .25s ease; }
+#mega { position: fixed; inset: 0; z-index: 30; display: none; place-items: center; background: rgba(10,6,12,.45);
+        backdrop-filter: blur(10px) saturate(.8); -webkit-backdrop-filter: blur(10px) saturate(.8); }
+#mega.show { display: grid; animation: fadein .3s ease; }
 #confetti { position: fixed; inset: 0; z-index: 31; pointer-events: none; }
-.megacard { position: relative; z-index: 32; text-align: center; padding: 26px 44px; border-radius: 22px; background: #141017;
-            border: 1px solid rgba(255,255,255,.18); min-width: 270px;
-            box-shadow: 0 0 0 1px rgba(242,196,109,.15), 0 0 40px rgba(130, 220, 190, .25), 0 0 80px rgba(200, 140, 230, .2);
-            animation: pop .5s cubic-bezier(.2,1.4,.4,1); }
-.megacard .t1 { color: var(--mega); font-weight: 700; letter-spacing: .08em; font-size: 15px; }
-.megacard .sym { font-family: var(--mono); color: var(--ink-2); margin-top: 18px; font-size: 15px; }
-.megacard .pct { color: var(--up); font-size: 46px; font-weight: 800; letter-spacing: -0.02em; margin-top: 10px; }
-.megacard .usd { font-size: 24px; font-weight: 700; margin-top: 8px; }
+.megaring { position: relative; z-index: 32; padding: 1.5px; border-radius: 24px;
+            background: conic-gradient(from 200deg, #6fd6b0, #8ccbf0, #a99af0, #f08aa8, #f2cf7a, #6fd6b0);
+            box-shadow: 0 0 34px rgba(111,214,176,.28), 0 0 60px rgba(169,154,240,.22), 0 0 90px rgba(240,138,168,.14);
+            animation: pop .55s cubic-bezier(.2,1.4,.4,1); }
+.megacard { text-align: center; padding: 30px 52px 30px; border-radius: 22.5px; background: #161017; min-width: 276px; }
+.megacard .t1 { color: var(--mega); font-weight: 700; letter-spacing: .02em; font-size: 17px; display: flex; gap: 12px;
+                justify-content: center; align-items: center; }
+.megacard .t1 i { font-style: normal; font-size: 9px; opacity: .9; }
+.megacard .sym { font-family: var(--mono); color: #d9d2dc; margin-top: 26px; font-size: 16px; letter-spacing: .03em; }
+.megacard .pct { color: #6fe0b4; font-size: 50px; font-weight: 800; letter-spacing: -0.02em; margin-top: 14px; line-height: 1; }
+.megacard .usd { font-size: 25px; font-weight: 700; margin-top: 18px; color: #fff; }
 @keyframes pop { from { transform: scale(.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 @keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
 
@@ -294,10 +297,15 @@ a { color: #8fb8f0; text-decoration: none; } a:hover { text-decoration: underlin
       <p class="note" id="missed"></p>
     </section>
   </div>
+  <section class="card mt">
+    <h2 class="section">Labo de sortie : quand vendre ?</h2>
+    <div class="scroll"><table id="lab"></table></div>
+    <p class="note" id="labNote"></p>
+  </section>
   </div>
 </main>
 <div id="tip"></div>
-<div id="mega"><div class="megacard"><div class="t1">✦ MEGA PROFIT ✦</div><div class="sym" id="megaSym"></div><div class="pct" id="megaPct"></div><div class="usd" id="megaUsd"></div></div></div>
+<div id="mega" role="dialog" aria-live="polite"><div class="megaring"><div class="megacard"><div class="t1"><i>✦</i><span id="megaTitle">MEGA PROFIT</span><i>✦</i></div><div class="sym" id="megaSym"></div><div class="pct" id="megaPct"></div><div class="usd" id="megaUsd"></div></div></div></div>
 <canvas id="confetti"></canvas>
 
 <script>
@@ -541,6 +549,17 @@ function drawPanels() {
   if (!S.kills.length) kb.append(el("div", { class: "empty" }, "Aucune élimination pour l'instant."));
   $("missed").textContent = a.missed.length ? "À regarder : " + a.missed.map(m => `$${m.symbol} ${pct(m.change_pct, 0)} (tué par ${killLabel(m.reason)})`).join(" · ")
     : "AUDIT re-prix chaque verdict 6 h après. Un bon filtre tue surtout des tokens qui chutent.";
+  const lab = S.lab || { trades: 0, results: [] };
+  table("lab", [["Profil de sortie"], ["Trades", 1], ["Gagnants", 1], ["PnL rejoué", 1], ["1re moitié", 1], ["2e moitié", 1]],
+    lab.results.map(r => {
+      const name = el("span", {}, r.name === "actif" ? `actif (${lab.active === "actif" ? "config.py" : lab.active})` : r.name);
+      if (r.name === "actif") name.style.fontWeight = "700";
+      return [name, String(r.n), r.n ? Math.round(r.win / r.n * 100) + "%" : "–", span(sign(r.pnl), usd(r.pnl)),
+              span(sign(r.first_half), usd(r.first_half)), span(sign(r.second_half), usd(r.second_half))];
+    }), "Le labo démarre après les premières ventes : il lui faut des trajets de prix enregistrés.");
+  $("labNote").textContent = `Chaque profil est rejoué sur le vrai trajet de prix de chaque trade clôturé (pendant le trade et 6 h après la vente). `
+    + `Le desk change de profil tout seul seulement si un autre gagne sur les deux moitiés des trades, nettement, et à partir de ${lab.min_trades || 30} trades. `
+    + (lab.trades ? `Aujourd'hui : ${lab.trades} trade(s) rejoué(s).` : "");
   const xb = a.x.BUY, xs = a.x.SKIP;
   if (xb.n || xs.n) $("missed").textContent += ` · ECHO : ${xs.crashed}/${xs.n} écartés ont chuté, ${xb.crashed}/${xb.n} approuvés ont chuté.`;
 }
@@ -580,28 +599,49 @@ function drawTop() {
 }
 
 // ---------- MEGA PROFIT ----------
-function confetti() {
-  const c = $("confetti"), ctx = c.getContext("2d");
-  c.width = innerWidth; c.height = innerHeight;
-  const colors = ["#3fd39b", "#f2c46d", "#e87ba4", "#9085e9", "#ffffff", "#ec835a"];
-  const bits = Array.from({ length: 160 }, () => ({ x: Math.random() * c.width, y: -20 - Math.random() * c.height * .5,
-    vx: (Math.random() - .5) * 2, vy: 2 + Math.random() * 3, r: Math.random() * 6, w: 3 + Math.random() * 4, h: 6 + Math.random() * 8, c: colors[Math.random() * colors.length | 0] }));
-  const end = performance.now() + 3600;
+function confetti(ms = 4200) {
+  // thin pastel strips falling from above the screen, each with its own sway and spin
+  const c = $("confetti"), ctx = c.getContext("2d"), dpr = devicePixelRatio || 1;
+  c.width = innerWidth * dpr; c.height = innerHeight * dpr;
+  const colors = ["#ffffff", "#f08aa8", "#6fd6b0", "#f2cf7a", "#a99af0", "#f2a272", "#8ccbf0"];
+  const bits = Array.from({ length: 230 }, () => ({
+    x: Math.random() * c.width, y: (Math.random() * .55 - .5) * c.height,
+    vy: (1.8 + Math.random() * 2.6) * dpr, sway: Math.random() * 6.28, sw: .6 + Math.random() * 1.4,
+    r: Math.random() * 6.28, vr: (Math.random() - .5) * .12,
+    w: (2 + Math.random() * 2.2) * dpr, h: (6 + Math.random() * 9) * dpr, c: colors[Math.random() * colors.length | 0] }));
+  const t0 = performance.now();
   (function step(t) {
+    const k = (t - t0) / ms;
     ctx.clearRect(0, 0, c.width, c.height);
-    for (const b of bits) { b.x += b.vx; b.y += b.vy; b.r += .08; ctx.save(); ctx.translate(b.x, b.y); ctx.rotate(b.r); ctx.fillStyle = b.c; ctx.fillRect(-b.w / 2, -b.h / 2, b.w, b.h); ctx.restore(); }
-    if (t < end) requestAnimationFrame(step); else ctx.clearRect(0, 0, c.width, c.height);
-  })(performance.now());
+    ctx.globalAlpha = k > .8 ? Math.max(0, (1 - k) / .2) : 1;
+    for (const b of bits) {
+      b.y += b.vy; b.sway += .03; b.r += b.vr;
+      const x = b.x + Math.sin(b.sway) * 14 * b.sw * dpr;
+      ctx.save(); ctx.translate(x, b.y); ctx.rotate(b.r); ctx.fillStyle = b.c;
+      ctx.beginPath(); ctx.roundRect ? ctx.roundRect(-b.w / 2, -b.h / 2, b.w, b.h, b.w / 2) : ctx.rect(-b.w / 2, -b.h / 2, b.w, b.h); ctx.fill();
+      ctx.restore();
+    }
+    if (k < 1) requestAnimationFrame(step); else ctx.clearRect(0, 0, c.width, c.height);
+  })(t0);
 }
-function mega(e) {
+const profitQueue = [];
+let showingProfit = false;
+function mega(e) { profitQueue.push(e); if (!showingProfit) nextProfit(); }
+function nextProfit() {
+  const e = profitQueue.shift();
+  if (!e) { showingProfit = false; return; }
+  showingProfit = true;
+  $("megaTitle").textContent = e.pct >= S.mega_pct ? "MEGA PROFIT" : "PROFIT";
   $("megaSym").textContent = "$" + (e.symbol || "");
   $("megaPct").textContent = pct(e.pct);
   $("megaUsd").textContent = usd(e.pnl);
-  $("mega").classList.add("show");
+  const box = $("mega");
+  box.classList.remove("show"); void box.offsetWidth; box.classList.add("show");
   if (!matchMedia("(prefers-reduced-motion: reduce)").matches) confetti();
-  setTimeout(() => $("mega").classList.remove("show"), 4200);
+  clearTimeout(nextProfit.t);
+  nextProfit.t = setTimeout(() => { box.classList.remove("show"); setTimeout(nextProfit, 350); }, 4400);
 }
-$("mega").addEventListener("click", () => $("mega").classList.remove("show"));
+$("mega").addEventListener("click", () => { clearTimeout(nextProfit.t); $("mega").classList.remove("show"); setTimeout(nextProfit, 200); });
 
 // paste a CA: the page only queues it, the desk's GARDE runs the checks and the log shows the verdict
 $("checkForm").addEventListener("submit", async (evt) => {
@@ -628,8 +668,8 @@ async function load() {
   }
   const newIds = new Set(S.events.filter(e => e.id > lastEventId).map(e => e.id));
   if (!firstLoad) {
-    const megas = S.events.filter(e => newIds.has(e.id) && e.kind === "sell" && e.pct >= S.mega_pct);
-    if (megas.length) mega(megas[0]);
+    // every sale that made money gets the card: PROFIT, or MEGA PROFIT past the threshold. oldest first
+    S.events.filter(e => newIds.has(e.id) && e.kind === "sell" && e.pnl > 0).reverse().forEach(mega);
   }
   lastEventId = Math.max(lastEventId, ...S.events.map(e => e.id), 0);
   drawLog(firstLoad ? new Set() : newIds);

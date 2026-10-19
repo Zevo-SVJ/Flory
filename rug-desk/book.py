@@ -75,7 +75,7 @@ def guard(mint: str) -> str | None:
 def open_position(mint, symbol, price, liq_usd, usd=TICKET_USD):
     book = load()
     book[mint] = {"symbol": symbol, "entry": price, "qty0": usd / price, "qty": usd / price,
-                  "peak": price, "liq0": liq_usd, "opened": time.time(), "steps": 0}
+                  "peak": price, "peak_t": time.time(), "liq0": liq_usd, "opened": time.time(), "steps": 0}
     save(book)
     record(mint, symbol, "open", usd, 0, "entry")
 

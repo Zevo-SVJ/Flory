@@ -191,6 +191,7 @@ def state(range_key: str = "auto") -> dict:
         "experiment": experiment[:30], "groups": groups,
         "kills": [{"label": k, "n": v} for k, v in kills.most_common(8)],
         "audit": audit.summary(), "vigie_every": SCHEDULE["vigie_every_s"],
+        "lab": _json(os.path.join(DATA, "exitlab.json"), {"trades": 0, "results": [], "active": "actif"}),
     }
 
 

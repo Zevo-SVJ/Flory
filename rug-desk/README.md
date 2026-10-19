@@ -82,3 +82,22 @@ the Solana chain itself and GoPlus, both free, no key.
 
 Public RPC note: `api.mainnet-beta.solana.com` rate-limits hard. If you see `facts failed: ... 429`,
 create a free RPC key (Helius or QuickNode) and paste its URL into `SOLANA_RPC` in config.py.
+
+## Exits
+
+No study gives the best exit for memecoins; the evidence is thin and partly conflicting. What it does support:
+
+- volatility-adjusted trailing stops (LeBeau's Chandelier Exit, ATR x 3) over fixed-percent trails, to avoid noise exits:
+  [volatilitybox](https://volatilitybox.com/research/volatility-adjusted-stop-losses/),
+  [stratbase](https://stratbase.ai/en/blog/average-true-range-trailing-stop),
+  [trendrider (counter-evidence)](https://trendrider.net/blog/stop-loss-strategies-crypto-trading-2026)
+- the dump phase of a meme pump: >30% under the peak with volume below half of the pump's:
+  [arXiv 2507.01963](https://arxiv.org/html/2507.01963v2)
+- selling into strength in tiers, and leaving on a stall:
+  [odin.tools](https://odin.tools/blog/pump-fun-autosell-take-profit-stop-loss-2026),
+  [thrive](https://thrive.fi/blog/trading/memecoin-trading-strategy-risk-management-guide)
+
+So `exits.py` runs that as the starting profile (liquidity, stop, ladder, lock, Chandelier trail, dump, stall, time),
+VIGIE records every traded token's price path during the trade and 6 h after, and `exitlab.py` replays a dozen
+alternative profiles on those real paths every 30 minutes. With `EXIT_AUTOTUNE`, the desk switches profile by itself
+only when a candidate wins on both halves of at least 30 trades by a clear margin (data/exit_profile.json).

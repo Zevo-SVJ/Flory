@@ -13,6 +13,7 @@ def _best(pairs: list, mint: str) -> dict | None:
         return None
     p = max(pairs, key=lambda x: (x.get("liquidity") or {}).get("usd") or 0)
     h1 = (p.get("txns") or {}).get("h1") or {}
+    m5 = (p.get("txns") or {}).get("m5") or {}
     born = p.get("pairCreatedAt")
     return {
         "symbol": (p.get("baseToken") or {}).get("symbol"),
@@ -24,6 +25,9 @@ def _best(pairs: list, mint: str) -> dict | None:
         "buys_1h": h1.get("buys", 0),
         "sells_1h": h1.get("sells", 0),
         "vol_1h": (p.get("volume") or {}).get("h1"),
+        "buys_5m": m5.get("buys", 0),
+        "sells_5m": m5.get("sells", 0),
+        "vol_5m": (p.get("volume") or {}).get("m5") or 0,
         "url": p.get("url"),
     }
 

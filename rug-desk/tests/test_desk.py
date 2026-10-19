@@ -242,7 +242,7 @@ class Exits(Base):
     def test_pool_gone(self):
         with mock.patch("requests.get", fake_get(ds=[])):
             e = [x["text"] for x in watch.watch()[0]]
-        self.assertIn("pool gone", e[0])
+        self.assertIn("pool_gone", e[0])
         self.assertAlmostEqual(book.today_pnl(), -25)
 
     def test_report_runs(self):
@@ -407,3 +407,83 @@ class Score(unittest.TestCase):
         self.assertGreater(organic["score"], 80)
         self.assertLessEqual(bots["score"], 40)
         self.assertIn("bot_volume", bots["flags"])
+
+
+class ExitRules(unittest.TestCase):
+    """exits.decide on hand-built ticks, one rule at a time."""
+    P = dict(config.EXIT)
+
+    def pos(self, **kw):
+        p = {"entry": 1.0, "qty0": 25, "qty": 25, "peak": 1.0, "peak_t": 0, "liq0": 100000, "opened": 0, "steps": 0}
+        p.update(kw)
+        return p
+
+    def tick(self, price, t=600, **kw):
+        s = {"t": t, "price": price, "liq": 100000, "b5": 10, "s5": 10, "v5": 1000, "vol": None, "v5_avg": 1000}
+        s.update(kw)
+        return s
+
+    def test_lock_keeps_a_winner_from_turning_red(self):
+        import exits
+        self.assertEqual(exits.decide(self.pos(peak=1.45), self.tick(1.04), self.P), (1.0, "lock"))
+
+    def test_chandelier_is_wider_on_a_wild_token(self):
+        import exits
+        pos = self.pos(peak=1.8)
+        # calm token (3% bars -> 15% floor): 20% under the peak is out
+        self.assertEqual(exits.decide(pos, self.tick(1.44, vol=3), self.P), (1.0, "trailing_stop"))
+        # wild token (12% bars -> 36% trail): the same 20% dip is noise, hold
+        self.assertIsNone(exits.decide(pos, self.tick(1.44, vol=12), self.P))
+
+    def test_dump_needs_the_volume_to_collapse(self):
+        import exits
+        pos = self.pos(peak=1.6)
+        wild = {"vol": 14}                                       # 40% trail, so the dump rule decides
+        self.assertIsNone(exits.decide(pos, self.tick(1.1, v5=900, **wild), self.P))
+        self.assertEqual(exits.decide(pos, self.tick(1.1, v5=300, **wild), self.P), (1.0, "dump"))
+
+    def test_stall_takes_profit_when_sellers_take_over(self):
+        import exits
+        pos = self.pos(peak=1.3, peak_t=0)
+        self.assertIsNone(exits.decide(pos, self.tick(1.25, t=10 * 60, b5=10, s5=30), self.P))     # too soon
+        self.assertEqual(exits.decide(pos, self.tick(1.25, t=50 * 60, b5=10, s5=30), self.P), (1.0, "stall"))
+        self.assertIsNone(exits.decide(pos, self.tick(1.25, t=50 * 60, b5=30, s5=30), self.P))    # buyers still there
+
+
+class ExitLab(Base):
+    def setUp(self):
+        super().setUp()
+        import exits, shutil
+        if os.path.exists(exits.PROFILE):
+            os.remove(exits.PROFILE)
+        shutil.rmtree(config.PATHS, ignore_errors=True)
+
+    def paths_of(self, shape, n=40):
+        import paths
+        base = time.time() - 3 * 86400
+        with open(config.TRADES, "w") as f:
+            f.write("time,mint,symbol,action,usd,pnl,reason\n")
+            for i in range(n):
+                t0 = base + i * 3600
+                mint = f"LAB{i}"
+                f.write(f"{time.strftime('%Y-%m-%d %H:%M', time.localtime(t0))},{mint},L,open,25,0,entry\n")
+                f.write(f"{time.strftime('%Y-%m-%d %H:%M', time.localtime(t0 + 7200))},{mint},L,close,25,0,stop\n")
+                for k in range(360):
+                    paths.append(mint, {"t": t0 + k * 20, "price": shape(k), "liq": 100000, "b5": 10, "s5": 10, "v5": 1000})
+
+    def test_current_profile_beats_the_article_on_a_slow_bleed(self):
+        import exitlab
+        self.paths_of(lambda k: 1 + 0.8 * k / 180 if k <= 180 else 1.8 - 1.1 * (k - 180) / 180)
+        res = exitlab.run()
+        pnl = {r["name"]: r["pnl"] for r in res["results"]}
+        self.assertGreater(pnl["actif"], 0)
+        self.assertLess(pnl["article"], 0)
+        self.assertIsNone(res["switched"])          # nothing beats the active profile by the margin
+
+    def test_autotune_switches_when_a_profile_wins_on_both_halves(self):
+        import exitlab, exits
+        # +60% then a one-tick crash to -50%: no trail can react, only selling into strength helps
+        self.paths_of(lambda k: 1 + 0.6 * k / 60 if k <= 60 else 0.5)
+        res = exitlab.run()
+        self.assertEqual(res["switched"], "early ladder +50% +100%")
+        self.assertEqual(exits.active()["ladder"], [[50, 0.33], [100, 0.33]])
