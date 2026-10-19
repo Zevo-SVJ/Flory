@@ -32,6 +32,7 @@ def _b58(b: bytes) -> str:
     return "1" * (len(b) - len(b.lstrip(b"\0"))) + s
 
 
+chain_holders_error = None      # last failure of the on-chain holder read, shown by GARDE
 RPC_URL = env.get("SOLANA_RPC") or SOLANA_RPC   # a private RPC URL in .env (Helius, QuickNode...) wins
 
 
@@ -158,10 +159,12 @@ def report(mint: str, pool: dict) -> dict:
     holders = g.get("holders") or []
     source = "goplus"
     if not holders:                    # GoPlus blind on this token: read the holders from the chain
+        global chain_holders_error
         try:
             holders, source = _holders_chain(mint), "chain"
-        except Exception:
-            holders = []
+            chain_holders_error = None
+        except Exception as e:         # the public RPC refuses this call (429): a private RPC is needed
+            holders, chain_holders_error = [], str(e)[:160]
     count = g.get("holder_count")
     if not count and source == "chain":
         try:

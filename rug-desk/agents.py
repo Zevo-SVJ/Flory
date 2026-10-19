@@ -14,7 +14,7 @@ MARKS = os.path.join(DATA, "marks.json")
 INBOX = os.path.join(DATA, "inbox.txt")      # CAs pasted in the dashboard, checked by GARDE
 from events import emit, set_agent, agents as agent_state
 from notify import post
-import book, watch, scan, check, audit, report, pending, exitlab, ruggers, health
+import book, watch, scan, check, audit, report, pending, exitlab, ruggers, health, facts
 
 
 def beat():
@@ -97,6 +97,12 @@ def garde(mint: str):
             down.add(src)
     elif v["verdict"] == "SKIP":
         down.discard("facts"); down.discard("dexscreener")
+        if reason == "no_holders" and facts.chain_holders_error and "holders" not in down:
+            emit("GARDE", "error", "holders unreadable on chain, every such token is killed: "
+                                   f"{facts.chain_holders_error} (is SOLANA_RPC set to Helius in .env?)")
+            down.add("holders")
+        elif reason == "no_holders" and not facts.chain_holders_error:
+            down.discard("holders")
         verb = "skipped (limits)" if v["stage"] == "limits" else "killed"
         emit("GARDE", "kill", f"${sym} {verb}: {reason}", symbol=sym, mint=mint, reason=reason,
              stage=v["stage"])
