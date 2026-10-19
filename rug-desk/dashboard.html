@@ -779,7 +779,9 @@ function drawPanels() {
   const B0 = (SH.bought || {});
   $("shadowNote").textContent = `${SH.waiting || 0} token(s) écarté(s) suivi(s) en ce moment. Chaque token que GARDE élimine après les règles de pool est suivi 6 h par VIGIE, puis rejoué avec le vrai moteur de sortie et les coûts réels. `
     + (SH.all && B0.mean != null ? `Écartés : ${pct(SH.all.mean)} par trade · achetés : ${pct(B0.mean)} (${B0.n} trades). ` : "")
-    + "Si les écartés font mieux que les achetés, le filtre coûte de l'argent au lieu d'en sauver. Un rendement négatif ici veut dire que GARDE a eu raison.";
+    + "Si les écartés font mieux que les achetés, le filtre coûte de l'argent au lieu d'en sauver. Un rendement négatif ici veut dire que GARDE a eu raison. "
+    + "Une règle souple dont les écartés gagnent plus de 5 % par trade sur 20 trades fantômes, sur les deux moitiés, est levée toute seule ; les règles dures (mint, freeze, LP non brûlée, honeypot, whale, wallets d'usine) jamais."
+    + ((SH.waived || []).length ? " Levées en ce moment : " + SH.waived.map(killLabel).join(", ") + "." : " Aucune règle levée pour l'instant.");
   const T = S.tgbot || {};
   $("tgNote").textContent = T.on
     ? `Actif · ${T.today} lecture(s) aujourd'hui · ${T.checks_7d} sur 7 jours · ${T.users_7d} personne(s) différente(s). Il lit, il ne trade jamais. Le chiffre qui compte pour en faire un produit : combien reviennent.`

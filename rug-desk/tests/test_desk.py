@@ -1298,3 +1298,26 @@ class ShadowLowScore(Base):
         self.assertTrue(shadow.note(MINT, v))
         self.assertEqual(shadow._rows()[0]["reason"], "low_score")
         os.remove(shadow.FILE)
+
+
+class Waiver(Base):
+    """A soft kill whose shadow buys made money is lifted by the desk itself; a hard one never."""
+    def test_lifted_only_when_clear_and_soft(self):
+        import shadow
+        res = {"reasons": [
+            {"reason": "bundle_same_sol", "n": 25, "mean": 9.0, "half1": 6.0, "half2": 12.0},
+            {"reason": "copycat", "n": 25, "mean": 9.0, "half1": -3.0, "half2": 21.0},      # one half only
+            {"reason": "low_score", "n": 12, "mean": 30.0, "half1": 20.0, "half2": 40.0},   # too few
+            {"reason": "whale", "n": 40, "mean": 20.0, "half1": 20.0, "half2": 20.0},       # hard
+            {"reason": "lp_unverified", "n": 30, "mean": -12.0, "half1": -10.0, "half2": -14.0}]}
+        shadow._waived["t"] = 0
+        with mock.patch.object(shadow, "results", return_value=res):
+            self.assertEqual(shadow.waived(), {"bundle_same_sol"})
+        shadow._waived.update(t=0, v=set())
+
+    def test_fact_kill_passes_over_a_lifted_reason_and_applies_the_rest(self):
+        t = {"mint_authority": None, "freeze_authority": None, "danger": [], "lp_burned_pct": None, "dev_pct": 0,
+             "top10_pct": 45, "max_wallet_pct": 2, "same_sol_wallets": 1, "ladder_wallets": 1}
+        self.assertEqual(facts.fact_kill(t), "lp_unverified")
+        self.assertEqual(facts.fact_kill(t, skip={"lp_unverified"}), "top10_heavy")
+        self.assertIsNone(facts.fact_kill(t, skip={"lp_unverified", "top10_heavy"}))

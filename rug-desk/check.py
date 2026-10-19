@@ -66,6 +66,8 @@ def judge(token: dict, m: dict) -> dict:
 
 
 def check(mint: str) -> dict:
+    import shadow
+    waived = shadow.waived()             # soft kills the shadow book showed cost money: passed over
     if (g := book.guard(mint)):                                  # limits, free
         return {"stage": "limits", "verdict": "SKIP", "reason": g}
 
@@ -84,7 +86,7 @@ def check(mint: str) -> dict:
         p0 = grads.birth_price(mint)
         if p0 and m.get("price_native") and m["price_native"] < FACTS["min_vs_graduation"] * p0:
             return {"stage": "pool", "verdict": "SKIP", "reason": "below_graduation", "symbol": m.get("symbol"), **seen}
-    if (k := market.copycat(m, mint)):                           # a rug factory's name, or a bigger owner
+    if (k := market.copycat(m, mint)) and k not in waived:       # a rug factory's name, or a bigger owner
         return {"stage": "pool", "verdict": "SKIP", "reason": k, "symbol": m.get("symbol"), **seen}
 
     # the pool as it is on chain right now. DexScreener can lag a pool by minutes: a token already dumped
@@ -107,7 +109,7 @@ def check(mint: str) -> dict:
                 "symbol": m["symbol"], **seen}
     seen["dev"] = token.get("dev")
     smart.snapshot(mint, token.get("all_owners") or token.get("wallets"))
-    if (k := fact_kill(token, market.lane(m))):
+    if (k := fact_kill(token, market.lane(m), waived)):
         return {"stage": "facts", "verdict": "SKIP", "reason": k,
                 "symbol": m["symbol"] or token["symbol"], **seen}
 
@@ -115,7 +117,7 @@ def check(mint: str) -> dict:
     sym = m["symbol"] or token["symbol"]
     sc = score(m, token)
     if sc["score"] >= MIN_SCORE:            # the deep read costs calls: only for tokens that could be bought
-        deep = deep_read(mint, token)
+        deep = deep_read(mint, token, skip=waived)
         seen.update(deep["logged"])
         if deep["kill"]:
             return {"stage": "deep", "verdict": "SKIP", "reason": deep["kill"], "symbol": sym, **seen,
@@ -128,7 +130,7 @@ def check(mint: str) -> dict:
             "x_ticker": f"https://x.com/search?q=%24{sym}&f=live"}
 
 
-def deep_read(mint: str, token: dict, desk: bool = True) -> dict:
+def deep_read(mint: str, token: dict, desk: bool = True, skip: frozenset | set = frozenset()) -> dict:
     """Three outside reads, cheapest first, each one optional: a source that fails is unknown, not a kill.
     Jupiter (free) -> who funded the top holders (RPC) -> Solana Tracker (key, 2,500 free requests).
     desk=False (the Telegram bot): reads only, no memory written and Solana Tracker's daily cap kept for the desk."""
@@ -146,6 +148,7 @@ def deep_read(mint: str, token: dict, desk: bool = True) -> dict:
     if j:
         logged.update(organic=j["organic"], organic_vol=j["organic_vol_share"], dev_mints=j["dev_mints"])
         kill = jup.kill(j, DEEP)
+        kill = None if kill in skip else kill
     if not kill:
         try:
             c = cluster.analyze(token.get("holder_pcts") or [])
@@ -156,6 +159,7 @@ def deep_read(mint: str, token: dict, desk: bool = True) -> dict:
             if desk:
                 ruggers.note_funder(mint, c["cluster_funder"])
             kill = cluster.kill(c, DEEP, ruggers.funders())
+            kill = None if kill in skip else kill
     if not kill and desk:
         try:
             s = stracker.fetch(mint)
@@ -164,6 +168,7 @@ def deep_read(mint: str, token: dict, desk: bool = True) -> dict:
         if s:
             logged.update(bundlers_pct=s["bundlers_pct"], insiders_pct=s["insiders_pct"], snipers_pct=s["snipers_pct"])
             kill = stracker.kill(s, DEEP)
+            kill = None if kill in skip else kill
     return {"kill": kill, "logged": logged}
 
 
@@ -177,7 +182,8 @@ def run(mint: str) -> dict:
         "organic", "organic_vol", "dev_mints", "cluster_pct", "fresh_pct", "bundlers_pct", "insiders_pct",
         "snipers_pct", "factory_wallets")})
     enter = v["verdict"] == "BUY" or (v["verdict"] == "PASS" and PAPER and PAPER_BUY_ON_PASS)
-    if enter and (v.get("score") or 0) < MIN_SCORE:
+    import shadow
+    if enter and (v.get("score") or 0) < MIN_SCORE and "low_score" not in shadow.waived():
         v["action"] = f"not bought: score {v['score']} < {MIN_SCORE} ({v.get('flags') or 'no flag'})"
         return v
     if enter and PAPER and v["verdict"] == "PASS" and ECHO_MODE == "gate":

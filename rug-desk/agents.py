@@ -236,12 +236,22 @@ def auditor():
         best = next(r for r in lab["results"] if r["name"] == lab["switched"])
         emit("AUDIT", "info", f"exit profile switched to '{lab['switched']}': "
                               f"{best['pnl']:+.2f}$ on {best['n']} replayed trades, better on both halves")
+    import shadow                         # a soft kill the shadow book proved costly is lifted, said once
+    shadow._waived["t"] = 0
+    now_waived = shadow.waived()
+    for reason in sorted(now_waived ^ _lifted):
+        d = next((x for x in (shadow.results()["reasons"]) if x["reason"] == reason), {})
+        emit("AUDIT", "info", (f"GARDE n'applique plus « {reason} » : ses éliminations auraient rapporté "
+                               f"{d.get('mean', 0):+.1f} % par trade sur {d.get('n', 0)} trades fantômes")
+             if reason in now_waived else f"GARDE applique de nouveau « {reason} »")
+    _lifted.clear(); _lifted.update(now_waived)
     bt = backtest_kick()
     return (f"{s['killed']['crashed']}/{s['killed']['n']} éliminés ont chuté · labo : {lab['trades']} trade(s) rejoué(s), "
             f"profil « {lab['active']} »" + (f" · {bt}" if bt else ""))
 
 
 _bt = {"proc": None}
+_lifted = set()          # soft kills currently lifted by the shadow book, to say each change once
 
 
 def backtest_kick() -> str | None:

@@ -301,30 +301,35 @@ def report(mint: str, pool: dict) -> dict:
     }
 
 
-def fact_kill(t: dict, lane: str = "early") -> str | None:
+def fact_kill(t: dict, lane: str = "early", skip: frozenset | set = frozenset()) -> str | None:
     """Plain comparisons. First failure wins, the reason gets logged.
     momentum lane: a survivor's LP often sits on Raydium or Meteora, where no burn can be read and no
-    creator is recorded; its deep, old pool stands in for those two checks, and its holder limits are wider."""
+    creator is recorded; its deep, old pool stands in for those two checks, and its holder limits are wider.
+    skip: soft reasons the shadow book showed cost money (shadow.waived()): passed over, the rest still apply."""
     from config import MOMENTUM
     mom = lane == "momentum"
     top10_max = MOMENTUM["max_top10_pct"] if mom else FACTS["max_top10_pct"]
     wallet_max = MOMENTUM["max_wallet_pct"] if mom else FACTS["max_wallet_pct"]
-    if t.get("dev") and t["dev"] in ruggers.known():             return "dev_rugged_before"
-    if t["mint_authority"]:                                      return "mint_open"
-    if t["freeze_authority"]:                                    return "freeze_open"
-    if t["danger"]:                                              return "danger:" + t["danger"][0]
-    if t["lp_burned_pct"] is None and not mom:                   return "lp_unverified"
-    if t["lp_burned_pct"] is not None and t["lp_burned_pct"] < FACTS["min_lp_locked_pct"]:
-        return "lp_unlocked"
-    if t["dev_pct"] is None and not mom:                         return "dev_unknown"
-    if t["dev_pct"] is not None and t["dev_pct"] > FACTS["max_dev_pct"]:
-        return "dev_holds"
-    if t["top10_pct"] is None:                                   return "no_holders"
-    if t["top10_pct"] > top10_max:                               return "top10_heavy"
-    if t["max_wallet_pct"] > wallet_max:                         return "whale"
-    if t["same_sol_wallets"] >= FACTS["bundle_same_sol"]:        return "bundle_same_sol"
-    if t["ladder_wallets"] >= FACTS["bundle_ladder"]:            return "bundle_ladder"
-    if (not mom and (t.get("farm_wallets") or 0) >= FACTS["farm_wallets"]   # airdrops make identical bags too
-            and (t.get("farm_pct") or 0) >= FACTS["farm_pct"]):
-        return "holder_farm"
+    gt = lambda v, limit: v is not None and v > limit
+    checks = [
+        ("dev_rugged_before", lambda: t.get("dev") and t["dev"] in ruggers.known()),
+        ("mint_open", lambda: t["mint_authority"]),
+        ("freeze_open", lambda: t["freeze_authority"]),
+        ("danger:" + (t["danger"] or [""])[0], lambda: t["danger"]),
+        ("lp_unverified", lambda: t["lp_burned_pct"] is None and not mom),
+        ("lp_unlocked", lambda: t["lp_burned_pct"] is not None and t["lp_burned_pct"] < FACTS["min_lp_locked_pct"]),
+        ("dev_unknown", lambda: t["dev_pct"] is None and not mom),
+        ("dev_holds", lambda: gt(t["dev_pct"], FACTS["max_dev_pct"])),
+        ("no_holders", lambda: t["top10_pct"] is None),
+        ("top10_heavy", lambda: gt(t["top10_pct"], top10_max)),
+        ("whale", lambda: gt(t["max_wallet_pct"], wallet_max)),
+        ("bundle_same_sol", lambda: t["same_sol_wallets"] >= FACTS["bundle_same_sol"]),
+        ("bundle_ladder", lambda: t["ladder_wallets"] >= FACTS["bundle_ladder"]),
+        # airdrops make identical bags too
+        ("holder_farm", lambda: not mom and (t.get("farm_wallets") or 0) >= FACTS["farm_wallets"]
+                                and (t.get("farm_pct") or 0) >= FACTS["farm_pct"]),
+    ]
+    for reason, failed in checks:
+        if reason not in skip and failed():
+            return reason
     return None

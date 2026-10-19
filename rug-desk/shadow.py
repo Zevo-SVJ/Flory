@@ -68,10 +68,34 @@ def replay(r: dict) -> float | None:
     return (gross / exitlab.TICKET_USD - cost) * 100
 
 
+# never waived, whatever the shadow book says: each one is a way to lose the whole ticket at once
+HARD = {"dev_rugged_before", "mint_open", "freeze_open", "lp_unlocked", "nobody_can_sell", "holder_farm",
+        "factory_wallets", "rug_funder", "st_rugged", "stale_data", "whale", "no_holders"}
+WAIVE_MIN_N = 20            # shadow trades replayed for that reason
+WAIVE_MIN_MEAN = 5.0        # net % per trade, after costs, and positive on both halves
+_waived = {"t": 0.0, "v": set()}
+
+
+def waived() -> set:
+    """Soft kill reasons the desk stops applying by itself: their shadow buys made money, clearly and
+    on both halves. a reason that protects (shadow buys lose) stays. cached 10 min."""
+    if time.time() - _waived["t"] > 600:
+        try:
+            r = results()
+            _waived["v"] = {d["reason"] for d in r["reasons"]
+                            if d["reason"] not in HARD and not d["reason"].startswith("danger:")
+                            and d["n"] >= WAIVE_MIN_N and d["mean"] >= WAIVE_MIN_MEAN
+                            and (d.get("half1") or 0) > 0 and (d.get("half2") or 0) > 0}
+        except Exception:
+            _waived["v"] = set()
+        _waived["t"] = time.time()
+    return _waived["v"]
+
+
 def results() -> dict:
     """Shadows whose 6 h are over, per kill reason and in all, next to what the desk's real buys made."""
     now, done, waiting = time.time(), [], 0
-    for r in _rows():
+    for r in sorted(_rows(), key=lambda r: float(r["t"])):
         if now < float(r["t"]) + HOURS * 3600:
             waiting += 1
             continue
@@ -79,10 +103,11 @@ def results() -> dict:
         if x is not None:
             done.append((r["reason"], x))
     by = {}
-    for reason, x in done:
+    for reason, x in done:                  # in kill order, so each reason's list splits into two halves
         by.setdefault(reason, []).append(x)
-    stat = lambda xs: {"n": len(xs), "mean": round(statistics.mean(xs), 1),
-                       "win": round(sum(v > 0 for v in xs) / len(xs), 2)} if xs else None
+    mean = lambda xs: round(statistics.mean(xs), 1) if xs else None
+    stat = lambda xs: {"n": len(xs), "mean": mean(xs), "win": round(sum(v > 0 for v in xs) / len(xs), 2),
+                       "half1": mean(xs[:len(xs) // 2]), "half2": mean(xs[len(xs) // 2:])} if xs else None
     import edge
     st = edge.stats()
     return {"waiting": waiting, "all": stat([x for _, x in done]),
