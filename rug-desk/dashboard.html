@@ -231,6 +231,7 @@ a { color: #8fb8f0; text-decoration: none; } a:hover { text-decoration: underlin
       <span class="label" id="modeLabel">TRADING MODE</span>
     </div>
     <span class="spacer"></span>
+    <span class="tasks" id="sol" title="Tendance de SOL : les memecoins Solana suivent SOL. AUDIT mesure si les PASS chutent plus quand SOL baisse."></span>
     <span class="tasks" id="tasks"></span>
     <span class="live" id="live"><i></i><span id="liveText">…</span></span>
   </header>
@@ -562,6 +563,8 @@ function drawPanels() {
     + (lab.trades ? `Aujourd'hui : ${lab.trades} trade(s) rejoué(s).` : "");
   const xb = a.x.BUY, xs = a.x.SKIP;
   if (xb.n || xs.n) $("missed").textContent += ` · ECHO : ${xs.crashed}/${xs.n} écartés ont chuté, ${xb.crashed}/${xb.n} approuvés ont chuté.`;
+  const ru = a.regime["SOL up"], rd = a.regime["SOL down"];
+  if (ru.n || rd.n) $("missed").textContent += ` · Régime : ${rd.crashed}/${rd.n} PASS ont chuté quand SOL baissait, ${ru.crashed}/${ru.n} quand SOL montait.`;
 }
 
 function drawTop() {
@@ -570,6 +573,9 @@ function drawTop() {
   $("liveText").textContent = S.alive ? "LIVE" : "DESK ARRÊTÉ";
   $("modeLabel").textContent = (S.paper ? "TRADING MODE · PAPIER" : "TRADING MODE · RÉEL") + (S.marks_age > 90 && S.open.length ? " · prix en retard" : "");
   $("tasks").textContent = `${S.tasks.toLocaleString("fr-FR")} TÂCHES`;
+  const sol = S.sol || {};
+  $("sol").textContent = sol.sol_24h == null ? "" : `SOL 24H ${pct(sol.sol_24h)} · 1H ${pct(sol.sol_1h)}`;
+  $("sol").className = "tasks " + sign(sol.sol_24h || 0);
   $("balance").textContent = plain(S.balance);
   $("balanceSub").textContent = `started at ${plain(S.bankroll)}`;
   $("pnl").textContent = usd(S.pnl); $("pnl").className = "big " + sign(S.pnl);

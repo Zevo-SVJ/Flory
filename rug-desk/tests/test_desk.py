@@ -487,3 +487,20 @@ class ExitLab(Base):
         res = exitlab.run()
         self.assertEqual(res["switched"], "early ladder +50% +100%")
         self.assertEqual(exits.active()["ladder"], [[50, 0.33], [100, 0.33]])
+
+
+class Regime(Base):
+    def test_audit_splits_passes_by_sol_trend(self):
+        import audit
+        for f in (config.AUDIT,):
+            if os.path.exists(f):
+                os.remove(f)
+        check.log({"time": "2026-01-01 00:00", "mint": "UP", "stage": "judge", "verdict": "PASS", "sol_24h": 2.5})
+        check.log({"time": "2026-01-01 00:00", "mint": "DOWN", "stage": "judge", "verdict": "PASS", "sol_24h": -4})
+        with open(config.AUDIT, "w") as f:
+            f.write(",".join(audit.FIELDS) + "\n")
+            f.write("2026-01-01 06:00,UP,U,judge,PASS,,1,1.2,20,6\n")
+            f.write("2026-01-01 06:00,DOWN,D,judge,PASS,,1,0.3,-70,6\n")
+        r = audit.summary()["regime"]
+        self.assertEqual((r["SOL up"]["n"], r["SOL up"]["crashed"]), (1, 0))
+        self.assertEqual((r["SOL down"]["n"], r["SOL down"]["crashed"]), (1, 1))

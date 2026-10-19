@@ -55,6 +55,10 @@ def report() -> str:
         lines.append(f"exit lab on {lab['trades']} trades: best '{top['name']}' {top['pnl']:+.2f}$, "
                      f"active profile '{lab['active']}' {act['pnl']:+.2f}$")
     a = audit.summary()
+    up, down = a["regime"]["SOL up"], a["regime"]["SOL down"]
+    if up["n"] or down["n"]:
+        lines.append(f"regime: passes crashed {up['crashed']}/{up['n']} with SOL up over 24h, "
+                     f"{down['crashed']}/{down['n']} with SOL down")
     xb, xs = a["x"]["BUY"], a["x"]["SKIP"]
     if xb["n"] or xs["n"]:
         lines.append(f"ECHO: {xs['crashed']}/{xs['n']} tokens it skipped crashed later, "

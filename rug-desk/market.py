@@ -59,3 +59,24 @@ def market_kill(m: dict | None) -> str | None:
     if m["age_min"] > FACTS["max_age_hours"] * 60:               return "too_old"
     if m["buys_1h"] >= 20 and m["sells_1h"] == 0:                return "nobody_can_sell"
     return None
+
+
+SOL = "So11111111111111111111111111111111111111112"
+_regime = {"t": 0, "value": None}
+
+
+def sol_regime() -> dict | None:
+    """SOL's own trend (deepest SOL pool on DexScreener), cached 5 minutes. Solana memecoins move with
+    SOL, so every verdict records it and AUDIT can tell whether passes do worse in a falling market."""
+    if time.time() - _regime["t"] < 300:
+        return _regime["value"]
+    try:
+        r = requests.get(f"{DS}/{SOL}", timeout=15)
+        r.raise_for_status()
+        pairs = [p for p in r.json() if (p.get("baseToken") or {}).get("address") == SOL]
+        ch = max(pairs, key=lambda x: (x.get("liquidity") or {}).get("usd") or 0).get("priceChange") or {}
+        value = {"sol_1h": ch.get("h1"), "sol_24h": ch.get("h24")}
+    except Exception:
+        value = None                      # unknown stays unknown: the verdict is logged without it
+    _regime.update(t=time.time(), value=value)
+    return value

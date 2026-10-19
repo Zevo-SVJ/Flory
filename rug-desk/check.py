@@ -8,11 +8,12 @@ from score import score
 import pending
 from facts import report, fact_kill
 from market import pool, market_kill
+import market
 import book
 
 # price and liq_usd at verdict time let AUDIT check later whether a kill or a pass was right
 FIELDS = ["time", "mint", "symbol", "stage", "verdict", "confidence", "reason", "price", "liq_usd",
-          "score", "flags"]
+          "score", "flags", "sol_1h", "sol_24h"]
 
 
 def _migrate():
@@ -94,6 +95,7 @@ def check(mint: str) -> dict:
 
 def run(mint: str) -> dict:
     v = check(mint)
+    v.update(market.sol_regime() or {})
     log({"time": time.strftime("%Y-%m-%d %H:%M"), "mint": mint, **v})
     enter = v["verdict"] == "BUY" or (v["verdict"] == "PASS" and PAPER and PAPER_BUY_ON_PASS)
     if enter and (v.get("score") or 0) < MIN_SCORE:

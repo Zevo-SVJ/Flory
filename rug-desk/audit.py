@@ -62,7 +62,8 @@ def summary() -> dict:
     if not os.path.exists(AUDIT):
         empty = {"n": 0, "crashed": 0, "ran": 0}
         return {"killed": {"n": 0, "crashed": 0}, "passed": {"n": 0, "crashed": 0}, "missed": [],
-                "x": {"BUY": dict(empty), "SKIP": dict(empty)}}
+                "x": {"BUY": dict(empty), "SKIP": dict(empty)},
+                "regime": {"SOL up": dict(empty), "SOL down": dict(empty)}}
     with open(AUDIT, newline="") as f:
         rows = list(csv.DictReader(f))
     groups = {"killed": [r for r in rows if r["verdict"] == "SKIP" and " failed" not in (r["reason"] or "")],
@@ -85,6 +86,14 @@ def summary() -> dict:
         return {"n": len(sel), "crashed": sum(1 for r in sel if float(r["change_pct"]) <= CRASH_PCT),
                 "ran": sum(1 for r in sel if float(r["change_pct"]) >= 100)}
     out["x"] = {v: tally([r for r in groups["passed"] if xr.get(r["mint"]) == v]) for v in ("BUY", "SKIP")}
+
+    # did passes do worse when SOL was falling? the trend logged with each verdict decides the bucket
+    sol = {}
+    if os.path.exists(LOG):
+        with open(LOG, newline="") as f:
+            sol = {r["mint"]: r.get("sol_24h") for r in csv.DictReader(f) if r.get("sol_24h") not in (None, "")}
+    out["regime"] = {"SOL up": tally([r for r in groups["passed"] if r["mint"] in sol and float(sol[r["mint"]]) >= 0]),
+                     "SOL down": tally([r for r in groups["passed"] if r["mint"] in sol and float(sol[r["mint"]]) < 0])}
     return out
 
 
