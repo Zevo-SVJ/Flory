@@ -234,8 +234,8 @@ class Sizing(Base):
         self.assertEqual(usd1, usd0)                                  # flat tickets since Oct 19
         with mock.patch.dict(config.SIZING, {"strong": 8, "max": 14}):
             self.assertGreater(size.ticket({"score": 90}, hot)[0], usd0)   # the mechanism, once signals earn it
-        thin = dict(hot, liq_usd=5000)
-        self.assertEqual(size.ticket({"score": 90}, thin)[0], 5000 * config.FACTS["max_ticket_share"])
+        thin = dict(hot, liq_usd=1500)                                # the pool caps the ticket below $40
+        self.assertEqual(size.ticket({"score": 90}, thin)[0], 1500 * config.FACTS["max_ticket_share"])
         # the same activity made of $5 swaps (a bot farm) earns no signal
         self.assertEqual(size.ticket({"score": 60}, dict(hot, avg_trade_1h=5))[1], "base")
 
