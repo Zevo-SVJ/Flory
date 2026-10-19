@@ -10,13 +10,13 @@
 <style>
 :root {
   color-scheme: dark;
-  --page: #0c0a0f; --card: rgba(26, 21, 31, 0.72); --card-solid: #17131b; --ring: rgba(255,255,255,0.08);
+  --page: #0d090d; --card: rgba(24, 17, 22, 0.70); --card-solid: #181116; --ring: rgba(255,255,255,0.08);
   --ring-strong: rgba(255,255,255,0.16); --ink: #f3f0f5; --ink-2: #b9b2c0; --muted: #7d7684;
   --grid: rgba(255,255,255,0.05);
   --line: #199e70; --line-glow: rgba(46, 214, 156, 0.55); --area-top: rgba(36, 190, 136, 0.30);
   --up: #3fd39b; --down: #ef6f6f; --mega: #f2c46d; --claude: #d97757;
   /* agent identity, validated in this order on the card surface (adjacent CVD ≥ 8.4) */
-  --a1: #3987e5; --a2: #d95926; --a3: #199e70; --a4: #c98500; --a5: #d55181; --a6: #008300;
+  --a1: #6fd6b0; --a2: #f08aa8; --a3: #f2cf7a; --a4: #a99af0; --a5: #f2a272; --a6: #8ccbf0;
   --sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
   --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
 }
@@ -24,8 +24,9 @@
 html, body { margin: 0; background: var(--page); color: var(--ink); font-family: var(--sans); }
 body { min-height: 100vh; overflow-x: hidden;
   background:
-    radial-gradient(1200px 700px at 85% 110%, rgba(150, 70, 130, 0.22), transparent 60%),
-    radial-gradient(900px 600px at 10% -10%, rgba(90, 60, 140, 0.20), transparent 60%),
+    radial-gradient(900px 520px at 50% 105%, rgba(150, 66, 96, 0.30), transparent 65%),
+    radial-gradient(800px 500px at 100% 40%, rgba(110, 50, 110, 0.18), transparent 60%),
+    radial-gradient(700px 500px at 0% 0%, rgba(70, 40, 80, 0.20), transparent 60%),
     var(--page); }
 #stars { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
 main { position: relative; z-index: 1; padding: 0 18px 40px; }
@@ -38,9 +39,11 @@ main { position: relative; z-index: 1; padding: 0 18px 40px; }
 
 /* header */
 header { display: flex; align-items: center; gap: 14px; }
-.logo { width: 52px; height: 52px; border-radius: 14px; display: grid; place-items: center;
-        background: linear-gradient(160deg, #2a2230, #18131c); border: 1px solid var(--ring-strong);
-        box-shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 8px 24px rgba(0,0,0,.35); }
+.logo { width: 52px; height: 52px; border-radius: 15px; display: grid; place-items: center;
+        background: radial-gradient(circle at 30% 20%, #ffffff, #e9e4e6 55%, #c9c2c6);
+        box-shadow: inset 0 -3px 6px rgba(0,0,0,.18), 0 8px 24px rgba(0,0,0,.45); }
+.brand h1 { position: relative; display: inline-block; }
+.doodle { position: absolute; right: -24px; top: -6px; }
 .brand h1 { margin: 0; font-size: 36px; font-weight: 800; letter-spacing: -0.03em; line-height: 1; }
 .brand .label { margin-top: 6px; display: block; }
 .spacer { flex: 1; }
@@ -83,11 +86,12 @@ header { display: flex; align-items: center; gap: 14px; }
 .ranges { display: inline-flex; gap: 4px; }
 .ranges button { font-family: var(--mono); font-size: 10px; letter-spacing: .06em; color: var(--muted); background: transparent;
                  border: 1px solid transparent; border-radius: 6px; padding: 3px 7px; cursor: pointer; }
-.ranges button[aria-pressed="true"] { color: var(--ink); border-color: var(--ring-strong); background: rgba(255,255,255,.04); }
+.ranges button[aria-pressed="true"] { color: var(--ink); border-color: var(--ring); background: rgba(255,255,255,.05); }
+.ranges button:hover { color: var(--ink-2); }
 #chart { position: relative; flex: 1; min-height: 0; }
 #chart svg { width: 100%; height: 100%; display: block; overflow: visible; }
 #chart text { font-family: var(--mono); font-size: 10px; fill: var(--muted); }
-.bubble { position: absolute; transform: translate(-100%, -130%); background: #13241e; border: 1px solid rgba(63,211,155,.35);
+.bubble { position: absolute; transform: translate(calc(-100% - 6px), -135%); background: #101d19; border: 1px solid rgba(63,211,155,.45);
           color: var(--up); font-family: var(--mono); font-size: 18px; font-weight: 600; padding: 4px 10px; border-radius: 8px;
           white-space: nowrap; pointer-events: none; box-shadow: 0 6px 20px rgba(0,0,0,.35); }
 .bubble.neg { background: #2a1517; border-color: rgba(239,111,111,.35); color: var(--down); }
@@ -96,18 +100,17 @@ header { display: flex; align-items: center; gap: 14px; }
 #log { font-family: var(--mono); font-size: 12px; line-height: 1.55; flex: 1; min-height: 0; overflow: hidden; position: relative;
        mask-image: linear-gradient(to bottom, #000 80%, transparent); -webkit-mask-image: linear-gradient(to bottom, #000 80%, transparent); }
 .ev { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: baseline; padding: 3px 0; }
-.ev .tag { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-2); font-size: 11px; }
-.ev .tag::before { content: ""; width: 7px; height: 7px; border-radius: 2px; background: var(--c, var(--muted)); }
-.ev .txt { color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ev .amt { font-weight: 600; }
+.ev .tag { font-size: 11px; letter-spacing: .02em; }
+.ev .txt { color: #e6e0e8; font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ev .amt { font-weight: 600; font-size: 11.5px; } .ev .amt.mega { color: var(--mega); }
 .ev.fresh { animation: fresh 1.6s ease-out; }
 @keyframes fresh { from { background: rgba(255,255,255,.07); } to { background: transparent; } }
 
 /* daily bar */
 .daily { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 14px; align-items: center; margin: 2px 4px; }
-.track { height: 8px; border-radius: 99px; background: rgba(255,255,255,.07); overflow: hidden; }
+.track { height: 10px; border-radius: 99px; background: rgba(255,255,255,.07); overflow: hidden; }
 .fill { height: 100%; border-radius: 99px; width: 0; transition: width .6s ease;
-        background: linear-gradient(90deg, #3fd39b, #f2c46d); }
+        background: linear-gradient(90deg, #6fd6b0, #f2cf7a); }
 .fill.loss { background: linear-gradient(90deg, #f2c46d, #ef6f6f); }
 .pctlabel { font-family: var(--mono); font-size: 12px; font-weight: 600; }
 
@@ -116,20 +119,21 @@ header { display: flex; align-items: center; gap: 14px; }
 .agent { position: relative; text-align: center; padding: 10px 8px 8px; border-radius: 16px; background: var(--card);
          border: 1px solid var(--ring); transition: border-color .3s, box-shadow .3s, transform .3s; min-width: 0; }
 .agent::before { content: ""; position: absolute; left: 14px; top: 10px; width: 18px; height: 4px; border-radius: 4px; background: var(--c); }
-.agent.active { border-color: color-mix(in srgb, var(--c) 70%, white 10%); box-shadow: 0 0 0 1px color-mix(in srgb, var(--c) 45%, transparent), 0 0 28px color-mix(in srgb, var(--c) 30%, transparent); transform: translateY(-2px); }
+.agent.active { border-color: color-mix(in srgb, var(--c) 75%, white 5%); background: color-mix(in srgb, var(--c) 9%, var(--card));
+                box-shadow: 0 0 0 1px color-mix(in srgb, var(--c) 40%, transparent), 0 0 30px color-mix(in srgb, var(--c) 22%, transparent); }
 .agent.err { border-color: rgba(239,111,111,.6); }
-.blob { width: 46px; height: 40px; margin: 6px auto 6px; border-radius: 46% 46% 42% 42% / 52% 52% 44% 44%; position: relative;
-        background: radial-gradient(circle at 32% 28%, rgba(255,255,255,.55), transparent 32%),
-                    radial-gradient(circle at 50% 120%, color-mix(in srgb, var(--c) 60%, black), var(--c) 70%);
-        box-shadow: 0 8px 18px color-mix(in srgb, var(--c) 35%, transparent), inset 0 -6px 10px rgba(0,0,0,.18); }
-.blob::before, .blob::after { content: ""; position: absolute; top: 42%; width: 6px; height: 10px; border-radius: 4px; background: #1a1220;
-        animation: blink 5s infinite; }
-.blob::before { left: 36%; } .blob::after { left: 56%; }
+.blob { width: 50px; height: 42px; margin: 8px auto 8px; border-radius: 48% 48% 44% 44% / 56% 56% 44% 44%; position: relative;
+        background: radial-gradient(ellipse at 30% 22%, rgba(255,255,255,.85) 0 8%, rgba(255,255,255,.25) 18%, transparent 34%),
+                    radial-gradient(circle at 50% 110%, color-mix(in srgb, var(--c) 70%, #1a0f18), var(--c) 75%);
+        box-shadow: 0 10px 22px color-mix(in srgb, var(--c) 28%, transparent), inset 0 -5px 9px rgba(0,0,0,.14); }
+.blob::before, .blob::after { content: ""; position: absolute; top: 40%; width: 5px; height: 10px; border-radius: 4px; background: #241826;
+        animation: blink 5s infinite; transform: rotate(8deg); }
+.blob::before { left: 34%; } .blob::after { left: 54%; transform: rotate(-4deg); }
 .agent.active .blob { animation: bob 1.1s ease-in-out infinite; }
 .agent.err .blob::before, .agent.err .blob::after { height: 3px; top: 48%; }
 @keyframes bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-5px) scale(1.03, .97); } }
 @keyframes blink { 0%, 92%, 100% { transform: scaleY(1); } 95% { transform: scaleY(.1); } }
-.agent .name { font-family: var(--mono); font-weight: 600; font-size: 13px; letter-spacing: .1em; }
+.agent .name { font-family: var(--mono); font-weight: 600; font-size: 13px; letter-spacing: .12em; }
 .agent .role { font-size: 11px; color: var(--ink-2); margin-top: 2px; }
 .agent .msg { font-family: var(--mono); font-size: 10px; color: var(--muted); margin-top: 4px; min-height: 0;
               overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
@@ -211,7 +215,8 @@ a { color: #8fb8f0; text-decoration: none; } a:hover { text-decoration: underlin
       <svg width="34" height="34" viewBox="-20 -20 40 40" id="spark"></svg>
     </div>
     <div class="brand">
-      <h1>Claude Bot</h1>
+      <h1>Claude Bot<svg class="doodle" width="22" height="22" viewBox="0 0 22 22" aria-hidden="true">
+        <path d="M6 9 L3 3 M11 8 L12 1 M15 11 L21 8" stroke="#e8e2e6" stroke-width="2.2" stroke-linecap="round" fill="none"/></svg></h1>
       <span class="label" id="modeLabel">TRADING MODE</span>
     </div>
     <span class="spacer"></span>
@@ -222,11 +227,10 @@ a { color: #8fb8f0; text-decoration: none; } a:hover { text-decoration: underlin
   <section class="tiles">
     <div class="card"><div class="label">Balance</div><div class="big" id="balance">–</div><div class="sub" id="balanceSub"></div></div>
     <div class="card accent" id="pnlCard"><div class="label">Total P&amp;L</div><div class="big" id="pnl">–</div><div class="sub" id="pnlSub"></div></div>
-    <div class="card"><div class="label">Coût du desk</div><div class="big">$0.00</div><div class="sub">aucun abonnement · APIs gratuites · lecture X via Claude</div></div>
+    <div class="card"><div class="label">Positions</div><div class="big" id="posCount">–</div><div class="sub" id="posSub"></div></div>
     <div class="card winrate">
       <svg width="64" height="64" viewBox="0 0 64 64" id="donut" role="img"></svg>
       <div><div class="label">Win rate</div><div class="wl"><span class="up" id="wins">0W</span><br><span class="down" id="losses">0L</span></div></div>
-      <div style="margin-left:auto; text-align:right"><div class="label">Cash libre</div><div class="wl" id="cash">–</div></div>
     </div>
   </section>
 
@@ -367,7 +371,6 @@ function drawChart() {
   const merge = el("svg:feMerge"); merge.append(el("svg:feMergeNode", { in: "b" }), el("svg:feMergeNode", { in: "SourceGraphic" })); glow.append(merge);
   defs.append(grad, glow); svg.append(defs);
 
-  for (let i = 1; i <= 3; i++) svg.append(el("svg:line", { x1: L, x2: W - R, y1: T + (H - T - B) * i / 4, y2: T + (H - T - B) * i / 4, stroke: "var(--grid)" }));
   const base = S.bankroll;
   if (base > lo && base < hi) svg.append(el("svg:line", { x1: L, x2: W - R, y1: y(base), y2: y(base), stroke: "rgba(255,255,255,.14)", "stroke-dasharray": "3 4" }));
   svg.append(el("svg:text", { x: L + 4, y: T - 8 }, plain(hi - padv)));
@@ -395,8 +398,10 @@ function drawChart() {
     if (e.kind === "sell" && e.pct >= S.mega_pct && e.t >= t0) {
       const near = pts.reduce((a, p) => Math.abs(p[0] - e.t) < Math.abs(a[0] - e.t) ? p : a);
       const cx = x(e.t), cy = y(near[1]);
-      svg.append(el("svg:circle", { cx, cy, r: 5, fill: "var(--mega)", stroke: "var(--card-solid)", "stroke-width": 2 }));
-      svg.append(el("svg:text", { x: cx - 8, y: cy - 12, "text-anchor": "end", style: "fill: var(--mega)" }, "MEGA"));
+      svg.append(el("svg:circle", { cx, cy, r: 10, fill: "none", stroke: "rgba(242,196,109,.35)" }));
+      svg.append(el("svg:circle", { cx, cy, r: 4.5, fill: "var(--mega)" }));
+      svg.append(el("svg:rect", { x: cx - 52, y: cy - 30, width: 40, height: 18, rx: 4, fill: "var(--mega)" }));
+      svg.append(el("svg:text", { x: cx - 32, y: cy - 17.5, "text-anchor": "middle", style: "fill: #2a1d05; font-weight: 600" }, "MEGA"));
     }
   }
   const ex = x(t1), ey = y(S.balance);
@@ -423,12 +428,16 @@ function drawChart() {
 }
 
 // ---------- activity log ----------
+const KIND_TAGS = { scan: ["SCAN", "#7fd4c8"], kill: ["RISK", "#f2a272"], pass: ["PASS", "#a99af0"], buy: ["EXEC", "#8cb4f0"],
+  sell: ["FILL", "#6fd6b0"], audit: ["AUDIT", "#f08aa8"], report: ["RAPPORT", "#8ccbf0"], error: ["ERR", "#ef6f6f"], info: ["DESK", "#9a93a0"], x: ["X", "#f2cf7a"] };
 function eventLine(e) {
   const row = el("div", { class: "ev" });
-  const tag = el("span", { class: "tag" }, e.agent);
-  tag.style.setProperty("--c", AGENT_COLORS[e.agent] || "var(--muted)");
-  row.append(tag, el("span", { class: "txt", title: e.text }, e.text));
-  if (e.kind === "sell" && e.pnl != null) row.append(el("span", { class: "amt " + sign(e.pnl) }, usd(e.pnl)));
+  const isMega = e.kind === "sell" && e.pct >= S.mega_pct;
+  const [name, color] = isMega ? ["MEGA", "var(--mega)"] : (KIND_TAGS[e.kind] || [e.kind.toUpperCase(), "var(--muted)"]);
+  const tag = el("span", { class: "tag", title: e.agent }, `[${name}]`);
+  tag.style.color = color;
+  row.append(tag, el("span", { class: "txt", title: `${e.agent} · ${e.text}` }, e.text));
+  if (e.kind === "sell" && e.pnl != null) row.append(el("span", { class: "amt " + (isMega ? "mega" : sign(e.pnl)) }, usd(e.pnl)));
   else row.append(el("span", { class: "clock" }, new Date(e.t * 1000).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })));
   return row;
 }
@@ -436,7 +445,7 @@ function drawLog(newIds) {
   const box = $("log");
   box.replaceChildren(...S.events.map(e => { const r = eventLine(e); if (newIds.has(e.id)) r.classList.add("fresh"); return r; }));
   if (!S.events.length) box.append(el("div", { class: "empty" }, "Les agents démarrent…"));
-  $("logCount").textContent = `${S.tasks.toLocaleString("fr-FR")} ÉVÉNEMENTS`;
+  $("logCount").textContent = `${(S.wins + S.losses).toLocaleString("fr-FR")} RÉSOLUS`;
 }
 
 // ---------- agents ----------
@@ -447,8 +456,9 @@ function drawAgents() {
     const active = a.status === "work" || (a.name !== "ECHO" && a.t && now - a.t < 4 && a.status !== "error");
     const card = el("div", { class: "agent" + (active ? " active" : "") + (a.status === "error" ? " err" : "") });
     card.style.setProperty("--c", AGENT_COLORS[a.name]);
+    card.title = `${a.name} : ${a.role}. ${a.detail}.\n${a.msg || ""}`;
     card.append(el("div", { class: "blob", "aria-hidden": "true" }), el("div", { class: "name" }, a.name),
-      el("div", { class: "role" }, a.role), el("div", { class: "msg", title: a.detail }, a.status === "error" ? "⚠ " + a.msg : a.msg),
+      el("div", { class: "msg" }, a.status === "error" ? "⚠ " + a.msg : a.role + " · " + a.msg),
       el("div", { class: "when" }, a.name === "ECHO" ? (a.last ? "dernière lecture " + a.last.slice(11) : "") : ago(a.t)));
     return card;
   }));
@@ -522,11 +532,13 @@ function drawTop() {
   $("modeLabel").textContent = (S.paper ? "TRADING MODE · PAPIER" : "TRADING MODE · RÉEL") + (S.marks_age > 90 && S.open.length ? " · prix en retard" : "");
   $("tasks").textContent = `${S.tasks.toLocaleString("fr-FR")} TÂCHES`;
   $("balance").textContent = plain(S.balance);
-  $("balanceSub").textContent = `départ à ${plain(S.bankroll)} · ${S.open.length} position(s) ouverte(s)`;
+  $("balanceSub").textContent = `started at ${plain(S.bankroll)}`;
   $("pnl").textContent = usd(S.pnl); $("pnl").className = "big " + sign(S.pnl);
   $("pnlCard").classList.toggle("neg", S.pnl < 0);
   $("pnlSub").textContent = `${pct(S.pnl / S.bankroll * 100)} · réalisé ${usd(S.realized)} · latent ${usd(S.unrealized)}`;
-  $("cash").textContent = plain(S.cash);
+  $("pnlSub").className = "sub " + sign(S.pnl);
+  $("posCount").textContent = String(S.open.length);
+  $("posSub").textContent = `${plain(S.open.length * S.ticket)} engagés · cash libre ${plain(S.cash)}`;
   const n = S.wins + S.losses, rate = n ? S.wins / n : 0;
   $("wins").textContent = S.wins + "W"; $("losses").textContent = S.losses + "L";
   const d = $("donut"); d.replaceChildren();
@@ -542,7 +554,8 @@ function drawTop() {
   const used = Math.min(1, Math.max(0, -S.today) / S.loss_limit);
   fill.classList.toggle("loss", S.today < 0);
   fill.style.width = (S.today < 0 ? used * 100 : Math.min(100, S.today / S.loss_limit * 100)) + "%";
-  $("dayLabel").textContent = `${usd(S.today)} · ${S.today < 0 ? Math.round(used * 100) + "% de la limite de perte" : "limite de perte " + plain(S.loss_limit)}`;
+  $("dayLabel").textContent = pct(S.today / S.bankroll * 100);
+  $("dayLabel").title = `${usd(S.today)} aujourd'hui · limite de perte ${plain(S.loss_limit)}`;
   $("dayLabel").className = "pctlabel " + sign(S.today);
 }
 
