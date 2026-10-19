@@ -786,8 +786,8 @@ function drawPanels() {
     + ((SH.waived || []).length ? " Levées en ce moment : " + SH.waived.map(killLabel).join(", ") + "." : " Aucune règle levée pour l'instant.");
   const T = S.tgbot || {};
   $("tgNote").textContent = T.on
-    ? `Actif · ${T.today} lecture(s) aujourd'hui · ${T.checks_7d} sur 7 jours · ${T.users_7d} personne(s) différente(s). Il lit, il ne trade jamais. Le chiffre qui compte pour en faire un produit : combien reviennent. `
-      + (T.paired ? "Lié à ton Telegram : tu reçois les alertes du desk, et tes CA passent par GARDE."
+    ? `Actif · ${T.today} lecture(s) aujourd'hui · ${T.checks_7d} sur 7 jours · ${T.users_7d} personne(s) différente(s), dont ${T.returning_7d || 0} revenue(s) un autre jour. Il lit, il ne trade jamais. Le chiffre qui compte pour en faire un produit : combien reviennent. `
+      + (T.paired ? "Lié à ton Telegram : tu reçois les alertes du desk, tes CA passent par GARDE, et /etat te donne en 5 lignes ce que le desk a fait dans l'heure (/etat 6 pour 6 h)."
                   : `Pour recevoir les alertes du desk sur ton téléphone, envoie au bot : /lier ${T.code}`)
     : "Éteint. Crée un bot avec @BotFather sur Telegram, puis dans le dossier du desk : read -rs T && echo \"TELEGRAM_BOT_TOKEN=$T\" >> .env && chmod 600 .env, et relance ./start.sh.";
   const B = S.bilan || {}, bs = $("bilanStats"); bs.replaceChildren();

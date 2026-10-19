@@ -119,3 +119,61 @@ def morning(hours: float = 10) -> str:
     import health
     lines.append("desk: " + (health.summary(hours) or "no pause, it ran the whole night"))
     return "\n".join(lines)
+
+
+def status(hours: float = 1) -> str:
+    """The chief of staff's answer to "what is happening": five lines, every agent, the last hour.
+    asked with /etat in the paired Telegram chat. built from the desk's files, nothing from memory."""
+    from config import EVENTS, TRADES, PAPER_BANKROLL_USD
+    since = time.time() - hours * 3600
+    cut = time.strftime("%Y-%m-%d %H:%M", time.localtime(since))
+    ev = []
+    try:
+        with open(EVENTS) as f:
+            for line in f:
+                try:
+                    e = json.loads(line)
+                except ValueError:
+                    continue
+                if e.get("t", 0) >= since:
+                    ev.append(e)
+    except OSError:
+        pass
+    scans = [e for e in ev if e.get("agent") == "SCOUT" and e.get("kind") == "scan"]
+    handed = sum(int(e["text"].split(" token")[0]) for e in scans if e["text"][:1].isdigit())
+    checks = []
+    if os.path.exists(LOG):
+        with open(LOG, newline="") as f:
+            checks = [r for r in csv.DictReader(f) if r["time"] >= cut]
+    kills = Counter(r["reason"] for r in checks if r["verdict"] == "SKIP")
+    passes = sum(1 for r in checks if r["verdict"] in ("PASS", "BUY"))
+    trades = []
+    if os.path.exists(TRADES):
+        with open(TRADES, newline="") as f:
+            trades = [t for t in csv.DictReader(f) if t["time"] >= cut]
+    buys = [t for t in trades if t["action"] == "open"]
+    sold = sum(float(t["pnl"]) for t in trades if t["action"] != "open")
+    pos = book.load()
+    import shadow
+    sh = shadow.results()
+    lifted = sorted(shadow.waived())
+    span = "Dernière heure" if hours == 1 else f"Dernières {hours:.0f} h" if hours > 1 else f"Dernières {hours * 60:.0f} min"
+    top = ", ".join(f"{k} {n}" for k, n in kills.most_common(3)) or "aucune"
+    lines = [
+        f"{span} : SCOUT {len(scans)} passages, {handed} token(s) à GARDE · GARDE {len(checks)} verdicts, "
+        f"{passes} PASS · éliminations : {top}",
+        f"Achats : {len(buys)}" + (f" ({', '.join(t['symbol'] for t in buys[:5])})" if buys else "")
+        + f" · ventes : {sold:+.2f} $ · {len(pos)} position(s) ouverte(s)",
+        f"Solde {PAPER_BANKROLL_USD + book.realized():.2f} $ (réalisé) · aujourd'hui {book.today_pnl():+.2f} $",
+        f"Fantômes : {sh['waiting']} suivis" + (f" · écartés {sh['all']['mean']:+.1f} %/trade sur {sh['all']['n']}"
+                                                if sh.get("all") else " · premiers résultats 6 h après")
+        + (f" · règles levées : {', '.join(lifted)}" if lifted else ""),
+    ]
+    try:
+        import backtest
+        r = (backtest.scorecard().get("rules") or {}).get("early: desk now (60 min + graduation)")
+        if r:
+            lines.append(f"Backtest règle actuelle : {r['mean']:+.1f} %/trade sur {r['n']} trades · {r['why']}")
+    except Exception:
+        pass
+    return "\n".join(lines[:5])

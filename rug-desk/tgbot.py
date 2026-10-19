@@ -192,8 +192,11 @@ def stats() -> dict:
         return out
     day0 = time.mktime(time.strptime(time.strftime("%Y-%m-%d"), "%Y-%m-%d"))
     week = [r for r in rows if float(r["time"]) > time.time() - 7 * 86400]
+    days = {}                                # the product test: people who came back another day
+    for r in week:
+        days.setdefault(r["user"], set()).add(time.strftime("%Y-%m-%d", time.localtime(float(r["time"]))))
     out.update(today=sum(1 for r in rows if float(r["time"]) >= day0), checks_7d=len(week),
-               users_7d=len({r["user"] for r in week}))
+               users_7d=len(days), returning_7d=sum(1 for d in days.values() if len(d) >= 2))
     return out
 
 
@@ -222,6 +225,11 @@ def handle(tok: str, message: dict):
                             "et chaque CA que tu envoies passe aussi par GARDE dans le desk.")
         else:
             send(tok, chat, "Code incorrect. Le bon code est affiché dans le panneau GARDE du tableau de bord.")
+        return
+    if body.startswith("/etat") and str(chat) == owner():     # the chief of staff: five lines, the last hour
+        import report
+        h = body.split()[-1]
+        send(tok, chat, report.status(float(h) if h.replace(".", "", 1).isdigit() else 1))
         return
     mints = list(dict.fromkeys(CA.findall(body)))[:3]
     if body.startswith("/") or not mints:

@@ -1383,3 +1383,17 @@ class ExploreTier(Base):
                                "symbol": "BAD", "price": 0.001, "liq_usd": 80000, "score": 20, "flags": ""}):
             v = check.run("Mint2222222222222222222222222222222222222")
         self.assertTrue(v["action"].startswith("not bought"))
+
+
+class ChiefOfStaff(Base):
+    def test_etat_answers_the_owner_in_five_lines_and_nobody_else(self):
+        import tgbot, report
+        sent = []
+        with mock.patch.object(tgbot, "send", lambda tok, chat, msg: sent.append((chat, msg))), \
+             mock.patch.object(tgbot, "owner", return_value="42"), \
+             mock.patch.object(tgbot.env, "get", lambda k: None):
+            tgbot.handle("T", {"chat": {"id": 42}, "text": "/etat"})
+            tgbot.handle("T", {"chat": {"id": 7}, "text": "/etat"})
+        self.assertLessEqual(len(sent[0][1].splitlines()), 5)
+        self.assertIn("SCOUT", sent[0][1])
+        self.assertNotIn("SCOUT", sent[1][1])                     # a stranger gets the help text
