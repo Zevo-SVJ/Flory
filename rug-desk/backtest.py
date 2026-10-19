@@ -293,6 +293,18 @@ def record_history(card: dict):
                             "rules": {k: {x: v[x] for x in ("n", "mean", "ci95")} for k, v in card["rules"].items()}}) + "\n")
 
 
+def alive(st: dict) -> bool:
+    """A run is going only if its process still exists: a Ctrl+C on start.sh kills the child too, and
+    its state would read "running" for 6 h."""
+    if not st.get("started") or st.get("finished", 0) >= st["started"] or not st.get("pid"):
+        return False
+    try:
+        os.kill(st["pid"], 0)
+        return True
+    except (OSError, ProcessLookupError):
+        return False
+
+
 def history(last: int = 30) -> list[dict]:
     return _jsonl(HISTORY)[-last:]
 
@@ -303,7 +315,11 @@ def run_batch() -> dict:
     rate-limits a replay and would slow the desk's own reads). writes the scorecard and its history."""
     from config import SCHEDULE
     import mbacktest
-    st = {"started": time.time()}
+    st = {"started": time.time(), "pid": os.getpid()}
+    tmp = atomic.tmp(STATE)
+    with open(tmp, "w") as f:           # the pid tells AUDIT whether a run is really alive
+        json.dump(st, f)
+    os.replace(tmp, STATE)
     try:
         st["momentum_added"] = mbacktest.run(SCHEDULE.get("backtest_momentum_n", 40))
     except Exception as e:

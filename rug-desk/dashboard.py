@@ -138,7 +138,7 @@ def backtest_state() -> dict:
             _card["t"] = time.time()
         card = _card["card"]
     nxt = st.get("started", 0) + SCHEDULE["backtest_every_h"] * 3600
-    running = bool(st.get("started")) and st.get("started", 0) > st.get("finished", 0)
+    running = backtest.alive(st)
     return {"card": card, "history": backtest.history(), "running": running, "finished": st.get("finished"),
             "next": nxt if st.get("started") else None, "early_error": st.get("early_error"),
             "momentum_error": st.get("momentum_error"), "every_h": SCHEDULE["backtest_every_h"]}

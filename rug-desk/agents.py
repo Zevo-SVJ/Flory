@@ -263,8 +263,14 @@ def backtest_kick() -> str | None:
              + (f" · {st['early_error']}" if st.get("early_error") else ""))
     if _bt["proc"] is not None and _bt["proc"].poll() is None:
         return "backtest en cours"
-    if time.time() - st.get("started", 0) < SCHEDULE["backtest_every_h"] * 3600:
+    if backtest.alive(st):
+        return "backtest en cours"
+    # a run killed before it finished (the desk was restarted) is started again, not waited 6 h for
+    finished_last = st.get("finished", 0) >= st.get("started", 0)
+    if finished_last and time.time() - st.get("started", 0) < SCHEDULE["backtest_every_h"] * 3600:
         return None
+    if not finished_last and time.time() - st.get("started", 0) < 600:
+        return None             # just launched: its child may not have written its pid yet
     here = os.path.dirname(os.path.abspath(__file__))
     with open(os.path.join(DATA, "backtest.log"), "a") as log:
         _bt["proc"] = subprocess.Popen([sys.executable, os.path.join(here, "backtest.py"), "--accumulate"],

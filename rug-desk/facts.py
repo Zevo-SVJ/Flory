@@ -242,6 +242,15 @@ def report(mint: str, pool: dict) -> dict:
         if supply_raw and len(accs) < 3000:   # the 30 biggest holders, only from a complete list
             big = sorted((a for a in accs if a.get("owner") != pool.get("pair")), key=lambda a: -int(a["amount"]))[:30]
             top30 = [(a["owner"], int(a["amount"]) / supply_raw * 100) for a in big]
+            if not holders:
+                # GoPlus and getTokenLargestAccounts both came back empty, but Helius gave the whole list:
+                # the top 10 is in it. "no_holders" killed 31 of 46 tokens one night, UHI (+631%) among them
+                by_owner = {}
+                for a in accs:
+                    by_owner[a["owner"]] = by_owner.get(a["owner"], 0) + int(a["amount"])
+                holders = [{"account": o, "percent": str(n / supply_raw)}
+                           for o, n in sorted(by_owner.items(), key=lambda kv: -kv[1])[:10]]
+                source = "helius_das"
     owners = [h["account"] for h in holders]
     kinds = _rpc("getMultipleAccounts", [owners, {"encoding": "base64",
                  "dataSlice": {"offset": 0, "length": 0}}])["value"] if owners else []

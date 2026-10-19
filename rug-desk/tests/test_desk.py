@@ -1217,3 +1217,44 @@ class TelegramBot(Base):
             for _ in range(tgbot.PER_CHAT_HOUR + 1):
                 tgbot.handle("T", {"chat": {"id": 7}, "text": MINT})
         self.assertIn("Limite", sent[-1])
+
+
+class HoldersFromHelius(Base):
+    """GoPlus and getTokenLargestAccounts empty, Helius DAS full: the top 10 comes from DAS."""
+    def test_das_list_fills_the_top_10(self):
+        class DasChain(Chain):
+            def __call__(self, url, timeout=None, json=None):
+                if json["method"] == "getTokenAccounts":
+                    accs = [{"owner": PAIR, "amount": "600000"}] + \
+                           [{"owner": f"W{i}", "amount": str(20000 - i * 1000)} for i in range(12)]
+                    return Resp({"jsonrpc": "2.0", "id": 1, "result": {"token_accounts": accs}})
+                return super().__call__(url, timeout=timeout, json=json)
+        with net(gp=goplus(holders=[]), chain=DasChain()), mock.patch.object(facts, "RPC_URL", "https://x.helius-rpc.com"):
+            t = facts.report(MINT, {"dex": "pumpswap", "pair": PAIR})
+        self.assertIsNotNone(t["top10_pct"])
+        self.assertEqual(t["holders_source"], "helius_das")
+        self.assertAlmostEqual(t["max_wallet_pct"], 2.0)          # the pool's 60% is not a whale
+
+
+class BacktestAlive(Base):
+    def test_a_killed_run_is_started_again_not_waited_for(self):
+        import agents, backtest, json as _j
+        dead = {"started": time.time() - 3600, "pid": 999999}      # killed an hour ago, never finished
+        with open(backtest.STATE, "w") as f:
+            _j.dump(dead, f)
+        self.assertFalse(backtest.alive(dead))
+        started = []
+
+        class Proc:
+            def __init__(self, *a, **k):
+                started.append(a)
+
+            def poll(self):
+                return None
+        agents._bt["proc"] = None
+        with mock.patch("subprocess.Popen", Proc):
+            agents.backtest_kick()
+        self.assertEqual(len(started), 1)
+        self.assertTrue(backtest.alive({"started": time.time(), "pid": os.getpid()}))
+        os.remove(backtest.STATE)
+        agents._bt["proc"] = None
