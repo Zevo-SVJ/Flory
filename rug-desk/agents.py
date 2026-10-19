@@ -14,7 +14,7 @@ MARKS = os.path.join(DATA, "marks.json")
 INBOX = os.path.join(DATA, "inbox.txt")      # CAs pasted in the dashboard, checked by GARDE
 from events import emit, set_agent, agents as agent_state
 from notify import post
-import book, watch, scan, check, audit, report, pending, exitlab, ruggers, health, facts, smart
+import book, watch, scan, check, audit, report, pending, exitlab, ruggers, health, facts, smart, sources
 
 
 def beat():
@@ -39,7 +39,11 @@ def log_equity(marks: dict):
                 f"{realized:.4f},{unrealized:.4f},{len(b)}\n")
 
 
+_vigie_last = {"t": 0.0}
+
+
 def vigie():
+    _vigie_last["t"] = time.time()
     exits, marks = watch.watch()
     for e in exits:
         if e["kind"] == "error":
@@ -89,6 +93,13 @@ def scout():
                           f"({len(scan.grads.recent())} pump.fun graduate(s) in the window)")
     for mint in leads:
         garde(mint)
+        # one process runs every agent: a batch of deep reads can take minutes, and open positions must
+        # not go unwatched meanwhile. VIGIE gets its turn between two leads
+        if time.time() - _vigie_last["t"] >= SCHEDULE["vigie_every_s"]:
+            try:
+                vigie()
+            except Exception as e:
+                emit("VIGIE", "error", f"between leads: {e}")
     return f"{len(leads)} lead(s) envoyé(s) à GARDE"
 
 
@@ -216,6 +227,8 @@ def main():
     post(f"CLAUDE BOT up. {'PAPER' if PAPER else 'LIVE'} mode, judge={JUDGE}, bankroll ${PAPER_BANKROLL_USD}. "
          f"VIGIE {SCHEDULE['vigie_every_s']}s, SCOUT {SCHEDULE['scout_every_min']}m, "
          f"AUDIT {SCHEDULE['audit_every_min']}m, report {SCHEDULE['report_at']}.")
+    for problem in sources.probe():         # every outside source answers once, now
+        emit("GARDE", "error", f"source en panne au démarrage : {problem[:160]}")
     if (t := health.since_last_run()):
         health.record(t, time.time(), "stopped")
     if (h := health.summary()):            # what the last 24 h looked like, said once at start

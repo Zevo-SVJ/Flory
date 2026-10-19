@@ -112,11 +112,19 @@ def echo_status(waiting: dict, xreads: list[dict], now: float) -> dict:
 
 def garde_detail() -> str:
     """Which outside sources GARDE really has, so a missing key shows on the page, not in a log."""
-    import facts, stracker
-    helius = "helius" in facts.RPC_URL
-    return ("pool, contrat, holders, usines à rugs · "
-            + ("Helius ✓" if helius else "Helius ✗ (holders limités)") + " · Jupiter ✓ · "
-            + ("Solana Tracker ✓" if stracker.key() else "Solana Tracker ✗ (clé manquante)"))
+    import facts, stracker, sources
+    st = sources.load()
+    def mark(name, label, configured=True, why_not=""):
+        if not configured:
+            return f"{label} ✗ ({why_not})"
+        s = st.get(name)
+        if not s:
+            return f"{label} … (pas encore appelé)"
+        return f"{label} {'✓' if s['ok'] else '✗'}" + ("" if s["ok"] and s["detail"] == "ok" else f" ({s['detail'][:40]})")
+    return " · ".join([mark("helius_das", "Helius", "helius" in facts.RPC_URL, "RPC public: holders limités"),
+                       mark("jupiter", "Jupiter"),
+                       mark("stracker", "Solana Tracker", bool(stracker.key()), "clé manquante")
+                       + f" {sources.calls_today('stracker')}/{stracker.DAILY_CAP} auj."])
 
 
 def state(range_key: str = "auto") -> dict:

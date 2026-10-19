@@ -51,10 +51,7 @@ def learn(mint: str, change_pct: float) -> int:
     open(done, "w").close()
     with open(path) as f:
         wallets = json.load(f)
-    mem = {}
-    if os.path.exists(MEMORY):
-        with open(MEMORY) as f:
-            mem = json.load(f)
+    mem = memory()                      # seeds included: a seeded wallet that rugs again goes to 3, not 1
     key = "runs" if change_pct >= RUN_PCT else "crashes"
     for w in wallets:
         mem.setdefault(w, {"runs": 0, "crashes": 0})[key] += 1

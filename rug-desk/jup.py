@@ -7,20 +7,29 @@
 #   - audit.devMints: how many tokens the creator wallet has launched (serial launchers)
 # every field is read defensively: an absent field is unknown, and unknown never kills a token.
 import requests
+import sources
 
 URL = "https://lite-api.jup.ag/tokens/v2/search"
 
 
 def fetch(mint: str) -> dict | None:
     """Jupiter's view of the token, normalized. None if Jupiter doesn't know it or is down."""
-    r = requests.get(URL, params={"query": mint}, timeout=10)
-    r.raise_for_status()
-    data = r.json()
+    try:
+        r = requests.get(URL, params={"query": mint}, timeout=10)
+        r.raise_for_status()
+        data = r.json()
+    except Exception as e:
+        sources.record("jupiter", False, str(e))
+        raise
     rows = data if isinstance(data, list) else (data.get("tokens") or data.get("data") or [])
     t = next((x for x in rows if isinstance(x, dict) and (x.get("id") or x.get("address")) == mint), None)
     if not t:
+        sources.record("jupiter", True, "token inconnu de Jupiter")
         return None
     audit = t.get("audit") or {}
+    # the fields this file reads; if Jupiter renames them, the dashboard says so instead of going quiet
+    missing = [k for k in ("organicScore", "stats1h") if k not in t]
+    sources.record("jupiter", not missing, "ok" if not missing else "champs absents: " + ", ".join(missing))
     h1 = t.get("stats1h") or {}
     vol = (h1.get("buyVolume") or 0) + (h1.get("sellVolume") or 0)
     organic_vol = (h1.get("buyOrganicVolume") or 0) + (h1.get("sellOrganicVolume") or 0)

@@ -7,7 +7,9 @@
 # the desk calls it once per token, and only for tokens that already passed every other check.
 # response shape from the official SDK (@solana-tracker/data-api 0.5.0, interfaces.d.ts: TokenRisk).
 import requests
-import env
+import env, sources
+
+DAILY_CAP = 75           # 2,500 free requests / 31 days, with room for the bundlers fallback call
 
 BASE = "https://data.solanatracker.io"
 
@@ -21,8 +23,17 @@ def fetch(mint: str) -> dict | None:
     k = key()
     if not k:
         return None
-    r = requests.get(f"{BASE}/tokens/{mint}", headers={"x-api-key": k}, timeout=15)
-    r.raise_for_status()
+    if sources.calls_today("stracker") >= DAILY_CAP:
+        sources.record("stracker", True, f"cap du jour atteint ({DAILY_CAP})")
+        return None
+    sources.count_call("stracker")
+    try:
+        r = requests.get(f"{BASE}/tokens/{mint}", headers={"x-api-key": k}, timeout=15)
+        r.raise_for_status()
+    except Exception as e:
+        sources.record("stracker", False, str(e))
+        raise
+    sources.record("stracker", True, "ok")
     risk = (r.json() or {}).get("risk") or {}
     pct = lambda cat: ((risk.get(cat) or {}).get("totalPercentage"))
     bundlers = risk.get("bundlers")

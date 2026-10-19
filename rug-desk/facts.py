@@ -6,7 +6,7 @@
 import base64, struct, time
 import requests
 from config import FACTS, SOLANA_RPC
-import ruggers, env
+import ruggers, env, sources
 
 GOPLUS = "https://api.gopluslabs.io/api/v1/solana/token_security"
 SYSTEM_PROGRAM = "11111111111111111111111111111111"
@@ -228,8 +228,11 @@ def report(mint: str, pool: dict) -> dict:
     farm_n, farm_pct, top30, all_owners = 0, 0.0, [], []
     try:                                    # the whole holder list (Helius): farms hide below the top 10
         accs = _das_accounts(mint)
-    except Exception:
+        if accs is not None:
+            sources.record("helius_das", True, f"{len(accs)} holders lus")
+    except Exception as e:
         accs = None
+        sources.record("helius_das", False, str(e))
     if accs is not None:
         count = count or len(accs)
         supply_raw = int(_rpc("getTokenSupply", [mint])["value"]["amount"])
