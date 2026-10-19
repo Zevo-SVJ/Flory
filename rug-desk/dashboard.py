@@ -214,7 +214,7 @@ def state(range_key: str = "auto") -> dict:
         "audit": audit.summary(), "vigie_every": SCHEDULE["vigie_every_s"],
         "sol": market.sol_regime(),
         "breakdown": audit.breakdown(), "ruggers": len(ruggers.known()),
-        "edge": edge.stats(), "smart": smart.known(),
+        "edge": edge.stats(), "smart": smart.known(), "living": edge.living(),
         "lab": _json(os.path.join(DATA, "exitlab.json"), {"trades": 0, "results": [], "active": "actif"}),
         # the agent panels: what each outside source last answered, which keys exist, PLUME's last words
         "sources": {k: v for k, v in src.items() if not k.endswith("_count")},

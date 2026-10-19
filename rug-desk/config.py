@@ -52,7 +52,11 @@ COOLDOWN_HOURS = 24         # no re-entry into a token you just left
 # paper fills pay what a real fill pays, so paper profit is not a fantasy: the pool fee, the price
 # impact of a $25 order on the pool (constant-product AMM: ~ order / half the liquidity), and a fixed
 # network + priority fee per transaction. a live fill can still be worse (latency, MEV): paper stays a ceiling.
-PAPER_COSTS = {"fee_pct": 0.3, "tx_usd": 0.05}
+# real-world numbers (Oct 2026): a memecoin swap that lands pays a priority fee plus a Jito tip, ~0.001-0.005 SOL
+# (~$0.20-1); 96% of Solana sandwich attacks hit pump.fun/PumpSwap tokens (Bitquery, 6.85M sandwiches in
+# a year), so each side also pays ~1% to slippage and MEV even with a tight slippage limit. paper must
+# not look better than a real wallet would.
+PAPER_COSTS = {"fee_pct": 0.3, "tx_usd": 0.50, "mev_pct": 1.0}
 MEGA_PROFIT_PCT = 50        # a sale this far in profit fires the dashboard's MEGA PROFIT card
 
 SOLANA_RPC = "https://api.mainnet-beta.solana.com"   # free public RPC. a free Helius/QuickNode URL also works

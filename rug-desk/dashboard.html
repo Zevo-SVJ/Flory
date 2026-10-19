@@ -353,6 +353,9 @@ a { color: #8fb8f0; text-decoration: none; } a:hover { text-decoration: underlin
     <section class="pane" data-agent="AUDIT" hidden><h3>Prêt pour l'argent réel ?</h3>
       <div class="stats3" id="edgeStats"></div><p class="note" id="edgeNote"></p>
     </section>
+    <section class="pane" data-agent="AUDIT" hidden><h3>Peut-on en vivre ?</h3>
+      <div class="stats3" id="livingStats"></div><p class="note" id="livingNote"></p>
+    </section>
     <section class="pane" data-agent="AUDIT" hidden><h3>Le filtre avait-il raison ?</h3>
       <div class="stats3" id="auditStats"></div><p class="note" id="missed"></p>
     </section>
@@ -738,11 +741,21 @@ function drawPanels() {
   const es = $("edgeStats"); es.replaceChildren();
   const E = S.edge || {};
   [["Trades clôturés", `${E.n || 0} / ${E.min_trades || 50}`, "il en faut 50 pour conclure"],
-   ["Gain moyen par trade", E.mean == null ? "–" : usd(E.mean), E.ci_low == null ? "" : `IC 95 % : ${usd(E.ci_low)} à ${usd(E.ci_high)}`],
+   ["Rendement moyen par trade", E.mean_pct == null ? "–" : pct(E.mean_pct), E.ci_low_pct == null ? "" : `IC 95 % : ${pct(E.ci_low_pct)} à ${pct(E.ci_high_pct)}`],
    ["Trades gagnants", E.win_rate == null ? "–" : Math.round(E.win_rate * 100) + "%", E.profit_factor ? `profit factor ${E.profit_factor}` : ""],
    ["Pire drawdown", E.max_drawdown == null ? "–" : plain(E.max_drawdown), "limite : 30 % de la banque"]].forEach(([l, v, sub]) => {
     const c = el("div", { class: "stat" }); c.append(el("div", { class: "label" }, l), el("div", { class: "v" }, v), el("div", { class: "sub" }, sub)); es.append(c);
   });
+  const L = S.living || {}, ls = $("livingStats"); ls.replaceChildren();
+  if (L.month) {
+    const M = L.month;
+    [["Revenu par mois (moyenne)", M.mean_pct == null ? "–" : usd(M.mean_pct), `fourchette 95 % : ${M.ci_low_pct == null ? "–" : usd(M.ci_low_pct)} à ${M.ci_high_pct == null ? "–" : usd(M.ci_high_pct)}`],
+     ["Trades par jour", String(L.trades_per_day), `sur ${L.n} trades clôturés`],
+     ["Mise max par trade", L.ticket_cap == null ? "–" : plain(L.ticket_cap), "plafond du marché : 2 % du pool médian"],
+     [`Rendement nécessaire pour ${plain(L.target)}/mois`, L.return_needed_pct == null ? "–" : pct(L.return_needed_pct), `banque nécessaire ≈ ${L.bankroll_needed == null ? "–" : plain(L.bankroll_needed)}`]
+    ].forEach(([l, v, sub]) => { const c = el("div", { class: "stat" }); c.append(el("div", { class: "label" }, l), el("div", { class: "v" }, v), el("div", { class: "sub" }, sub)); ls.append(c); });
+  }
+  $("livingNote").textContent = (L.why || "") + ". Revenu = rendement par trade × mise max que le marché accepte × trades par jour × 30, coûts réels inclus (frais, MEV, priorité). Aucune banque ne relève ce plafond : la profondeur des pools le fixe.";
   $("edgeNote").textContent = (E.why || "") + (E.suggested_ticket ? ` Ticket suggéré pour commencer : ${plain(E.suggested_ticket)} (un quart du Kelly, plafonné à 5 % de la banque et à 1 % du pool).` : "")
     + (S.smart ? ` · ${S.smart} wallet(s) « gagnants » appris.` : "");
   const bd = S.breakdown || { hour: [], age: [] };

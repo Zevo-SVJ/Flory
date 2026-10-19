@@ -13,7 +13,7 @@ LOCK = threading.RLock()
 def _cost_pct(usd: float, liq: float | None) -> float:
     """Pool fee + price impact of an order of this size on this pool, in %."""
     impact = 100 * usd / (liq / 2) if liq else 0
-    return PAPER_COSTS["fee_pct"] + impact
+    return PAPER_COSTS["fee_pct"] + impact + PAPER_COSTS.get("mev_pct", 0)
 
 FIELDS = ["time", "mint", "symbol", "action", "usd", "pnl", "reason"]
 

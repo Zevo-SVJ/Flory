@@ -790,6 +790,24 @@ class EchoSkipRetro(Base):
         self.assertEqual(ev[-1]["reason"], "x_skip")
 
 
+class Living(Base):
+    def test_income_is_capped_by_the_pools_not_the_bankroll(self):
+        import edge
+        t0 = time.time() - 10 * 86400
+        with open(config.TRADES, "w") as f:
+            f.write("time,mint,symbol,action,usd,pnl,reason\n")
+            for i in range(50):                     # 50 trades over 10 days, +5% each on $50
+                ts = time.strftime("%Y-%m-%d %H:%M", time.localtime(t0 + i * 3600))
+                f.write(f"{ts},M{i},M,open,50,0,entry\n{ts},M{i},M,close,52.5,2.5,trail\n")
+        for i in range(50):
+            check.log({"time": "2026-10-19 10:00", "mint": f"M{i}", "verdict": "PASS", "liq_usd": 40000})
+        L = edge.living(2200)
+        self.assertEqual(L["ticket_cap"], 40000 * config.FACTS["max_ticket_share"])     # $800
+        self.assertAlmostEqual(L["trades_per_day"], 5.0, delta=0.1)
+        self.assertAlmostEqual(L["month"]["mean_pct"], 0.05 * 800 * 5 * 30, delta=150)  # ~$6,000
+        self.assertAlmostEqual(L["return_needed_pct"], 2200 / (800 * 5 * 30) * 100, delta=0.2)
+
+
 class Team(Base):
     """What makes them a team: one book, shared dossiers, a rug that reaches every agent."""
     def test_a_rug_sells_the_positions_its_holders_are_in(self):
@@ -898,12 +916,12 @@ class Costs(Base):
     def test_a_round_trip_pays_fees_impact_and_tx(self):
         book.COSTS = True
         self.addCleanup(setattr, book, "COSTS", False)
-        book.open_position(MINT, "T", 1.0, 50000)            # $25 on $50k: 0.1% impact + 0.3% fee
+        book.open_position(MINT, "T", 1.0, 50000)            # $25 on $50k: 0.1% impact + 0.3% fee + 1% MEV
         p = book.load()[MINT]
-        self.assertAlmostEqual(p["entry"], 1.004, places=6)
-        pnl = book.sell(MINT, 1.0, 1.0, "flat", 50000)       # flat price still loses the round trip
-        self.assertLess(pnl, -0.2)
-        self.assertGreater(pnl, -0.35)
+        self.assertAlmostEqual(p["entry"], 1.014, places=6)
+        pnl = book.sell(MINT, 1.0, 1.0, "flat", 50000)       # a flat price loses ~4.7% of a $25 round trip
+        self.assertLess(pnl, -1.0)
+        self.assertGreater(pnl, -1.4)
 
 
 class EchoSilent(Base):
