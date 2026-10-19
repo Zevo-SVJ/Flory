@@ -17,7 +17,7 @@ import book
 FIELDS = ["time", "mint", "symbol", "stage", "verdict", "confidence", "reason", "price", "liq_usd",
           "score", "flags", "sol_1h", "sol_24h", "age_min", "dev", "ticket", "tier",
           "organic", "organic_vol", "dev_mints", "cluster_pct", "fresh_pct", "bundlers_pct", "insiders_pct",
-          "snipers_pct", "factory_wallets"]
+          "snipers_pct", "factory_wallets", "lane"]
 
 
 def _migrate():
@@ -74,7 +74,8 @@ def check(mint: str) -> dict:
         m = pool(mint)                                           # pool, free
     except Exception as e:
         return {"stage": "pool", "verdict": "SKIP", "reason": f"dexscreener failed: {e}"}
-    seen = {"price": (m or {}).get("price"), "liq_usd": (m or {}).get("liq_usd"), "age_min": (m or {}).get("age_min")}
+    seen = {"price": (m or {}).get("price"), "liq_usd": (m or {}).get("liq_usd"), "age_min": (m or {}).get("age_min"),
+            "lane": market.lane(m) if m else None}
     if (k := market_kill(m)):
         return {"stage": "pool", "verdict": "SKIP", "reason": k, "symbol": (m or {}).get("symbol"), **seen}
     if (k := market.copycat(m, mint)):                           # a rug factory's name, or a bigger owner
@@ -100,7 +101,7 @@ def check(mint: str) -> dict:
                 "symbol": m["symbol"], **seen}
     seen["dev"] = token.get("dev")
     smart.snapshot(mint, token.get("all_owners") or token.get("wallets"))
-    if (k := fact_kill(token)):
+    if (k := fact_kill(token, market.lane(m))):
         return {"stage": "facts", "verdict": "SKIP", "reason": k,
                 "symbol": m["symbol"] or token["symbol"], **seen}
 

@@ -239,7 +239,7 @@ def report(mint: str, pool: dict) -> dict:
         farm_n, farm_pct = holder_farm(accs, supply_raw, {pool.get("pair")})
         all_owners = sorted({a["owner"] for a in accs if a.get("owner") != pool.get("pair")
                              and supply_raw and int(a["amount"]) >= supply_raw * 0.0001})
-        if supply_raw:                      # the 30 biggest holders, for the funding-cluster read
+        if supply_raw and len(accs) < 3000:   # the 30 biggest holders, only from a complete list
             big = sorted((a for a in accs if a.get("owner") != pool.get("pair")), key=lambda a: -int(a["amount"]))[:30]
             top30 = [(a["owner"], int(a["amount"]) / supply_raw * 100) for a in big]
     owners = [h["account"] for h in holders]
@@ -292,21 +292,30 @@ def report(mint: str, pool: dict) -> dict:
     }
 
 
-def fact_kill(t: dict) -> str | None:
-    """Plain comparisons. First failure wins, the reason gets logged."""
+def fact_kill(t: dict, lane: str = "early") -> str | None:
+    """Plain comparisons. First failure wins, the reason gets logged.
+    momentum lane: a survivor's LP often sits on Raydium or Meteora, where no burn can be read and no
+    creator is recorded; its deep, old pool stands in for those two checks, and its holder limits are wider."""
+    from config import MOMENTUM
+    mom = lane == "momentum"
+    top10_max = MOMENTUM["max_top10_pct"] if mom else FACTS["max_top10_pct"]
+    wallet_max = MOMENTUM["max_wallet_pct"] if mom else FACTS["max_wallet_pct"]
     if t.get("dev") and t["dev"] in ruggers.known():             return "dev_rugged_before"
     if t["mint_authority"]:                                      return "mint_open"
     if t["freeze_authority"]:                                    return "freeze_open"
     if t["danger"]:                                              return "danger:" + t["danger"][0]
-    if t["lp_burned_pct"] is None:                               return "lp_unverified"
-    if t["lp_burned_pct"] < FACTS["min_lp_locked_pct"]:          return "lp_unlocked"
-    if t["dev_pct"] is None:                                     return "dev_unknown"
-    if t["dev_pct"] > FACTS["max_dev_pct"]:                      return "dev_holds"
+    if t["lp_burned_pct"] is None and not mom:                   return "lp_unverified"
+    if t["lp_burned_pct"] is not None and t["lp_burned_pct"] < FACTS["min_lp_locked_pct"]:
+        return "lp_unlocked"
+    if t["dev_pct"] is None and not mom:                         return "dev_unknown"
+    if t["dev_pct"] is not None and t["dev_pct"] > FACTS["max_dev_pct"]:
+        return "dev_holds"
     if t["top10_pct"] is None:                                   return "no_holders"
-    if t["top10_pct"] > FACTS["max_top10_pct"]:                  return "top10_heavy"
-    if t["max_wallet_pct"] > FACTS["max_wallet_pct"]:            return "whale"
+    if t["top10_pct"] > top10_max:                               return "top10_heavy"
+    if t["max_wallet_pct"] > wallet_max:                         return "whale"
     if t["same_sol_wallets"] >= FACTS["bundle_same_sol"]:        return "bundle_same_sol"
     if t["ladder_wallets"] >= FACTS["bundle_ladder"]:            return "bundle_ladder"
-    if (t.get("farm_wallets") or 0) >= FACTS["farm_wallets"] and (t.get("farm_pct") or 0) >= FACTS["farm_pct"]:
+    if (not mom and (t.get("farm_wallets") or 0) >= FACTS["farm_wallets"]   # airdrops make identical bags too
+            and (t.get("farm_pct") or 0) >= FACTS["farm_pct"]):
         return "holder_farm"
     return None

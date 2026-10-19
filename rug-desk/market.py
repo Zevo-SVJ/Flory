@@ -2,7 +2,7 @@
 # checks 10-13. the pool itself: depth, age, price, and whether anyone can actually sell.
 import time
 import requests
-from config import FACTS, TICKET_USD
+from config import FACTS, TICKET_USD, MOMENTUM
 
 DS = "https://api.dexscreener.com/tokens/v1/solana"
 
@@ -27,6 +27,11 @@ def _best(pairs: list, mint: str) -> dict | None:
         "buys_1h": h1.get("buys", 0),
         "sells_1h": h1.get("sells", 0),
         "vol_1h": (p.get("volume") or {}).get("h1"),
+        "vol_6h": (p.get("volume") or {}).get("h6") or 0,
+        "vol_24h": (p.get("volume") or {}).get("h24") or 0,
+        "chg_5m": (p.get("priceChange") or {}).get("m5") or 0,
+        "chg_1h": (p.get("priceChange") or {}).get("h1") or 0,
+        "chg_24h": (p.get("priceChange") or {}).get("h24") or 0,
         # the average trade: rug farms fake activity with hundreds of wallets buying $3-10 each. on Oct 19
         # the 18 "Gemini" and the FOMO farm traded $4-9 a swap; the graduates that really ran, $40-75
         "avg_trade_1h": ((p.get("volume") or {}).get("h1") or 0) / max(1, h1.get("buys", 0) + h1.get("sells", 0)),
@@ -64,15 +69,40 @@ def market_kill(m: dict | None) -> str | None:
     if m["price"] <= 0:                                          return "no_price"
     if m["liq_usd"] < FACTS["min_liquidity_usd"]:                return "thin_pool"
     if TICKET_USD / m["liq_usd"] > FACTS["max_ticket_share"]:    return "ticket_too_big"
-    if (m.get("mcap") or 0) > FACTS["max_mcap_liq"] * m["liq_usd"]: return "fake_cap"
+    cap_x = MOMENTUM["max_mcap_liq"] if lane(m) == "momentum" else FACTS["max_mcap_liq"]
+    if (m.get("mcap") or 0) > cap_x * m["liq_usd"]:              return "fake_cap"
     if m["buys_1h"] + m["sells_1h"] >= 100 and m.get("avg_trade_1h", 1e9) < FACTS["min_avg_trade_usd"]:
         return "micro_trades"
-    if (m.get("vol_1h") or 0) < FACTS["min_turnover_1h"] * m["liq_usd"]:
+    # a launch must trade 5% of its pool an hour; a deep survivor's pool can't turn that fast, its
+    # volume is judged against its own recent hours instead (momentum_kill)
+    if lane(m) == "early" and (m.get("vol_1h") or 0) < FACTS["min_turnover_1h"] * m["liq_usd"]:
         return "dead_volume"
     if m["age_min"] is None or m["age_min"] < FACTS["min_age_min"]:
         return "too_fresh"
-    if m["age_min"] > FACTS["max_age_hours"] * 60:               return "too_old"
     if m["buys_1h"] >= 20 and m["sells_1h"] == 0:                return "nobody_can_sell"
+    if lane(m) == "momentum":
+        return momentum_kill(m)
+    return None
+
+
+def lane(m: dict) -> str:
+    """"early": a launch, up to max_age_hours old. "momentum": a survivor, judged on its move."""
+    return "momentum" if (m.get("age_min") or 0) > FACTS["max_age_hours"] * 60 else "early"
+
+
+def momentum_kill(m: dict) -> str | None:
+    """A survivor is bought only while it moves: rising, on rising volume, buyers ahead, not vertical.
+    "no_momentum" is not a verdict on the token: SCOUT sees it again when it trends again."""
+    p = MOMENTUM
+    if m["liq_usd"] < p["min_liq_usd"]:                          return "thin_pool"
+    if m.get("vol_24h", 0) < p["min_vol_24h"]:                   return "dead_volume"
+    if m.get("chg_1h", 0) > p["max_chg_1h"] or m.get("chg_24h", 0) > p["max_chg_24h"]:
+        return "overextended"
+    if m.get("chg_1h", 0) < p["min_chg_1h"] or m.get("chg_5m", 0) < p["min_chg_5m"]:
+        return "no_momentum"
+    if (m.get("vol_1h") or 0) < p["vol_accel"] * (m.get("vol_6h") or 0) / 6:
+        return "no_momentum"
+    if m["buys_1h"] < m["sells_1h"]:                              return "no_momentum"
     return None
 
 

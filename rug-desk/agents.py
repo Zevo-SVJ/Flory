@@ -89,8 +89,13 @@ def scout():
         down.add("grads")
     elif not scan.grad_error:
         down.discard("grads")
-    emit("SCOUT", "scan", f"{len(leads)} token(s) with a real pool handed to GARDE "
-                          f"({len(scan.grads.recent())} pump.fun graduate(s) in the window)")
+    if scan.gt_error and "gt" not in down:
+        emit("SCOUT", "error", scan.gt_error)
+        down.add("gt")
+    elif not scan.gt_error:
+        down.discard("gt")
+    emit("SCOUT", "scan", f"{len(leads)} token(s) handed to GARDE: {scan.last_lanes['early']} launch(es), "
+                          f"{scan.last_lanes['momentum']} in momentum ({len(scan.grads.recent())} graduates watched)")
     for mint in leads:
         garde(mint)
         # one process runs every agent: a batch of deep reads can take minutes, and open positions must

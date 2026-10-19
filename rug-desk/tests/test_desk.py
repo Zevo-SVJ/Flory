@@ -96,7 +96,7 @@ class Resp:
 
 
 def fake_get(gp=None, ds=None, gp_code=200):
-    def get(url, timeout=None, params=None):
+    def get(url, timeout=None, params=None, headers=None):
         if "gopluslabs" in url:
             return Resp({"code": 1, "message": "ok", "result": {MINT: gp if gp is not None else goplus()}}, gp_code)
         return Resp(ds if ds is not None else ds_pairs())
@@ -209,7 +209,6 @@ class Filter(Base):
             "no_pool": [],
             "thin_pool": ds_pairs(liq=10000),
             "too_fresh": ds_pairs(age_min=10),
-            "too_old": ds_pairs(age_min=80 * 60),
             "nobody_can_sell": ds_pairs(buys=40, sells=0),
         }
         for reason, ds in cases.items():
@@ -354,7 +353,7 @@ class Agents(Base):
         check.ECHO_MODE = "observe"
         self.addCleanup(setattr, check, "ECHO_MODE", check.ECHO_MODE)
         prof = [{"chainId": "solana", "tokenAddress": MINT}]
-        def get(url, timeout=None, params=None):
+        def get(url, timeout=None, params=None, headers=None):
             if "token-profiles" in url or "token-boosts" in url:
                 return Resp(prof)
             return fake_get()(url, timeout, params)
@@ -625,6 +624,31 @@ class Ruggers(Base):
         with mock.patch("requests.get", fake_get(ds=ds_pairs(price=1.1, liq=20000))):
             agents.vigie()
         self.assertIn("DEVWALLET", ruggers.known())
+
+
+class MomentumLane(Base):
+    """Survivors older than 72 h are bought on their move, not on their youth."""
+    def old(self, **kw):
+        ds = ds_pairs(age_min=10 * 24 * 60, liq=kw.pop("liq", 400000), vol=kw.pop("vol", 120000),
+                      dex=kw.pop("dex", "raydium"), mcap=2e6)
+        ds[0]["volume"].update(h6=kw.pop("vol6", 300000), h24=kw.pop("vol24", 1500000))
+        ds[0]["priceChange"] = {"m5": kw.pop("m5", 1.5), "h1": kw.pop("h1", 12), "h24": kw.pop("h24", 40)}
+        ds[0]["txns"]["h1"] = {"buys": 900, "sells": 700}
+        return ds
+
+    def test_a_rising_survivor_passes_without_lp_proof(self):
+        v = self.verdict(ds=self.old())                     # Raydium: no LP burn readable, no dev recorded
+        self.assertEqual(v["verdict"], "PASS", v)
+        self.assertEqual(v.get("lane"), "momentum")
+
+    def test_no_move_no_buy(self):
+        self.assertEqual(self.verdict(ds=self.old(h1=0.5))["reason"], "no_momentum")
+        self.assertEqual(self.verdict(ds=self.old(vol=40000))["reason"], "no_momentum")     # volume fading
+        self.assertEqual(self.verdict(ds=self.old(h1=150))["reason"], "overextended")
+        self.assertEqual(self.verdict(ds=self.old(liq=60000))["reason"], "thin_pool")
+
+    def test_a_launch_still_needs_its_lp_proof(self):
+        self.assertEqual(self.verdict(ds=ds_pairs(dex="raydium"))["reason"], "lp_unverified")
 
 
 class Farms(Base):

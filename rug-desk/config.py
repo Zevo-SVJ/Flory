@@ -80,6 +80,24 @@ FACTS = {                   # the rug filter. code only, no model
     "max_age_hours": 72,
 }
 
+# MOMENTUM: the second lane. tokens older than max_age_hours are not launches any more: they survived.
+# they are bought on momentum, not on youth: rising now, on rising volume, with buyers ahead, without
+# chasing a vertical candle. a survivor's pool is deep, so its rug risk is lower and its moves are
+# tradeable; its LP may sit on Raydium or Meteora, where the desk can't verify a burn, so the pool must
+# be deep and old instead. leads come from GeckoTerminal's trending pools and DexScreener's boosts.
+MOMENTUM = {
+    "min_liq_usd": 100000,      # a survivor's pool
+    "min_vol_24h": 300000,
+    "min_chg_1h": 3,            # rising over the hour...
+    "min_chg_5m": -2,           # ...and not rolling over right now
+    "vol_accel": 1.3,           # the last hour's volume >= 1.3x the hourly average of the last 6 h
+    "max_chg_1h": 80,           # past this the candle is vertical: buying it is buying someone's exit
+    "max_chg_24h": 400,
+    "max_top10_pct": 40,        # established tokens carry exchange and team wallets
+    "max_wallet_pct": 8,
+    "max_mcap_liq": 60,         # a survivor's cap runs 10-50x its pool; the Oct 19 clones ran 150-300x
+}
+
 # the deep read, for tokens that passed every check above (jup.py, cluster.py, stracker.py).
 # thresholds are first guesses from the sources named in each file: every value is logged with the
 # verdict, so AUDIT can tell within a week which ones kill crashers and which ones kill winners.

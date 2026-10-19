@@ -19,6 +19,7 @@ WORDS = ["pump", "sol", "cat", "dog", "ai", "meme", "pepe", "inu", "moon", "coin
 WORDS_PER_RUN = 4           # every 3 minutes. the search mostly returns old pools: the graduations feed matters more
 _turn = 0
 grad_error = None           # the on-chain graduation feed's last failure, shown by SCOUT
+last_lanes = {"early": 0, "momentum": 0}
 # kills that can change with time: a pool grows up, a source comes back. retried after this long
 RETRY_AFTER_MIN = 30
 RETRYABLE = ("too_fresh", "thin_pool", "no_pool", "no_price", "no_holders")
@@ -79,6 +80,31 @@ def searched(trending: list[str] = ()) -> list[str]:
     return out
 
 
+GT = "https://api.geckoterminal.com/api/v2/networks/solana/trending_pools"
+NOT_MEMES = {"So11111111111111111111111111111111111111112", "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+             "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB"}      # SOL, USDC, USDT
+gt_error = None
+
+
+def gt_trending() -> list[str]:
+    """GeckoTerminal's trending Solana pools over 5 min and 1 h (free, no key, ~10 calls a minute):
+    the tokens moving now, whatever their age. the momentum lane's main source."""
+    global gt_error
+    out = []
+    try:
+        for d in ("5m", "1h"):
+            r = requests.get(GT, params={"duration": d, "page": 1}, headers={"accept": "application/json"}, timeout=15)
+            r.raise_for_status()
+            for p in r.json().get("data") or []:
+                bid = ((((p.get("relationships") or {}).get("base_token") or {}).get("data") or {}).get("id") or "")
+                if bid.startswith("solana_") and bid[7:] not in NOT_MEMES and bid[7:] not in out:
+                    out.append(bid[7:])
+        gt_error = None
+    except Exception as e:
+        gt_error = f"GeckoTerminal trending unreadable: {e}"[:200]
+    return out
+
+
 def leads() -> list[str]:
     done, out, errors = _done(), [], []
     for src in SOURCES:
@@ -107,6 +133,7 @@ def leads() -> list[str]:
         grad_error = f"pump.fun graduations unreadable: {e}"[:200]
     graduates = [a for a in grads.recent() if a not in done and a not in out]
     out += graduates
+    out += [a for a in gt_trending() if a not in done and a not in out]
     # one batched pool read for every lead: most are bonding-curve tokens with no real pool yet.
     # they are not logged, they just come back next run, so the slots go to tokens that can pass
     live.update(market.pools([m for m in out if m not in live]))
@@ -115,9 +142,14 @@ def leads() -> list[str]:
     grads.forget([m for m in graduates if time.time() - born.get(m, time.time()) > 7200
                   and ((live.get(m) or {}).get("liq_usd") or 0) < 10000])
     ok = [m for m in out if not market_kill(live[m])]
-    # best pools first, so the per-run cap keeps the tradeable ones
+    # best pools first, and the two lanes take turns, so momentum's big volumes never crowd out launches
     ok.sort(key=lambda m: -(live[m].get("vol_1h") or 0))
-    return ok[:SCHEDULE["scan_per_run"]]
+    early = [m for m in ok if market.lane(live[m]) == "early"]
+    mom = [m for m in ok if market.lane(live[m]) == "momentum"]
+    mixed = [m for pair in zip(early, mom) for m in pair] + early[len(mom):] + mom[len(early):]
+    global last_lanes
+    last_lanes = {"early": len(early), "momentum": len(mom)}
+    return mixed[:SCHEDULE["scan_per_run"]]
 
 
 def scan() -> list[dict]:
