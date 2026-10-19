@@ -87,7 +87,7 @@ def summary() -> dict:
     path = os.path.join(DATA, "x_reads.csv")
     if os.path.exists(path):
         with open(path, newline="") as f:
-            xr = {r["mint"]: r["verdict"].upper() for r in csv.DictReader(f) if r.get("mint")}
+            xr = {r["mint"]: r["verdict"].upper().replace("SCAM", "SKIP") for r in csv.DictReader(f) if r.get("mint")}
     def tally(sel):
         return {"n": len(sel), "crashed": sum(1 for r in sel if float(r["change_pct"]) <= CRASH_PCT),
                 "ran": sum(1 for r in sel if float(r["change_pct"]) >= 100)}

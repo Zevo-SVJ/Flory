@@ -7,6 +7,7 @@ from config import (DATA, LOG, JUDGE, MIN_CONFIDENCE, PAPER, PAPER_BUY_ON_PASS, 
 from score import score
 import pending, smart, size
 from facts import report, fact_kill
+import facts
 from market import pool, market_kill
 import market
 import book
@@ -73,8 +74,21 @@ def check(mint: str) -> dict:
     seen = {"price": (m or {}).get("price"), "liq_usd": (m or {}).get("liq_usd"), "age_min": (m or {}).get("age_min")}
     if (k := market_kill(m)):
         return {"stage": "pool", "verdict": "SKIP", "reason": k, "symbol": (m or {}).get("symbol"), **seen}
-    if market.copycat(m, mint):                                  # a bigger token owns this ticker
-        return {"stage": "pool", "verdict": "SKIP", "reason": "copycat", "symbol": m.get("symbol"), **seen}
+    if (k := market.copycat(m, mint)):                           # a rug factory's name, or a bigger owner
+        return {"stage": "pool", "verdict": "SKIP", "reason": k, "symbol": m.get("symbol"), **seen}
+
+    # the pool as it is on chain right now. DexScreener can lag a pool by minutes: a token already dumped
+    # can still show its old liquidity there, and get bought at a price that no longer exists
+    if m.get("dex") == "pumpswap":
+        try:
+            vaults = facts.pool_vaults(m["pair"])
+            res = facts.reserves(vaults) if vaults else None
+        except Exception:
+            vaults, res = None, None
+        if res and None not in res:
+            if m.get("liq_quote") and res[1] < 0.7 * m["liq_quote"]:
+                return {"stage": "pool", "verdict": "SKIP", "reason": "stale_data", "symbol": m.get("symbol"), **seen}
+            seen.update(vaults=vaults, sol0=res[1])        # VIGIE watches these vaults once bought
 
     try:
         token = report(mint, m)                                  # rug filter, free
@@ -111,7 +125,8 @@ def run(mint: str) -> dict:
         v["action"] = f"waiting for ECHO's X read (score {v['score']})"
         return v
     if enter and PAPER:
-        book.open_position(mint, v["symbol"], v["price"], v["liq_usd"], usd=v.get("ticket") or TICKET_USD)
+        book.open_position(mint, v["symbol"], v["price"], v["liq_usd"], usd=v.get("ticket") or TICKET_USD,
+                           vaults=v.get("vaults"), sol0=v.get("sol0"))
         v["action"] = (f"PAPER BUY ${v.get('ticket') or TICKET_USD:.0f} ({v.get('tier', 'base')}"
                        + (f": {', '.join(v['signals'])}" if v.get("signals") else "") + f") at {v['price']}")
         if v["verdict"] == "PASS" and ECHO_MODE == "observe":   # ECHO still reads it, after the buy

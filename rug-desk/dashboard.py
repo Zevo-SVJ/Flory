@@ -152,7 +152,7 @@ def state(range_key: str = "auto") -> dict:
                     for r in rows if r["verdict"] == "SKIP")
     passes = [r for r in rows if r["verdict"] in ("PASS", "BUY")]
 
-    xr = {r["mint"]: r for r in xreads}
+    xr = {r["mint"]: {**r, "verdict": "SKIP" if r["verdict"].upper() == "SCAM" else r["verdict"]} for r in xreads}
     waiting = pending.load()
     bought = {t["mint"] for t in trades if t["action"] == "open"}
 

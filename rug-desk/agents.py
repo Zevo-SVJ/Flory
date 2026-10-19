@@ -149,7 +149,7 @@ def gate():
     """GARDE's second job: settle the PASSes waiting for ECHO. Buys only after an X BUY."""
     events = pending.decide()
     for e in events:
-        agent = "GARDE" if e["kind"] == "buy" else "ECHO"
+        agent = {"buy": "GARDE", "sell": "VIGIE"}.get(e["kind"], "ECHO")
         emit(agent, e["kind"], e["text"], **{k: v for k, v in e.items() if k not in ("kind", "text")})
         if e["kind"] == "buy":
             post(e["text"])

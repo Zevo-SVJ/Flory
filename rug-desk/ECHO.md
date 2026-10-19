@@ -21,12 +21,17 @@ The desk's code has already done every check a script can do. You do check 14, t
 4. Append one line per token to `data/x_reads.csv` (create it with this header if it's missing):
    `time,mint,symbol,verdict,raison`
    - `time`: `YYYY-MM-DD HH:MM`, local time
-   - `verdict`: `BUY` or `SKIP`, nothing else
+   - `verdict`: `BUY`, `SKIP` or `SCAM`, nothing else
+     - `SCAM` only on concrete evidence of a scam: a named account accusing it of a rug or bundle with
+       proof, fake voting/airdrop portals, the same recycled shill text across fresh accounts, the dev
+       selling, the name already rugged on Solana this week. the desk SELLS a position at once on SCAM.
+     - `SKIP` when X simply gives no support (few or no posts, no organic accounts)
    - `raison`: one line, in French, the fact that decided it (no commas, they break the CSV)
 
 ## Hard rules
 
 - **Zero posts by CA → SKIP.** Nobody knows the token exists.
+- **The same ticker already rugged on Solana in the last days (a recycled name) → SCAM.**
 - **Another Solana CA under the same ticker → SKIP.**
 - **The dev sold, or launched many tokens before → SKIP.**
 - **Mostly fresh accounts with the same wording → SKIP.**

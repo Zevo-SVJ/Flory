@@ -92,6 +92,14 @@ def decide() -> list[dict]:
                 if x:
                     out.append({"kind": "info", "symbol": sym, "mint": mint,
                                 "text": f"${sym} X read after the buy: {x['verdict'].upper()} ({x.get('raison', '')[:70]})"})
+                if x and x["verdict"].upper() == "SCAM" and mint in book.load():
+                    # concrete scam evidence on X: out now, at the pool's price of this moment
+                    m = pool(mint)
+                    price = (m or {}).get("price") or 0
+                    pnl = book.sell(mint, 1.0, price, "x_scam", (m or {}).get("liq_usd"))
+                    out.append({"kind": "sell", "symbol": sym, "mint": mint, "pnl": pnl, "reason": "x_scam",
+                                "pct": (price / v["price"] - 1) * 100 if price and v.get("price") else -100,
+                                "closed": True, "text": f"{sym}: sold the rest on ECHO's SCAM read, pnl ${pnl:+.2f}"})
             continue
         if (not x and PAPER and silent and waited > ECHO_SILENT_MIN * 60
                 and (v.get("score") or 0) >= ECHO_FALLBACK_SCORE):
@@ -124,7 +132,7 @@ def decide() -> list[dict]:
             out.append({"kind": "buy", "text": f"BUY ${usd:.0f} ({tier}) ${sym} @ {m['price']:.8g} "
                                                f"(score {v.get('score')}, X: {x.get('raison', '')[:60]})",
                         "symbol": sym, "mint": mint, "price": m["price"]})
-        elif x:
+        elif x:                                # SKIP or SCAM: not bought
             del p[mint]
             out.append({"kind": "kill", "text": f"${sym} dropped, X read: {x.get('raison', 'SKIP')[:90]}",
                         "symbol": sym, "mint": mint, "reason": "x_skip"})

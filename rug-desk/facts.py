@@ -79,19 +79,78 @@ def _holders_chain(mint: str) -> list[dict]:
     return out
 
 
-def _holder_count(mint: str, cap_pages: int = 3) -> int | None:
-    """Holder count when GoPlus has none. Helius only (DAS getTokenAccounts, 1000 per page): 3 pages
-    reach 3000, where the score's holder points are already full."""
+def _das_accounts(mint: str, cap_pages: int = 3) -> list[dict] | None:
+    """Every token account of the mint with a balance, up to 3000. Helius only (DAS getTokenAccounts,
+    1000 a page): the public RPC has no such call. None off Helius."""
     if "helius" not in RPC_URL:
         return None
-    n = 0
+    out = []
     for page in range(1, cap_pages + 1):
         res = _rpc("getTokenAccounts", {"mint": mint, "limit": 1000, "page": page})
         accs = res.get("token_accounts") or []
-        n += sum(1 for a in accs if int(a.get("amount") or 0) > 0)
+        out += [a for a in accs if int(a.get("amount") or 0) > 0]
         if len(accs) < 1000:
             break
-    return n
+    return out
+
+
+def _holder_count(mint: str, cap_pages: int = 3) -> int | None:
+    """Holder count when GoPlus has none: 3 pages reach 3000, where the score's holder points are full."""
+    accs = _das_accounts(mint, cap_pages)
+    return None if accs is None else len(accs)
+
+
+def holder_farm(accounts: list[dict], supply: int, skip: set[str]) -> tuple[int, float]:
+    """The biggest group of holders with the same bag (within 1%): (wallets, % of supply).
+    Organic buyers pay different prices, so their bags differ. A farm buys the same amount from hundreds
+    of fresh wallets, each too small for any top 10: FOMO (Oct 19) had hundreds of wallets holding 0.46M
+    tokens each, which all sold in the same second. dust under 0.01% of supply is ignored."""
+    if not supply:
+        return 0, 0.0
+    bags = sorted(int(a["amount"]) for a in accounts
+                  if a.get("owner") not in skip and int(a["amount"]) >= supply * 0.0001)
+    best_n, best_sum, i, run = 0, 0, 0, 0
+    for j, b in enumerate(bags):
+        run += b
+        while b > bags[i] * 1.01:
+            run -= bags[i]
+            i += 1
+        if j - i + 1 > best_n:
+            best_n, best_sum = j - i + 1, run
+    return best_n, round(best_sum / supply * 100, 2)
+
+
+def pool_vaults(pair: str) -> list[str] | None:
+    """The two token accounts a PumpSwap pool keeps its reserves in: [token vault, SOL vault]."""
+    a = _rpc("getAccountInfo", [pair, {"encoding": "base64"}])["value"]
+    if not a or a["owner"] != PUMPSWAP:
+        return None
+    d = base64.b64decode(a["data"][0])
+    return [_b58(d[139:171]), _b58(d[171:203])]
+
+
+def reserves(vaults: list[str]) -> list[float | None]:
+    """Balances of many vaults in one call, None where unreadable. VIGIE reads every position's pool this way."""
+    if not vaults:
+        return []
+    out = []
+    for i in range(0, len(vaults), 100):
+        for x in _rpc("getMultipleAccounts", [vaults[i:i + 100], {"encoding": "jsonParsed"}])["value"]:
+            try:
+                out.append(float(x["data"]["parsed"]["info"]["tokenAmount"]["uiAmount"] or 0))
+            except (TypeError, KeyError):
+                out.append(None)
+    return out
+
+
+def pool_reserves(pair: str) -> tuple[float, float] | None:
+    """(tokens, SOL) sitting in a PumpSwap pool right now, read from its two vaults on chain.
+    DexScreener can lag a pool by minutes; the chain cannot. None if not a PumpSwap pool."""
+    vaults = pool_vaults(pair)                             # pool_base_token_account, pool_quote_token_account
+    if not vaults:
+        return None
+    amt = reserves(vaults)
+    return None if None in amt else (amt[0], amt[1])
 
 
 def pool_chain(mint: str, pair: str, dex: str) -> dict:
@@ -166,11 +225,15 @@ def report(mint: str, pool: dict) -> dict:
         except Exception as e:         # the public RPC refuses this call (429): a private RPC is needed
             holders, chain_holders_error = [], str(e)[:160]
     count = g.get("holder_count")
-    if not count and source == "chain":
-        try:
-            count = _holder_count(mint)
-        except Exception:
-            count = None
+    farm_n, farm_pct = 0, 0.0
+    try:                                    # the whole holder list (Helius): farms hide below the top 10
+        accs = _das_accounts(mint)
+    except Exception:
+        accs = None
+    if accs is not None:
+        count = count or len(accs)
+        supply_raw = int(_rpc("getTokenSupply", [mint])["value"]["amount"])
+        farm_n, farm_pct = holder_farm(accs, supply_raw, {pool.get("pair")})
     owners = [h["account"] for h in holders]
     kinds = _rpc("getMultipleAccounts", [owners, {"encoding": "base64",
                  "dataSlice": {"offset": 0, "length": 0}}])["value"] if owners else []
@@ -210,6 +273,8 @@ def report(mint: str, pool: dict) -> dict:
         "same_sol_wallets": _same_sol([w["lamports"] for w in wallets]),
         "ladder_wallets": _ladder(pcts),
         "holders": count,
+        "farm_wallets": farm_n,             # biggest group of identical bags, and its share of supply
+        "farm_pct": farm_pct,
         "holders_source": source if holders else None,
         "wallets": [w["address"] for w in wallets],      # top holder wallets, for the smart-wallet memory
         "not_checked": ["risk_score", "insider_graph"],
@@ -231,4 +296,6 @@ def fact_kill(t: dict) -> str | None:
     if t["max_wallet_pct"] > FACTS["max_wallet_pct"]:            return "whale"
     if t["same_sol_wallets"] >= FACTS["bundle_same_sol"]:        return "bundle_same_sol"
     if t["ladder_wallets"] >= FACTS["bundle_ladder"]:            return "bundle_ladder"
+    if (t.get("farm_wallets") or 0) >= FACTS["farm_wallets"] and (t.get("farm_pct") or 0) >= FACTS["farm_pct"]:
+        return "holder_farm"
     return None

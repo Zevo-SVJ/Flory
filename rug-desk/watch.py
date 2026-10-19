@@ -4,7 +4,32 @@
 import time
 from config import PAPER
 from market import pools
-import book, exits, paths
+import book, exits, paths, facts
+
+_sol_usd = {"v": None}      # last SOL price seen, to turn an on-chain SOL price into dollars
+
+
+def chain_marks(positions: dict, live: dict) -> dict:
+    """{mint: (price_usd, liq_usd)} read from each PumpSwap pool's vaults, all positions in one RPC call.
+    DexScreener lags a pool by seconds to minutes and sometimes drops a pair: a rug factory dumps in
+    one block, so the desk reads the pool itself. Empty if the RPC fails (DexScreener still covers)."""
+    for m in live.values():
+        if m and m.get("price") and m.get("price_native"):
+            _sol_usd["v"] = m["price"] / m["price_native"]
+            break
+    held = {mint: p["vaults"] for mint, p in positions.items() if p.get("vaults")}
+    if not held or not _sol_usd["v"]:
+        return {}
+    try:
+        flat = facts.reserves([v for vs in held.values() for v in vs])
+    except Exception:
+        return {}
+    out = {}
+    for i, mint in enumerate(held):
+        tokens, sol = flat[2 * i], flat[2 * i + 1]
+        if tokens and sol is not None:
+            out[mint] = (sol / tokens * _sol_usd["v"], 2 * sol * _sol_usd["v"])
+    return out
 
 
 def watch() -> tuple[list[dict], dict]:
@@ -26,9 +51,12 @@ def watch() -> tuple[list[dict], dict]:
             paths.append(mint, sample(now, m))
 
     profile = exits.active()
+    onchain = chain_marks(positions, live)
     for mint, p in positions.items():
         m = live.get(mint)
         s = sample(now, m)
+        if mint in onchain:                   # the pool itself beats any indexer
+            s["price"], s["liq"] = onchain[mint]
         paths.append(mint, s)
         if s["price"] > 0:
             marks[mint] = s["price"]

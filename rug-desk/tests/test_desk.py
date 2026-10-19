@@ -116,9 +116,15 @@ def net(gp=None, ds=None, chain=None, gp_code=200):
 
 class Base(unittest.TestCase):
     def setUp(self):
+        import market
+        market._tickers.clear()                 # the ticker search cache would leak between tests
         for f in (config.LOG, config.POSITIONS, config.TRADES):
             if os.path.exists(f):
                 os.remove(f)
+
+    def verdict(self, **kw):
+        with net(**kw):
+            return check.check(MINT)
 
 
 class Filter(Base):
@@ -221,7 +227,7 @@ class Sizing(Base):
     def test_more_signals_bigger_ticket_capped_by_the_pool(self):
         import size
         calm = {"symbol": "A", "liq_usd": 80000, "vol_1h": 5000, "buys_5m": 2, "sells_5m": 2}
-        hot = {"symbol": "B", "liq_usd": 80000, "vol_1h": 120000, "buys_5m": 40, "sells_5m": 10}
+        hot = {"symbol": "B", "liq_usd": 80000, "vol_1h": 120000, "buys_5m": 40, "sells_5m": 10, "avg_trade_1h": 60}
         usd0, tier0, _ = size.ticket({"score": 60}, calm)
         usd1, tier1, sig = size.ticket({"score": 90}, hot)
         self.assertEqual((tier0, tier1), ("base", "max"), sig)
@@ -229,6 +235,8 @@ class Sizing(Base):
         self.assertGreater(usd1, usd0)
         thin = dict(hot, liq_usd=5000)
         self.assertEqual(size.ticket({"score": 90}, thin)[0], 5000 * config.FACTS["max_ticket_share"])
+        # the same activity made of $5 swaps (a bot farm) earns no signal
+        self.assertEqual(size.ticket({"score": 60}, dict(hot, avg_trade_1h=5))[1], "base")
 
 
 class Book(Base):
@@ -619,11 +627,90 @@ class Ruggers(Base):
         self.assertIn("DEVWALLET", ruggers.known())
 
 
+class Farms(Base):
+    """The Oct 19 rugs: FOMO and Gemini, one factory, bot volume, hundreds of identical bags."""
+    def test_micro_trades_kill(self):
+        ds = ds_pairs(liq=80000, vol=20000)
+        ds[0]["txns"]["h1"] = {"buys": 2500, "sells": 2400}        # $4 a swap
+        self.assertEqual(self.verdict(ds=ds)["reason"], "micro_trades")
+
+    def test_a_recycled_name_is_a_serial_farm(self):
+        import market
+        market._tickers.clear()
+        dead = [{"chainId": "solana", "dexId": "pumpswap", "baseToken": {"address": f"DEAD{i}", "symbol": "TEST"},
+                 "liquidity": {"usd": 1880}, "pairCreatedAt": (time.time() - (5 + i) * 3600) * 1000,
+                 "volume": {"h24": 60000}, "txns": {"h24": {"buys": 6000, "sells": 6000}}} for i in range(3)]
+        def get(url, timeout=None, params=None):
+            if "search" in url:
+                return Resp({"pairs": dead})
+            return fake_get()(url, timeout, params)
+        with mock.patch("requests.get", get), mock.patch("requests.post", Chain()):
+            self.assertEqual(check.check(MINT)["reason"], "serial_farm")
+        # namesakes that died with human-sized swaps (copies of a runner) are not a factory
+        market._tickers.clear()
+        for d in dead:
+            d["txns"]["h24"] = {"buys": 600, "sells": 600}
+        with mock.patch("requests.get", get), mock.patch("requests.post", Chain()):
+            self.assertNotEqual(check.check(MINT)["reason"], "serial_farm")
+
+    def test_identical_bags_are_a_farm(self):
+        supply = 10**15
+        farm = [{"owner": f"F{i}", "amount": str(460_000_000_000 + i * 1000)} for i in range(300)]   # 0.046% each
+        organic = [{"owner": f"O{i}", "amount": str(int(supply * 0.002 * (0.9 ** i)))} for i in range(40)]
+        n, pct = facts.holder_farm(farm + organic, supply, set())
+        self.assertGreaterEqual(n, 300)
+        self.assertGreater(pct, 13)
+        self.assertLess(facts.holder_farm(organic, supply, set())[0], 3)
+        t = {"mint_authority": None, "freeze_authority": None, "danger": [], "lp_burned_pct": 100, "dev_pct": 0,
+             "top10_pct": 10, "max_wallet_pct": 2, "same_sol_wallets": 1, "ladder_wallets": 1,
+             "farm_wallets": n, "farm_pct": pct}
+        self.assertEqual(facts.fact_kill(t), "holder_farm")
+
+    def test_stale_dexscreener_data_is_not_bought(self):
+        ds = ds_pairs()
+        ds[0]["liquidity"]["quote"] = 500.0                         # DexScreener still shows 500 SOL...
+        with net(ds=ds), mock.patch.object(facts, "pool_vaults", lambda pair: ["VB", "VQ"]), \
+                mock.patch.object(facts, "reserves", lambda v: [990e6, 0.4]):                  # ...the chain 0.4
+            self.assertEqual(check.check(MINT)["reason"], "stale_data")
+
+
+class EchoScam(Base):
+    def test_a_scam_read_sells_the_open_position(self):
+        import pending
+        for f in (pending.PENDING, pending.X_READS, pending.X_QUEUE):
+            if os.path.exists(f):
+                os.remove(f)
+        self.addCleanup(setattr, check, "ECHO_MODE", check.ECHO_MODE)
+        check.ECHO_MODE = "observe"
+        with net():
+            check.run(MINT)
+        self.assertIn(MINT, book.load())
+        with open(pending.X_READS, "w") as f:
+            f.write(f"time,mint,symbol,verdict,raison\n2026-10-19 10:00,{MINT},TEST,SCAM,nom deja rug cette semaine\n")
+        with net():
+            ev = pending.decide()
+        self.assertNotIn(MINT, book.load())
+        self.assertTrue(any(e["kind"] == "sell" and e["reason"] == "x_scam" for e in ev), ev)
+
+
+class OnChainVigie(Base):
+    def test_a_drained_pool_is_sold_even_if_dexscreener_lags(self):
+        book.open_position(MINT, "TEST", 0.001, 80000, vaults=["VB", "VQ"], sol0=200)
+        ds = ds_pairs(price=0.001, liq=80000)          # DexScreener still shows the old pool...
+        ds[0]["priceNative"] = "0.00000500"            # SOL = $200
+        with mock.patch("requests.get", fake_get(ds=ds)), \
+                mock.patch.object(facts, "reserves", lambda v: [990e6, 0.4]):    # ...the chain: drained
+            out = watch.watch()[0]
+        self.assertTrue(out and out[0]["reason"] == "liquidity_pulled", out)
+        self.assertNotIn(MINT, book.load())
+
+
 class Copycat(Base):
     def test_a_smaller_token_under_a_bigger_ticker_is_killed(self):
         import market
         market._tickers.clear()
         big = {"chainId": "solana", "baseToken": {"address": "BIGONE", "symbol": "TEST"}, "liquidity": {"usd": 900000},
+               "volume": {"h24": 2000000},
                "pairCreatedAt": (time.time() - 9 * 3600) * 1000}
         def get(url, timeout=None, params=None):
             if "search" in url:

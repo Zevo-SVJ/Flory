@@ -107,6 +107,27 @@ VIGIE records every traded token's price path during the trade and 6 h after, an
 alternative profiles on those real paths every 30 minutes. With `EXIT_AUTOTUNE`, the desk switches profile by itself
 only when a candidate wins on both halves of at least 30 trades by a clear margin (data/exit_profile.json).
 
+## Rug factories (Oct 19)
+
+Two paper rugs in one day, FOMO (-$25) and Gemini (-$74), came from the same factory. Read on chain:
+18 "Gemini" and 14 "FOMO" graduated within 24 h, each pumped for ~1 h by hundreds of fresh wallets buying
+the same small bag ($4-9 swaps; FOMO's pool went from 67 to 503 SOL in a straight line), then sold in
+one block (FOMO: slot 458785212, 505 SOL -> 87 SOL), every one ending at -95.7%. No wallet ever held
+more than 0.05%, so no top-10 or bundle check could see it. The dump takes one block: no exit is fast
+enough, the only defense is not buying. What the desk checks now:
+
+| kill | what it reads | FOMO / Gemini | real runners (UHI, XBT, HOOT, KIBI, SPORE) |
+|---|---|---|---|
+| micro_trades | average swap over the last hour, 100+ swaps | $4-9 | $40-75 |
+| serial_farm | 2+ older PumpSwap namesakes, dead, with bot-sized swaps | 13-17 | 0 (their copies came after them) |
+| holder_farm | every holder (Helius DAS): biggest group of identical bags | hundreds x 0.046% | none |
+| fake_cap / dead_volume | cap vs pool, pool turnover | | |
+| stale_data | the pool's SOL read on chain vs DexScreener | | |
+
+VIGIE also reads each PumpSwap position's pool vaults on chain every 20 s, so a drained pool is sold
+on the next tick even when DexScreener lags or drops the pair. ECHO can answer SCAM (concrete evidence on
+X): the desk sells at once.
+
 ## Overnight
 
 `./start.sh` runs the desk and the dashboard, restarts either one 10 s after a crash, and keeps the Mac and

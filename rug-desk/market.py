@@ -20,12 +20,17 @@ def _best(pairs: list, mint: str) -> dict | None:
         "dex": p.get("dexId"),
         "pair": p.get("pairAddress"),
         "price": float(p.get("priceUsd") or 0),
+        "price_native": float(p.get("priceNative") or 0),       # in SOL: priceUsd / priceNative = SOL's price
         "liq_usd": (p.get("liquidity") or {}).get("usd") or 0,
         "mcap": p.get("marketCap") or p.get("fdv") or 0,
         "age_min": round((time.time() * 1000 - born) / 60000) if born else None,
         "buys_1h": h1.get("buys", 0),
         "sells_1h": h1.get("sells", 0),
         "vol_1h": (p.get("volume") or {}).get("h1"),
+        # the average trade: rug farms fake activity with hundreds of wallets buying $3-10 each. on Oct 19
+        # the 18 "Gemini" and the FOMO farm traded $4-9 a swap; the graduates that really ran, $40-75
+        "avg_trade_1h": ((p.get("volume") or {}).get("h1") or 0) / max(1, h1.get("buys", 0) + h1.get("sells", 0)),
+        "liq_quote": (p.get("liquidity") or {}).get("quote"),     # SOL in the pool, as DexScreener last saw it
         "buys_5m": m5.get("buys", 0),
         "sells_5m": m5.get("sells", 0),
         "vol_5m": (p.get("volume") or {}).get("m5") or 0,
@@ -60,6 +65,8 @@ def market_kill(m: dict | None) -> str | None:
     if m["liq_usd"] < FACTS["min_liquidity_usd"]:                return "thin_pool"
     if TICKET_USD / m["liq_usd"] > FACTS["max_ticket_share"]:    return "ticket_too_big"
     if (m.get("mcap") or 0) > FACTS["max_mcap_liq"] * m["liq_usd"]: return "fake_cap"
+    if m["buys_1h"] + m["sells_1h"] >= 100 and m.get("avg_trade_1h", 1e9) < FACTS["min_avg_trade_usd"]:
+        return "micro_trades"
     if (m.get("vol_1h") or 0) < FACTS["min_turnover_1h"] * m["liq_usd"]:
         return "dead_volume"
     if m["age_min"] is None or m["age_min"] < FACTS["min_age_min"]:
@@ -93,10 +100,13 @@ def sol_regime() -> dict | None:
 _tickers = {}
 
 
-def copycat(m: dict, mint: str) -> bool | None:
-    """Is another Solana token under the same ticker, launched this week, clearly bigger? Then this one
-    is a copy riding someone else's narrative: copies get the leftovers. Search cached 10 min per ticker.
-    None when the search failed: an unknown is not a kill here, the other checks still run."""
+def copycat(m: dict, mint: str) -> str | None:
+    """Two kills from one search of the ticker (cached 10 min). None when clean or the search failed.
+    - "serial_farm": 2+ other PumpSwap tokens under this ticker, launched in the 72 h BEFORE this one, dead
+      (pool under $5k) after bot-made volume (average swap under $15). namesakes that died on the bonding
+      curve don't count: every name gets those. a rug factory recycles names: 18 "Gemini" and 14 "FOMO" in a day on Oct 19, each
+      pumped by bots for ~1 h then dumped in one block to the same -95.7%. the next one is the same script.
+    - "copycat": another token under the ticker, launched this week, clearly bigger: copies get the leftovers."""
     sym = (m.get("symbol") or "").strip().lower()
     if not sym:
         return None
@@ -110,10 +120,26 @@ def copycat(m: dict, mint: str) -> bool | None:
         except Exception:
             return None
         week_ago_ms = (time.time() - 7 * 86400) * 1000   # an old token reusing the name is not a rival narrative
-        hit = (time.time(), [((p.get("baseToken") or {}).get("address"), (p.get("liquidity") or {}).get("usd") or 0)
+        def avg24(p):
+            t = (p.get("txns") or {}).get("h24") or {}
+            return ((p.get("volume") or {}).get("h24") or 0) / max(1, (t.get("buys") or 0) + (t.get("sells") or 0))
+        hit = (time.time(), [((p.get("baseToken") or {}).get("address"), (p.get("liquidity") or {}).get("usd") or 0,
+                              p.get("pairCreatedAt") or 0, p.get("dexId"), avg24(p),
+                              (p.get("volume") or {}).get("h24") or 0)
                              for p in pairs if p.get("chainId") == "solana"
                              and (p.get("pairCreatedAt") or 0) >= week_ago_ms
                              and ((p.get("baseToken") or {}).get("symbol") or "").strip().lower() == sym])
         _tickers[sym] = hit
-    bigger = [liq for addr, liq in hit[1] if addr != mint and liq > 1.5 * (m.get("liq_usd") or 0)]
-    return bool(bigger)
+    # only the dead namesakes born BEFORE this token count: a real runner gets copied after it runs, and its
+    # copies die (UHI, XBT, HOOT on Oct 19). a factory's previous batches are older than its next one
+    recent_ms = (time.time() - 72 * 3600) * 1000
+    me_ms = (time.time() - (m.get("age_min") or 0) * 60) * 1000
+    dead = {addr for addr, liq, born, dex, avg, _ in hit[1]
+            if addr != mint and dex == "pumpswap" and recent_ms <= born < me_ms - 10 * 60000
+            and liq < 5000 and avg < FACTS["min_avg_trade_usd"]}
+    if len(dead) >= 2:
+        return "serial_farm"
+    # a rival counts only if it really trades: the $1.2M "UHI" pools on Fluxbeam (Oct 19) moved 2% a day
+    bigger = [liq for addr, liq, _, _, _, vol24 in hit[1]
+              if addr != mint and liq > 1.5 * (m.get("liq_usd") or 0) and vol24 >= 0.25 * liq]
+    return "copycat" if bigger else None

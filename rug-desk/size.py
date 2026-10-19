@@ -20,10 +20,13 @@ def signals(v: dict, m: dict, t: dict | None) -> list[str]:
     if sc >= SIZING["score_max"]:
         out.append("top score")
     liq, vol = m.get("liq_usd") or 0, m.get("vol_1h") or 0
-    if liq and vol / liq >= SIZING["turnover_hot"]:          # the pool traded its own size in an hour
+    # activity only counts when it looks human: bot farms make volume with $3-10 swaps. Gemini (Oct 19)
+    # got a "strong" ticket on turnover and buyers alone, then dumped within the minute
+    organic = (m.get("avg_trade_1h") or 0) >= SIZING["organic_avg_trade"]
+    if organic and liq and vol / liq >= SIZING["turnover_hot"]:   # the pool traded its own size in an hour
         out.append(f"turnover x{vol / liq:.1f}")
     b, s = m.get("buys_5m") or 0, m.get("sells_5m") or 0
-    if b >= 10 and b >= 1.3 * s:                             # buyers in charge right now
+    if organic and b >= 10 and b >= 1.3 * s:                 # buyers in charge right now
         out.append("buyers 5m")
     if t and smart.count(t.get("wallets") or []):            # wallets that were early on past runners
         out.append("smart wallets")
