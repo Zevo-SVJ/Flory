@@ -7,6 +7,41 @@ from collections import Counter
 from config import LOG, TRADES, EVENTS, DATA, MIN_SCORE, DAILY_LOSS_HALT_USD, FACTS, AUDIT
 import book
 
+if "--trades" in sys.argv:
+    # every trade since the start, one line each, for an outside review: when, where, why it was bought,
+    # how it ended. reads trades.csv and checks.csv only
+    import chains
+    from config import RULES_SINCE
+    info = {}
+    with open(LOG, newline="") as f:
+        for r in csv.DictReader(f):
+            if r["verdict"] in ("PASS", "BUY"):
+                info[r["mint"]] = r
+    opened, lines = {}, []
+    with open(TRADES, newline="") as f:
+        for t in csv.DictReader(f):
+            if t["action"] == "open":
+                opened[t["mint"]] = {"t": t["time"], "usd": float(t["usd"] or 0), "pnl": 0.0, "exits": []}
+            elif t["mint"] in opened:
+                o = opened[t["mint"]]
+                o["pnl"] += float(t["pnl"])
+                o["exits"].append(t["reason"])
+                if t["action"] == "close":
+                    i = info.get(t["mint"], {})
+                    h = (time.mktime(time.strptime(t["time"], "%Y-%m-%d %H:%M"))
+                         - time.mktime(time.strptime(o["t"], "%Y-%m-%d %H:%M"))) / 60
+                    lines.append(f"{o['t']} | {chains.split(t['mint'])[0]:9} | ${t['symbol'][:12]:12} | mise {o['usd']:6.2f} $ | "
+                                 f"{o['pnl'] / max(o['usd'], 1e-9) * 100:+6.1f} % ({o['pnl']:+6.2f} $) | {h:4.0f} min | "
+                                 f"sortie {'+'.join(o['exits'])} | palier {i.get('tier') or '?'} | note {i.get('score') or '?'} | "
+                                 f"âge entrée {i.get('age_min') or '?'} min | pool {i.get('liq_usd') or '?'} $ | "
+                                 f"{'règles actuelles' if o['t'] >= RULES_SINCE else 'anciennes règles'}")
+                    opened.pop(t["mint"])
+    print(f"== {len(lines)} trades clôturés (date | chaîne | token | mise | résultat | durée | sortie | palier | note | âge | pool)")
+    print("\n".join(lines))
+    for m, o in opened.items():
+        print(f"ouvert : {o['t']} {m[:20]} mise {o['usd']:.2f} $")
+    sys.exit(0)
+
 H = float(sys.argv[1]) if len(sys.argv) > 1 else 6
 since = time.time() - H * 3600
 cut = time.strftime("%Y-%m-%d %H:%M", time.localtime(since))
