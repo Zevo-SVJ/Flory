@@ -170,8 +170,8 @@ def breakdown() -> dict:
                         "win": sum(1 for m in sel if pnl[m] > 0)})
         return out
     # does a bigger ticket go with better trades? the tier size.py gave at entry, as 0/1/2
-    rank = {"base": 0, "strong": 1, "max": 2}
-    tier_b = [("base", 0, 1), ("strong", 1, 2), ("max", 2, 3)]
+    rank = {"explore": -1, "base": 0, "strong": 1, "max": 2}     # explore: a full pass under MIN_SCORE, paper only
+    tier_b = [("explore", -1, 0), ("base", 0, 1), ("strong", 1, 2), ("max", 2, 3)]
     return {"hour": group(hours, lambda m: int(opened[m][11:13])),
             "age": group(age_b, lambda m: ages.get(m)),
             "tier": group(tier_b, lambda m: rank.get(tiers.get(m)))}

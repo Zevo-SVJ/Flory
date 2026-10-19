@@ -376,6 +376,8 @@ a { color: #8fb8f0; text-decoration: none; } a:hover { text-decoration: underlin
         <div class="scroll"><table id="byHour"></table></div>
         <div class="scroll"><table id="byAge"></table></div>
       </div>
+      <div class="scroll"><table id="byTier"></table></div>
+      <p class="note">« explore » : un token qui a passé tous les contrôles anti-rug mais dont la note est sous 55, acheté petit (papier seulement). S'il fait aussi bien que « base », la note ne sert à rien.</p>
     </section>
     <section class="pane" data-agent="AUDIT" hidden><h3>Dernier rapport</h3><pre class="now" id="plumeReport" style="white-space:pre-wrap;margin:0"></pre></section>
     <section><h3>Ses dernières actions</h3><div id="pevents"></div></section>
@@ -815,7 +817,7 @@ function drawPanels() {
     + "Il faut 200 trades par règle pour conclure ; à 300 trades, une moyenne ≤ 0 met fin à l'idée d'en vivre."
     + (BT.early_error ? " · " + BT.early_error : "") + (BT.momentum_error ? " · momentum : " + BT.momentum_error : "");
   const bd = S.breakdown || { hour: [], age: [] };
-  [["byHour", "Heure d'achat", bd.hour], ["byAge", "Âge du token", bd.age]].forEach(([id, head, rows]) =>
+  [["byHour", "Heure d'achat", bd.hour], ["byAge", "Âge du token", bd.age], ["byTier", "Mise", bd.tier || []]].forEach(([id, head, rows]) =>
     table(id, [[head], ["Trades", 1], ["Gagnants", 1], ["PnL", 1]],
       rows.filter(r => r.n).map(r => [r.bucket, String(r.n), Math.round(r.win / r.n * 100) + "%", span(sign(r.pnl), usd(r.pnl))]),
       "Pas encore de position clôturée."));

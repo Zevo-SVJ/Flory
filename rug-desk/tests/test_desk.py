@@ -470,12 +470,12 @@ class Gate(Base):
         self.assertEqual(out[0]["reason"], "x_timeout")
 
     def test_low_score_is_not_bought(self):
-        # bots: 300 holders trading $200k an hour
+        # bots: 300 holders trading $200k an hour, and a score under the explore floor too
         with net(gp=goplus(holder_count="300"), ds=ds_pairs()):
-            with mock.patch("score.score", return_value={"score": 30, "flags": ["bot_volume"]}), \
-                 mock.patch("check.score", return_value={"score": 30, "flags": ["bot_volume"]}):
+            with mock.patch("score.score", return_value={"score": 25, "flags": ["bot_volume"]}), \
+                 mock.patch("check.score", return_value={"score": 25, "flags": ["bot_volume"]}):
                 v = check.run(MINT)
-        self.assertIn("not bought: score 30", v["action"])
+        self.assertIn("not bought: score 25", v["action"])
         self.assertEqual(self.p.load(), {})
 
 
@@ -1365,3 +1365,21 @@ class TelegramLoopKeepsCode(Base):
         self.assertEqual(tgbot.pair_code(), code_box["code"])
         self.assertEqual(tgbot._state()["offset"], 6)
         os.remove(tgbot.STATE)
+
+
+class ExploreTier(Base):
+    """Paper: a full pass under MIN_SCORE is bought small in its own tier; under the floor it is not."""
+    def test_low_score_pass_is_bought_small_as_explore(self):
+        import shadow
+        shadow._waived.update(t=time.time(), v=set())
+        with mock.patch.object(check, "check", return_value={"verdict": "PASS", "stage": "judge", "reason": "ok",
+                               "symbol": "LOW", "price": 0.001, "liq_usd": 80000, "score": 40, "ticket": 40,
+                               "tier": "base", "flags": "bot_volume"}):
+            v = check.run(MINT)
+        self.assertEqual(v["tier"], "explore")
+        self.assertIn(MINT, book.load())
+        self.assertLess(book.load()[MINT]["qty"] * 0.001, 40)          # smaller than a base ticket
+        with mock.patch.object(check, "check", return_value={"verdict": "PASS", "stage": "judge", "reason": "ok",
+                               "symbol": "BAD", "price": 0.001, "liq_usd": 80000, "score": 20, "flags": ""}):
+            v = check.run("Mint2222222222222222222222222222222222222")
+        self.assertTrue(v["action"].startswith("not bought"))

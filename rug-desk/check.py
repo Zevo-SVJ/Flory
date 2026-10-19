@@ -4,7 +4,7 @@
 import csv, json, os, sys, time
 from config import FACTS
 from config import (DATA, LOG, JUDGE, MIN_CONFIDENCE, PAPER, PAPER_BUY_ON_PASS, TICKET_USD,
-                    ECHO_MODE, MIN_SCORE)
+                    ECHO_MODE, MIN_SCORE, SIZING, PAPER_BANKROLL_USD)
 from score import score
 import pending, smart, size, jup, cluster, stracker, ruggers
 from config import DEEP
@@ -184,8 +184,13 @@ def run(mint: str) -> dict:
     enter = v["verdict"] == "BUY" or (v["verdict"] == "PASS" and PAPER and PAPER_BUY_ON_PASS)
     import shadow
     if enter and (v.get("score") or 0) < MIN_SCORE and "low_score" not in shadow.waived():
-        v["action"] = f"not bought: score {v['score']} < {MIN_SCORE} ({v.get('flags') or 'no flag'})"
-        return v
+        if PAPER and (v.get("score") or 0) >= SIZING["explore_min_score"]:
+            equity = PAPER_BANKROLL_USD + book.realized()      # the explore tier: small, and logged apart
+            usd = min(equity * SIZING["explore"] / 100, (v.get("liq_usd") or 0) * FACTS["max_ticket_share"], book.cash())
+            v.update(ticket=round(max(usd, min(TICKET_USD, book.cash())), 2), tier="explore", signals=[])
+        else:
+            v["action"] = f"not bought: score {v['score']} < {MIN_SCORE} ({v.get('flags') or 'no flag'})"
+            return v
     if enter and PAPER and v["verdict"] == "PASS" and ECHO_MODE == "gate":
         pending.add(mint, {**v, "flags": (v.get("flags") or "").split()})
         v["action"] = f"waiting for ECHO's X read (score {v['score']})"

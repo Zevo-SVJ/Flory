@@ -44,7 +44,12 @@ TICKET_USD = 25             # the smallest ticket. the real size comes from SIZI
 SIZING = {"base": 4, "strong": 8, "max": 14,
           "score_strong": 75, "score_max": 85,  # score thresholds that count as a signal
           "turnover_hot": 1.0,                  # 1 h volume >= the pool's liquidity
-          "organic_avg_trade": 30}              # activity counts only if the average swap is $30+
+          "organic_avg_trade": 30,              # activity counts only if the average swap is $30+
+          # paper only: a token that passed every anti-rug check but scored under MIN_SCORE is bought
+          # small, in its own tier. on Oct 19 the score's bot-volume cap held 18 of 23 full passes at 40,
+          # and the passes bought on a good score were at -28% median 6 h later: whether the score
+          # picks anything is the open question, and small paper trades answer it fastest
+          "explore": 2, "explore_min_score": 30}
 MAX_OPEN = 40               # safety net only: cash runs out first (1000 / 25 = 40)
 MAX_ENTRIES_PER_DAY = 40
 DAILY_LOSS_HALT_USD = 250   # realized loss today hits this -> no new entries until tomorrow
