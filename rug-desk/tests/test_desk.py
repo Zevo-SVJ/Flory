@@ -948,6 +948,11 @@ class Copycat(Base):
         big["pairCreatedAt"] = (time.time() - 400 * 86400) * 1000
         with mock.patch("requests.get", get), mock.patch("requests.post", Chain()):
             self.assertNotEqual(check.check(MINT).get("reason"), "copycat")
+        # a bigger namesake launched AFTER this token is its copy, not its original: no kill (DAC, Oct 19)
+        market._tickers.clear()
+        big["pairCreatedAt"] = (time.time() - 30 * 60) * 1000          # our token is 120 min old
+        with mock.patch("requests.get", get), mock.patch("requests.post", Chain()):
+            self.assertNotEqual(check.check(MINT).get("reason"), "copycat")
         market._tickers.clear()
 
 

@@ -169,7 +169,11 @@ def copycat(m: dict, mint: str) -> str | None:
             and liq < 5000 and avg < FACTS["min_avg_trade_usd"]}
     if len(dead) >= 2:
         return "serial_farm"
-    # a rival counts only if it really trades: the $1.2M "UHI" pools on Fluxbeam (Oct 19) moved 2% a day
-    bigger = [liq for addr, liq, _, _, _, vol24 in hit[1]
-              if addr != mint and liq > 1.5 * (m.get("liq_usd") or 0) and vol24 >= 0.25 * liq]
+    # a rival counts only if it really trades: the $1.2M "UHI" pools on Fluxbeam (Oct 19) moved 2% a day.
+    # and only if it was there FIRST: a runner draws copies within the hour, and those copies can outgrow
+    # it for a while. counting them killed the originals: DAC (1.25M$ traded in 24 h) and Tengu on Oct 19,
+    # each "copying" namesakes launched after them. copycat was the desk's first kill reason that evening
+    bigger = [liq for addr, liq, born, _, _, vol24 in hit[1]
+              if addr != mint and born < me_ms - 10 * 60000
+              and liq > 1.5 * (m.get("liq_usd") or 0) and vol24 >= 0.25 * liq]
     return "copycat" if bigger else None
