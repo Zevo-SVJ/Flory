@@ -316,10 +316,19 @@ def backtest_kick() -> str | None:
 
 
 def plume():
-    """The evening report. AUDIT writes it: a scheduled summary is a job, not an agent of its own."""
+    """The evening report. AUDIT writes it: a scheduled summary is a job, not an agent of its own.
+    on the review day (edge.BILAN_ON) and once after it if the desk was off that evening, the decision
+    report too, saved in data/ and sent to Telegram."""
     text = report.report()
     emit("AUDIT", "report", text)
     post(text)
+    import edge, glob
+    done = [f for f in glob.glob(os.path.join(DATA, "rapport_decision_*.txt")) if f[-14:-4] >= edge.BILAN_ON]
+    if time.strftime("%Y-%m-%d") >= edge.BILAN_ON and not done:
+        big = report.weekly()
+        emit("AUDIT", "report", big)
+        post(big)
+        return "rapport du soir et rapport de décision publiés"
     return "rapport du soir publié"
 
 

@@ -8,15 +8,16 @@
 #     and the drawdown was survivable. then a suggested size: a quarter of the Kelly fraction,
 #     capped, because a full Kelly bet on an estimated edge is how accounts die.
 import csv, os, random, statistics, time
-from config import TRADES, TICKET_USD, PAPER_BANKROLL_USD, LOG, FACTS
+from config import TRADES, TICKET_USD, PAPER_BANKROLL_USD, LOG, FACTS, RULES_SINCE
 
 MIN_TRADES = 200           # Oct 19: with ~72% swing per trade, fewer trades cannot tell +5% from 0
 MAX_DRAWDOWN_SHARE = 0.30
 MAX_TICKET_SHARE = 0.05     # never more than 5% of the bankroll on one memecoin, whatever Kelly says
 
 
-def closed() -> list[dict]:
-    """Every fully closed position, in the order they closed: {mint, usd staked, pnl, opened, closed}."""
+def closed(since: str | None = "rules") -> list[dict]:
+    """Every fully closed position opened since `since` (the current rules; None = all time), in the order
+    they closed: {mint, usd staked, pnl, opened, closed}."""
     if not os.path.exists(TRADES):
         return []
     with open(TRADES, newline="") as f:
@@ -29,7 +30,8 @@ def closed() -> list[dict]:
             live[r["mint"]]["pnl"] += float(r["pnl"])
             if r["action"] == "close":
                 out.append({**live.pop(r["mint"]), "closed": r["time"]})
-    return out
+    since = RULES_SINCE if since == "rules" else since
+    return [t for t in out if not since or t["opened"] >= since]
 
 
 def per_trade() -> list[float]:
@@ -163,3 +165,17 @@ def living(target_month_usd: float = 2200.0) -> dict:
 if __name__ == "__main__":
     import json
     print(json.dumps(stats(), indent=2))
+
+
+def split(key) -> list[dict]:
+    """The current rules' closed trades grouped by key(trade) ("robinhood", "explore"...): n, mean % per
+    trade staked, total $. for the reports: a desk that wins on one chain and loses on another is two desks."""
+    groups = {}
+    for t in closed():
+        groups.setdefault(key(t), []).append(t)
+    out = []
+    for k, ts in groups.items():
+        rets = [t["pnl"] / max(t["usd"], 1e-9) * 100 for t in ts]
+        out.append({"group": k, "n": len(ts), "mean_pct": round(sum(rets) / len(rets), 1),
+                    "total": round(sum(t["pnl"] for t in ts), 2)})
+    return sorted(out, key=lambda d: -d["n"])

@@ -255,6 +255,10 @@ def handle(tok: str, message: dict):
         else:
             send(tok, chat, "Code incorrect. Le bon code est affiché dans le panneau GARDE du tableau de bord.")
         return
+    if body.startswith("/rapport") and str(chat) == owner():  # the decision report, any day, as of now
+        import report
+        send(tok, chat, report.weekly(save=False))         # a look before the day: the official one is saved
+        return
     if body.startswith("/etat") and str(chat) == owner():     # the chief of staff: five lines, the last hour
         import report
         h = body.split()[-1]

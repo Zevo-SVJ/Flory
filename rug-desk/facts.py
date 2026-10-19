@@ -215,7 +215,9 @@ def report(mint: str, pool: dict) -> dict:
     g = _goplus(mint)
     status = lambda k: str((g.get(k) or {}).get("status", "")) if isinstance(g.get(k), dict) else ""
 
-    holders = g.get("holders") or []
+    # GoPlus sometimes lists the top holders with empty addresses (MOMO, Oct 19): unusable, and sent to
+    # the RPC they failed the whole check as a "source down". without addresses, read them from the chain
+    holders = [h for h in g.get("holders") or [] if h.get("account")]
     source = "goplus"
     if not holders:                    # GoPlus blind on this token: read the holders from the chain
         global chain_holders_error

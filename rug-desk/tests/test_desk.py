@@ -828,7 +828,8 @@ class Living(Base):
                 f.write(f"{ts},M{i},M,open,50,0,entry\n{ts},M{i},M,close,52.5,2.5,trail\n")
         for i in range(50):
             check.log({"time": "2026-10-19 10:00", "mint": f"M{i}", "verdict": "PASS", "liq_usd": 40000})
-        L = edge.living(2200)
+        with mock.patch.object(edge, "RULES_SINCE", "2000-01-01 00:00"):    # these trades predate today's rules
+            L = edge.living(2200)
         self.assertEqual(L["ticket_cap"], 40000 * config.FACTS["max_ticket_share"])     # $800
         self.assertAlmostEqual(L["trades_per_day"], 5.0, delta=0.1)
         self.assertAlmostEqual(L["month"]["mean_pct"], 0.05 * 800 * 5 * 30, delta=150)  # ~$6,000
@@ -1492,3 +1493,43 @@ class MultiChain(Base):
         import market
         with evm_net():
             self.assertEqual(market.locate(EVM), self.KEY)
+
+
+class RulesRegime(Base):
+    def test_the_decision_counts_only_trades_under_the_current_rules(self):
+        import edge
+        with open(config.TRADES, "w") as f:
+            f.write("time,mint,symbol,action,usd,pnl,reason\n")
+            f.write("2026-10-19 10:00,OLD,O,open,40,0,entry\n2026-10-19 11:00,OLD,O,close,0,-20,stop\n")
+            f.write("2026-10-20 10:00,base:0xnew,N,open,40,0,entry\n2026-10-20 11:00,base:0xnew,N,close,0,8,trail\n")
+        self.assertEqual([t["mint"] for t in edge.closed()], ["base:0xnew"])
+        self.assertEqual(len(edge.closed(None)), 2)
+        import chains
+        self.assertEqual(edge.split(lambda t: chains.split(t["mint"])[0])[0], {"group": "base", "n": 1, "mean_pct": 20.0, "total": 8.0})
+        os.remove(config.TRADES)
+
+    def test_backtest_main_block_comes_after_every_function_it_calls(self):
+        src = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "backtest.py")).read()
+        self.assertGreater(src.index('if __name__ == "__main__":'), src.index("def variants("))
+
+    def test_goplus_holders_without_addresses_are_dropped(self):
+        with net(gp=goplus(holders=[{"account": "", "percent": "0.2", "is_locked": 0, "tag": ""}] * 10)):
+            t = facts.report(MINT, {"dex": "pumpswap", "pair": PAIR})
+        self.assertNotEqual(t.get("holders_source"), "goplus")          # read from the chain instead
+
+
+class DecisionReport(Base):
+    def test_sent_once_on_review_day_and_a_preview_does_not_block_it(self):
+        import agents, edge, report, glob
+        for f in glob.glob(os.path.join(config.DATA, "rapport_decision_*.txt")):
+            os.remove(f)
+        sent = []
+        report.weekly(save=False)                                       # /rapport before the day
+        with mock.patch.object(agents, "post", lambda t: sent.append(t)), \
+             mock.patch.object(edge, "BILAN_ON", time.strftime("%Y-%m-%d")):
+            agents.plume()
+            agents.plume()
+        self.assertEqual(sum("RAPPORT DE DÉCISION" in t for t in sent), 1)
+        self.assertTrue(any("DÉCISION : NON" in t for t in sent))      # no trades: the rule says no
+        for f in glob.glob(os.path.join(config.DATA, "rapport_decision_*.txt")):
+            os.remove(f)

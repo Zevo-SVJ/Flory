@@ -341,29 +341,6 @@ def run_batch() -> dict:
     return st
 
 
-if __name__ == "__main__":
-    if sys.argv[1:] == ["--accumulate"]:
-        try:
-            os.nice(10)                  # the desk's own reads come first
-        except OSError:
-            pass
-        print(json.dumps(run_batch()["card"], indent=1))
-        sys.exit(0)
-    n = int(sys.argv[1]) if len(sys.argv) > 1 else 60
-    sol_usd = sol_price()
-    h_from, h_to = (float(x) for x in os.environ.get("BT_WINDOW", "7.5,14").split(","))
-    gs = graduates(h_from, h_to, n)
-
-    def show(r, rows):
-        os.makedirs(DATA, exist_ok=True)
-        with open(OUT, "w") as f:
-            json.dump({"sol_usd": sol_usd, "rows": rows, "summary": summary(rows)}, f, indent=1)
-        print(json.dumps(r), flush=True)
-
-    rows = replay_all(gs, sol_usd, int(os.environ.get("BT_WORKERS", "3")), show)
-    print(json.dumps(summary(rows), indent=2))
-
-
 # ---------- offline variants: replay other entry and exit rules on the recorded paths ----------
 ENTRY_RULES = {
     "old desk (15 min, rules)": {"min_age": 15},
@@ -448,3 +425,28 @@ def variants(rows: list[dict], exits_only: tuple = ()) -> list[dict]:
                         "half1": round(statistics.mean(a), 1) if a else None,
                         "half2": round(statistics.mean(b), 1) if b else None})
     return sorted(out, key=lambda v: -v["mean"])
+
+
+# last: run as a script, every function above is defined (a main block placed before variants()
+# made every automatic run crash with a NameError, Oct 19)
+if __name__ == "__main__":
+    if sys.argv[1:] == ["--accumulate"]:
+        try:
+            os.nice(10)                  # the desk's own reads come first
+        except OSError:
+            pass
+        print(json.dumps(run_batch()["card"], indent=1))
+        sys.exit(0)
+    n = int(sys.argv[1]) if len(sys.argv) > 1 else 60
+    sol_usd = sol_price()
+    h_from, h_to = (float(x) for x in os.environ.get("BT_WINDOW", "7.5,14").split(","))
+    gs = graduates(h_from, h_to, n)
+
+    def show(r, rows):
+        os.makedirs(DATA, exist_ok=True)
+        with open(OUT, "w") as f:
+            json.dump({"sol_usd": sol_usd, "rows": rows, "summary": summary(rows)}, f, indent=1)
+        print(json.dumps(r), flush=True)
+
+    rows = replay_all(gs, sol_usd, int(os.environ.get("BT_WORKERS", "3")), show)
+    print(json.dumps(summary(rows), indent=2))

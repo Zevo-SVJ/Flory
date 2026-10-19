@@ -168,6 +168,11 @@ SCHEDULE = {                # used by agents.py: one entry per agent
     "backtest_momentum_n": 40,
 }
 
+# the rules the real-money decision judges: every trade opened before this ran under rules that no longer
+# exist (15 min entry, Solana only, the copycat bug, no explore tier). they stay in the files and in the
+# all-time lines of the reports; the go-live gate, the projection and the review count only these
+RULES_SINCE = "2026-10-19 21:00"
+
 DATA = os.environ.get("RUG_DESK_DATA") or os.path.join(HERE, "data")
 LOG = os.path.join(DATA, "checks.csv")
 POSITIONS = os.path.join(DATA, "positions.json")

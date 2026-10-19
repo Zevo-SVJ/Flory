@@ -377,6 +377,7 @@ a { color: #8fb8f0; text-decoration: none; } a:hover { text-decoration: underlin
         <div class="scroll"><table id="byAge"></table></div>
       </div>
       <div class="scroll"><table id="byTier"></table></div>
+      <div class="scroll"><table id="byChain"></table></div>
       <p class="note">« explore » : un token qui a passé tous les contrôles anti-rug mais dont la note est sous 55, acheté petit (papier seulement). S'il fait aussi bien que « base », la note ne sert à rien.</p>
     </section>
     <section class="pane" data-agent="AUDIT" hidden><h3>Dernier rapport</h3><pre class="now" id="plumeReport" style="white-space:pre-wrap;margin:0"></pre></section>
@@ -825,6 +826,9 @@ function drawPanels() {
     table(id, [[head], ["Trades", 1], ["Gagnants", 1], ["PnL", 1]],
       rows.filter(r => r.n).map(r => [r.bucket, String(r.n), Math.round(r.win / r.n * 100) + "%", span(sign(r.pnl), usd(r.pnl))]),
       "Pas encore de position clôturée."));
+  table("byChain", [["Chaîne"], ["Trades", 1], ["Rendement moyen", 1], ["PnL", 1]],
+    (S.by_chain || []).map(g => [g.group, String(g.n), span(sign(g.mean_pct), pct(g.mean_pct)), span(sign(g.total), usd(g.total))]),
+    "Pas encore de trade clôturé avec les règles actuelles.");
   if (S.ruggers) $("missed").textContent += ` · Liste noire : ${S.ruggers} dev(s) dont un token s'est effondré, tués d'office.`;
   const lab = S.lab || { trades: 0, results: [] };
   table("lab", [["Profil de sortie"], ["Trades", 1], ["Gagnants", 1], ["PnL rejoué", 1], ["1re moitié", 1], ["2e moitié", 1]],

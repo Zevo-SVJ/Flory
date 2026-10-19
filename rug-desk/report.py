@@ -177,3 +177,60 @@ def status(hours: float = 1) -> str:
     except Exception:
         pass
     return "\n".join(lines[:5])
+
+
+def weekly(save: bool = True) -> str:
+    """The real-money review (BILAN_ON, Oct 26). Everything the decision needs, on the current rules only,
+    and the verdict of the criteria fixed on Oct 19, applied mechanically: no reading between the lines."""
+    import chains, shadow
+    from config import RULES_SINCE, DATA
+    st = edge.stats()
+    rule = edge.judge(st["n"], st.get("mean_pct"), st.get("ci_low_pct"))
+    tier_of = {}
+    if os.path.exists(LOG):
+        with open(LOG, newline="") as f:
+            for r in csv.DictReader(f):
+                if r.get("tier"):
+                    tier_of[r["mint"]] = r["tier"]
+    by_chain = edge.split(lambda t: chains.split(t["mint"])[0])
+    by_tier = edge.split(lambda t: tier_of.get(t["mint"], "base"))
+    sh = shadow.results()
+    try:
+        import backtest
+        card = backtest.scorecard()
+    except Exception:
+        card = {"rules": {}}
+    a = audit.summary()
+    bil = edge.bilan(card)
+    go = rule["verdict"] == "edge" and st.get("max_drawdown", 1e9) <= edge.MAX_DRAWDOWN_SHARE * edge.PAPER_BANKROLL_USD
+    L = [f"RAPPORT DE DÉCISION — argent réel ? ({time.strftime('%Y-%m-%d')})",
+         f"Règles jugées : celles en place depuis le {RULES_SINCE}. Critères fixés le 19 octobre, avant les données.",
+         "",
+         f"DÉCISION : {'OUI, à petite taille (quart de Kelly, 5 % max par trade)' if go else 'NON'} — {rule['why']}",
+         "",
+         f"PAPIER : {st['n']} trades clôturés · rendement moyen {st.get('mean_pct', 0):+.1f} % par trade"
+         + (f" (IC 95 % {st['ci_low_pct']:+.1f} à {st['ci_high_pct']:+.1f})" if st.get('ci_low_pct') is not None else "")
+         + (f" · gagnants {st['win_rate']:.0%} · pire drawdown {st['max_drawdown']:.0f} $" if st["n"] else ""),
+         "par chaîne : " + (" · ".join(f"{g['group']} {g['n']} trades {g['mean_pct']:+.1f} % ({g['total']:+.2f} $)" for g in by_chain) or "aucun trade"),
+         "par mise : " + (" · ".join(f"{g['group']} {g['n']} trades {g['mean_pct']:+.1f} %" for g in by_tier) or "aucun trade"),
+         "",
+         "BACKTEST (Solana, graduations rejouées) : " + (" · ".join(
+             f"{k} n={v['n']} {v['mean']:+.1f} % [{v['ci95'][0]:+.0f}, {v['ci95'][1]:+.0f}] {v.get('why', '')}"
+             for k, v in (card.get("rules") or {}).items()) or "pas encore de données"),
+         f"BILAN papier contre backtest : {bil['why']}",
+         "",
+         "LE FILTRE (6 h après chaque verdict) : "
+         f"éliminés qui ont chuté {a['killed']['crashed']}/{a['killed']['n']} · PASS qui ont chuté {a['passed']['crashed']}/{a['passed']['n']}",
+         "FANTÔMES (si on avait acheté les écartés) : "
+         + (f"{sh['all']['n']} trades, {sh['all']['mean']:+.1f} % par trade" if sh.get("all") else "pas encore de résultats")
+         + (" · " + " · ".join(f"{d['reason']} {d['n']}×{d['mean']:+.1f} %" for d in sh["reasons"][:6]) if sh.get("reasons") else "")
+         + (f" · règles levées : {', '.join(sorted(shadow.waived()))}" if shadow.waived() else ""),
+         "",
+         "Règle de décision : OUI seulement avec 200 trades ou plus, un rendement moyen d'au moins +3 % par trade, "
+         "l'intervalle à 95 % entièrement au-dessus de 0, et un drawdown sous 30 % de la banque. Sinon NON, "
+         "et le papier continue. Avec 300 trades et une moyenne ≤ 0 : on arrête l'idée d'en vivre du trading."]
+    text = "\n".join(L)
+    if save:
+        with open(os.path.join(DATA, f"rapport_decision_{time.strftime('%Y-%m-%d')}.txt"), "w") as f:
+            f.write(text + "\n")
+    return text
