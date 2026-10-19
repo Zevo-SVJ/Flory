@@ -867,9 +867,39 @@ class OnChainVigie(Base):
         ds[0]["priceNative"] = "0.00000500"            # SOL = $200
         with mock.patch("requests.get", fake_get(ds=ds)), \
                 mock.patch.object(facts, "reserves", lambda v: [990e6, 0.4]):    # ...the chain: drained
+            watch._mismatch.clear()
+            watch.watch()                                  # first tick: the chain must agree twice
             out = watch.watch()[0]
         self.assertTrue(out and out[0]["reason"] == "liquidity_pulled", out)
         self.assertNotIn(MINT, book.load())
+
+
+class QuoteTokens(Base):
+    def setUp(self):
+        super().setUp()
+        watch._mismatch.clear(); watch._quote_usd.clear()
+
+    def test_a_pool_quoted_in_xmr_is_priced_in_xmr(self):
+        # Oct 19 soak test: LUKE's PumpSwap pool is against XMR, priced as SOL it read -84%
+        book.open_position(MINT, "LUKE", 0.0005672, 71600, vaults=["VB", "VQ"], sol0=58.7)
+        ds = ds_pairs(price=0.0005672, liq=71600)
+        ds[0]["priceNative"] = "0.000000953"                     # in XMR: XMR = $595
+        with mock.patch("requests.get", fake_get(ds=ds)), \
+                mock.patch.object(facts, "reserves", lambda v: [64_800_000, 61.75]):   # 61.75 XMR / 64.8M tokens
+            out = watch.watch()[0]
+        self.assertEqual(out, [])
+        self.assertIn(MINT, book.load())
+
+    def test_one_misread_tick_never_sells(self):
+        book.open_position(MINT, "TEST", 0.001, 80000, vaults=["VB", "VQ"], sol0=200)
+        ds = ds_pairs(price=0.001, liq=80000)
+        ds[0]["priceNative"] = "0.00000500"
+        bad = mock.patch.object(facts, "reserves", lambda v: [990e6, 0.4])        # a drained-looking read
+        with mock.patch("requests.get", fake_get(ds=ds)), bad:
+            self.assertEqual(watch.watch()[0], [])                                 # first tick: wait
+            self.assertIn(MINT, book.load())
+            out = watch.watch()[0]                                                  # second tick agrees: sell
+        self.assertTrue(out and out[0]["reason"] == "liquidity_pulled", out)
 
 
 class Copycat(Base):

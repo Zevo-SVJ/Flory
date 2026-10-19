@@ -20,7 +20,7 @@ OUT = os.path.join(DATA, "backtest.json")
 TICKET = 40.0                 # the desk's base ticket on a $1,000 balance (4%)
 SAMPLE_S = 360                # one price point every 6 minutes
 HORIZON_S = 7 * 3600          # entry window 3 h + exit window up to 6 h, capped at 7 h of history
-MAX_PAGES = 100               # pools with more than 100,000 transactions since birth are skipped (noted)
+MAX_PAGES = 250               # pools with more than 250,000 transactions since birth are skipped (noted)
 
 
 def tx(sig: str) -> dict | None:
@@ -124,14 +124,31 @@ def replay(g: dict, sol_usd: float) -> dict:
             return None
         return statistics.mean(abs(a - b) for a, b in zip(sols, sols[1:])) * sol_usd
 
-    entry = None
-    for k in range(int(FACTS["min_age_min"] * 60 // SAMPLE_S), int(3 * 3600 // SAMPLE_S) + 1):
+    # the whole first 7 h, one point every 6 min, kept in the output: entry and exit variants can be
+    # replayed offline (variants()) without reading the chain again
+    full = []
+    for k in range(int(HORIZON_S // SAMPLE_S) + 1):
         s = at(g["t0"] + k * SAMPLE_S)
+        if not s:
+            break
+        full.append(s)
+    trade = {}
+    for mins in (15, 30, 60, 120):          # average swap size at four ages, for the bot-volume rule
+        s = next((p for p in full if p["t"] >= g["t0"] + mins * 60), None)
+        if s:
+            trade[mins] = avg_trade(s["i"])
+    g = {**g, "path": [[round(p["t"] - g["t0"]), p["price"], round(p["liq"]), p["n1h"]] for p in full],
+         "avg_trade": {k: (round(v, 1) if v else None) for k, v in trade.items()}}
+    entry = None
+    start = -(-int(FACTS["min_age_min"] * 60) // SAMPLE_S)        # ceil: never before min_age_min
+    for k in range(start, int(3 * 3600 // SAMPLE_S) + 1):
+        s = full[k] if k < len(full) else None
         if not s:
             break
         if s["liq"] < FACTS["min_liquidity_usd"] or s["price"] * 1e9 > FACTS["max_mcap_liq"] * s["liq"]:
             continue
-        a = avg_trade(s["i"])
+        age = k * SAMPLE_S / 60
+        a = next((v for m, v in sorted(trade.items(), reverse=True) if m <= age and v), None)
         if a is None:
             continue
         if s["n1h"] >= 100 and a < FACTS["min_avg_trade_usd"]:
@@ -142,14 +159,7 @@ def replay(g: dict, sol_usd: float) -> dict:
         break
     if not entry:
         return {**g, "skip": "never_entered"}
-    path = [entry]
-    t = entry["t"]
-    while t < min(entry["t"] + 6 * 3600, g["t0"] + HORIZON_S):
-        t += SAMPLE_S
-        s = at(t)
-        if not s:                      # no swap after t: the pool is dead, last price stands
-            break
-        path.append(s)
+    path = [dict(p) for p in full if entry["t"] <= p["t"] <= entry["t"] + 6 * 3600]
     for p in path:
         p.update(b5=None, s5=None, v5=None)
     import exitlab
@@ -210,3 +220,86 @@ if __name__ == "__main__":
     with ThreadPoolExecutor(max_workers=int(os.environ.get("BT_WORKERS", "3"))) as ex:
         list(ex.map(one, gs))
     print(json.dumps(summary(rows), indent=2))
+
+
+# ---------- offline variants: replay other entry and exit rules on the recorded paths ----------
+ENTRY_RULES = {
+    "desk (15 min, rules)": {},
+    "wait 30 min": {"min_age": 30},
+    "wait 60 min": {"min_age": 60},
+    "above graduation price": {"above_t0": 1.0},
+    "rising 30 min (+10%)": {"rise_30m": 0.10},
+    "pool $30k+": {"min_liq": 30000},
+    "wait 60 min + above graduation": {"min_age": 60, "above_t0": 1.0},
+}
+
+
+def _entry(row: dict, rule: dict) -> int | None:
+    path = row.get("path") or []
+    if not path:
+        return None
+    p0 = path[0][1]
+    trade = {int(k): v for k, v in (row.get("avg_trade") or {}).items()}
+    for k, (t, price, liq, n1h) in enumerate(path):
+        age = t / 60
+        if age < rule.get("min_age", FACTS["min_age_min"]) or age > 180:
+            continue
+        if liq < rule.get("min_liq", FACTS["min_liquidity_usd"]) or price * 1e9 > FACTS["max_mcap_liq"] * liq:
+            continue
+        a = next((v for m, v in sorted(trade.items(), reverse=True) if m <= age and v), None)
+        if a is None or (n1h >= 100 and a < FACTS["min_avg_trade_usd"]) or n1h * a < FACTS["min_turnover_1h"] * liq:
+            continue
+        if price < rule.get("above_t0", 0) * p0:
+            continue
+        if "rise_30m" in rule:
+            back = next((q for q in reversed(path[:k]) if q[0] <= t - 1800), None)
+            if not back or price < back[1] * (1 + rule["rise_30m"]):
+                continue
+        return k
+    return None
+
+
+def _net(row: dict, k: int, params: dict) -> float | None:
+    import exitlab
+    t_in = row["path"][k][0]
+    pts = [{"t": t, "price": price, "liq": liq, "b5": None, "s5": None, "v5": None}
+           for t, price, liq, _ in row["path"][k:] if t <= t_in + 6 * 3600]
+    gross = exitlab.simulate(exits.features(pts), params)
+    if gross is None:
+        return None
+    impact = 100 * TICKET / (pts[0]["liq"] / 2)
+    cost = 2 * (PAPER_COSTS["fee_pct"] + PAPER_COSTS.get("mev_pct", 0) + impact) / 100 + 2 * PAPER_COSTS["tx_usd"] / TICKET
+    return (gross / exitlab.TICKET_USD - cost) * 100
+
+
+def variants(rows: list[dict]) -> list[dict]:
+    """Every entry rule x every exit profile, with the two halves (by graduation time) kept apart:
+    a rule that only wins on one half is luck, not an edge."""
+    import exitlab
+    live = sorted((r for r in rows if r.get("path")), key=lambda r: r["t0"])
+    half = len(live) // 2
+    profiles = {"actif": EXIT, **{n: {**EXIT, **p} for n, p in exitlab.PROFILES.items()}}
+    out = []
+    for en, rule in ENTRY_RULES.items():
+        for pn, params in profiles.items():
+            res = []
+            for i, r in enumerate(live):
+                k = _entry(r, rule)
+                if k is None:
+                    continue
+                x = _net(r, k, params)
+                if x is not None:
+                    res.append((i < half, x))
+            if not res:
+                continue
+            xs = [x for _, x in res]
+            a = [x for h, x in res if h]
+            b = [x for h, x in res if not h]
+            rng = random.Random(5)
+            boots = sorted(statistics.mean(rng.choice(xs) for _ in xs) for _ in range(1000))
+            out.append({"entry": en, "exit": pn, "n": len(xs), "mean": round(statistics.mean(xs), 1),
+                        "ci95": [round(boots[25], 1), round(boots[974], 1)],
+                        "win": round(sum(x > 0 for x in xs) / len(xs), 2),
+                        "half1": round(statistics.mean(a), 1) if a else None,
+                        "half2": round(statistics.mean(b), 1) if b else None})
+    return sorted(out, key=lambda v: -v["mean"])

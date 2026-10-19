@@ -6,19 +6,21 @@ from config import PAPER
 from market import pools
 import book, exits, paths, facts
 
-_sol_usd = {"v": None}      # last SOL price seen, to turn an on-chain SOL price into dollars
+_quote_usd = {}             # mint -> last dollar price of its pool's quote token (SOL, or XMR, USDC...)
+_mismatch = {}              # mint -> ticks in a row where the chain and DexScreener disagree by half
 
 
 def chain_marks(positions: dict, live: dict) -> dict:
     """{mint: (price_usd, liq_usd)} read from each PumpSwap pool's vaults, all positions in one RPC call.
     DexScreener lags a pool by seconds to minutes and sometimes drops a pair: a rug factory dumps in
-    one block, so the desk reads the pool itself. Empty if the RPC fails (DexScreener still covers)."""
-    for m in live.values():
+    one block, so the desk reads the pool itself. Empty if the RPC fails (DexScreener still covers).
+    each pool is priced in its OWN quote token: a PumpSwap pool is not always against SOL (on Oct 19,
+    LUKE's pool was against XMR, and pricing it in SOL read a -84% "rug" that never happened)."""
+    for mint, m in live.items():
         if m and m.get("price") and m.get("price_native"):
-            _sol_usd["v"] = m["price"] / m["price_native"]
-            break
-    held = {mint: p["vaults"] for mint, p in positions.items() if p.get("vaults")}
-    if not held or not _sol_usd["v"]:
+            _quote_usd[mint] = m["price"] / m["price_native"]      # priceNative is in the pair's quote token
+    held = {mint: p["vaults"] for mint, p in positions.items() if p.get("vaults") and _quote_usd.get(mint)}
+    if not held:
         return {}
     try:
         flat = facts.reserves([v for vs in held.values() for v in vs])
@@ -26,9 +28,10 @@ def chain_marks(positions: dict, live: dict) -> dict:
         return {}
     out = {}
     for i, mint in enumerate(held):
-        tokens, sol = flat[2 * i], flat[2 * i + 1]
-        if tokens and sol is not None:
-            out[mint] = (sol / tokens * _sol_usd["v"], 2 * sol * _sol_usd["v"])
+        tokens, quote = flat[2 * i], flat[2 * i + 1]
+        q = _quote_usd[mint]
+        if tokens and quote is not None:
+            out[mint] = (quote / tokens * q, 2 * quote * q)
     return out
 
 
@@ -58,8 +61,18 @@ def watch() -> tuple[list[dict], dict]:
         for mint, p in positions.items():
             m = live.get(mint)
             s = sample(now, m)
-            if mint in onchain:                   # the pool itself beats any indexer
-                s["price"], s["liq"] = onchain[mint]
+            if mint in onchain:                   # the pool itself beats any indexer...
+                cp, cl = onchain[mint]
+                dsp = (m or {}).get("price") or 0
+                if dsp and abs(cp / dsp - 1) > 0.5:
+                    # ...unless it disagrees with DexScreener by half: a real dump stays dumped 20 s later,
+                    # a misread does not. the chain wins only when two ticks in a row agree
+                    _mismatch[mint] = _mismatch.get(mint, 0) + 1
+                    if _mismatch[mint] >= 2:
+                        s["price"], s["liq"] = cp, cl
+                else:
+                    _mismatch.pop(mint, None)
+                    s["price"], s["liq"] = cp, cl
             paths.append(mint, s)
             if s["price"] > 0:
                 marks[mint] = s["price"]
