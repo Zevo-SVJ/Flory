@@ -20,8 +20,8 @@ RANGES = {"1h": 3600, "24h": 86400, "7j": 7 * 86400, "tout": None}
 
 AGENTS = [   # fixed order = fixed color slot on the page
     ("VIGIE", "surveille les positions", "prix toutes les 20 s, stops, prises de profit"),
-    ("SCOUT", "trouve les tokens", "graduations pump.fun + DexScreener, toutes les 10 min"),
-    ("GARDE", "tue les rugs", "13 checks : pool, autorités, LP, holders, bundles"),
+    ("SCOUT", "trouve les tokens", "graduations pump.fun, tendances, toutes les 3 min"),
+    ("GARDE", "tue les rugs", "pool, nom, contrat, holders, lecture approfondie"),
     ("ECHO", "lit X", "Claude dans Chrome, verdict BUY/SKIP par PASS"),
     ("AUDIT", "vérifie le filtre", "re-prix des verdicts 6 h après"),
     ("PLUME", "écrit le rapport", "bilan du soir à 21:30"),
@@ -110,22 +110,15 @@ def echo_status(waiting: dict, xreads: list[dict], now: float) -> dict:
             "last": last}
 
 
-def garde_detail() -> str:
-    """Which outside sources GARDE really has, so a missing key shows on the page, not in a log."""
-    import facts, stracker, sources
-    st = sources.load()
-    def mark(name, label, configured=True, why_not=""):
-        if not configured:
-            return f"{label} ✗ ({why_not})"
-        s = st.get(name)
-        if not s:
-            return f"{label} … (pas encore appelé)"
-        return f"{label} {'✓' if s['ok'] else '✗'}" + ("" if s["ok"] and s["detail"] == "ok" else f" ({s['detail'][:40]})")
-    return " · ".join([mark("helius_das", "Helius", "helius" in facts.RPC_URL, "RPC public: holders limités"),
-                       mark("jupiter", "Jupiter"), mark("geckoterminal", "GeckoTerminal"),
-                       mark("jupiter_top", "Jupiter top"),
-                       mark("stracker", "Solana Tracker", bool(stracker.key()), "clé manquante")
-                       + f" {sources.calls_today('stracker')}/{stracker.DAILY_CAP} auj."])
+def last_report() -> str | None:
+    """PLUME's latest evening report or morning brief, from the event log."""
+    text = None
+    if os.path.exists(events.EVENTS):
+        with open(events.EVENTS) as f:
+            for line in f:
+                if '"kind": "report"' in line:
+                    text = json.loads(line).get("text")
+    return text
 
 
 def state(range_key: str = "auto") -> dict:
@@ -150,6 +143,7 @@ def state(range_key: str = "auto") -> dict:
             "pct": (price / p["entry"] - 1) * 100 if price else None,
             "peak_pct": (p["peak"] / p["entry"] - 1) * 100, "pnl": pnl if price else None,
             "left_pct": p["qty"] / p["qty0"] * 100, "hours": (now - p["opened"]) / 3600,
+            "cost": p["qty"] * p["entry"],          # what is still tied up: tickets now vary with the setup
         })
 
     realized = book.realized()
@@ -198,9 +192,10 @@ def state(range_key: str = "auto") -> dict:
 
     st = events.agents()
     st["ECHO"] = echo_status(waiting, xreads, now)
-    agents = [{"name": n, "role": role, "detail": garde_detail() if n == "GARDE" else detail,
-               **st.get(n, {"status": "idle", "msg": "pas encore lancé"})}
+    agents = [{"name": n, "role": role, "detail": detail, **st.get(n, {"status": "idle", "msg": "pas encore lancé"})}
               for n, role, detail in AGENTS]
+    import facts, stracker, sources
+    src = sources.load()
 
     hb = _json(HEARTBEAT, None)
     balance = PAPER_BANKROLL_USD + realized + unrealized
@@ -222,6 +217,11 @@ def state(range_key: str = "auto") -> dict:
         "breakdown": audit.breakdown(), "ruggers": len(ruggers.known()),
         "edge": edge.stats(), "smart": smart.known(),
         "lab": _json(os.path.join(DATA, "exitlab.json"), {"trades": 0, "results": [], "active": "actif"}),
+        # the agent panels: what each outside source last answered, which keys exist, PLUME's last words
+        "sources": {k: v for k, v in src.items() if not k.endswith("_count")},
+        "keys": {"helius": "helius" in facts.RPC_URL, "stracker": bool(stracker.key())},
+        "stracker_today": sources.calls_today("stracker"), "stracker_cap": stracker.DAILY_CAP,
+        "last_report": last_report(), "report_at": SCHEDULE["report_at"],
     }
 
 
