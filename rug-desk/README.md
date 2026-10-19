@@ -51,6 +51,7 @@ Optional `.env` (copy `.env.example`, never commit it):
 | pending.py | ECHO_MODE = "gate": a PASS waits for ECHO's X read, BUY -> bought at the price of that moment, SKIP or no read in 60 min -> dropped |
 | ECHO.md | the X reader's instructions. run it from a local Claude session with Claude in Chrome: `/loop 10m Lis et applique ~/Documents/rug-desk-run/rug-desk/ECHO.md` |
 | events.py | the event log and agent status the dashboard reads |
+| ruggers.py | the desk's own creator blacklist: a token that collapses (-90% at audit, or a pulled pool) blacklists its creator, and GARDE kills that wallet's next tokens |
 | dashboard.py + .html | private dashboard: `python3 dashboard.py`, then http://localhost:8765 |
 | data/ | checks.csv, trades.csv, positions.json, desk.log |
 
@@ -76,6 +77,7 @@ the Solana chain itself and GoPlus, both free, no key.
 | 6 | LP burned | chain, PumpSwap pools | yes for PumpSwap; other DEXes die as `lp_unverified` |
 | 7 | top 10 wallets > 30% | GoPlus holders, pools excluded on chain | yes |
 | 8 | dev wallet > 5% | creator read from the PumpSwap pool on chain, its balance via RPC | yes for PumpSwap; plus no single wallet > 5% |
+| 9b | copycat | DexScreener search: a bigger token launched this week under the same ticker | the copy is killed |
 | 9 | insiders / bundles | same SOL balance in 3+ top wallets; 5+ big wallets within 2% | heuristic, read the kills |
 | 10-13 | depth, ticket share, age, sells | DexScreener | yes |
 | 14 | X read | you (links in every PASS), or Grok if paid | manual by default |

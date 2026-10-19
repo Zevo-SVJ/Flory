@@ -512,3 +512,73 @@ class Regime(Base):
         r = audit.summary()["regime"]
         self.assertEqual((r["SOL up"]["n"], r["SOL up"]["crashed"]), (1, 0))
         self.assertEqual((r["SOL down"]["n"], r["SOL down"]["crashed"]), (1, 1))
+
+
+class Ruggers(Base):
+    def setUp(self):
+        super().setUp()
+        import ruggers
+        for f in (ruggers.FILE, config.AUDIT):
+            if os.path.exists(f):
+                os.remove(f)
+
+    def test_audit_blacklists_the_creator_of_a_collapsed_token_and_garde_kills_its_next_one(self):
+        import audit, ruggers
+        dev = facts._b58(bytes(range(40, 72)))                 # the coin_creator in the fake pool
+        old = time.strftime("%Y-%m-%d %H:%M", time.localtime(time.time() - 8 * 3600))
+        check.log({"time": old, "mint": "OLDRUG", "symbol": "R", "stage": "judge", "verdict": "PASS",
+                   "price": 1.0, "dev": dev})
+        with mock.patch("requests.get", fake_get(ds=[])):     # pool gone: -100%
+            audit.audit()
+        self.assertIn(dev, ruggers.known())
+        with net():
+            v = check.check(MINT)
+        self.assertEqual((v["stage"], v["reason"]), ("facts", "dev_rugged_before"))
+
+    def test_vigie_blacklists_on_a_pulled_pool(self):
+        import agents, ruggers
+        check.log({"time": "2026-01-01 00:00", "mint": MINT, "symbol": "TEST", "stage": "judge",
+                   "verdict": "PASS", "dev": "DEVWALLET"})
+        book.open_position(MINT, "TEST", 1.0, 80000)
+        with mock.patch("requests.get", fake_get(ds=ds_pairs(price=1.1, liq=20000))):
+            agents.vigie()
+        self.assertIn("DEVWALLET", ruggers.known())
+
+
+class Copycat(Base):
+    def test_a_smaller_token_under_a_bigger_ticker_is_killed(self):
+        import market
+        market._tickers.clear()
+        big = {"chainId": "solana", "baseToken": {"address": "BIGONE", "symbol": "TEST"}, "liquidity": {"usd": 900000},
+               "pairCreatedAt": (time.time() - 9 * 3600) * 1000}
+        def get(url, timeout=None, params=None):
+            if "search" in url:
+                return Resp({"pairs": [big]})
+            return fake_get()(url, timeout, params)
+        with mock.patch("requests.get", get), mock.patch("requests.post", Chain()):
+            v = check.check(MINT)
+        self.assertEqual((v["stage"], v["reason"]), ("pool", "copycat"))
+        # the same name on a token from last year is not a rival: no kill
+        market._tickers.clear()
+        big["pairCreatedAt"] = (time.time() - 400 * 86400) * 1000
+        with mock.patch("requests.get", get), mock.patch("requests.post", Chain()):
+            self.assertNotEqual(check.check(MINT).get("reason"), "copycat")
+        market._tickers.clear()
+
+
+class Breakdown(Base):
+    def test_groups_closed_positions_by_entry_hour_and_age(self):
+        import audit
+        with open(config.TRADES, "w") as f:
+            f.write("time,mint,symbol,action,usd,pnl,reason\n"
+                    "2026-01-01 02:10,A,A,open,25,0,entry\n2026-01-01 03:00,A,A,close,10,-15,stop\n"
+                    "2026-01-01 14:10,B,B,open,25,0,entry\n2026-01-01 15:00,B,B,close,40,15,trailing_stop\n")
+        check.log({"time": "2026-01-01 02:10", "mint": "A", "stage": "judge", "verdict": "PASS", "age_min": 90})
+        check.log({"time": "2026-01-01 14:10", "mint": "B", "stage": "judge", "verdict": "PASS", "age_min": 900})
+        bd = audit.breakdown()
+        hour = {b["bucket"]: b for b in bd["hour"]}
+        age = {b["bucket"]: b for b in bd["age"]}
+        self.assertEqual((hour["00-04"]["n"], hour["00-04"]["pnl"]), (1, -15.0))
+        self.assertEqual((hour["12-16"]["n"], hour["12-16"]["pnl"]), (1, 15.0))
+        self.assertEqual(age["< 3 h"]["pnl"], -15.0)
+        self.assertEqual(age["12-36 h"]["pnl"], 15.0)

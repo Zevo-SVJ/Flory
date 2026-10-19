@@ -57,6 +57,13 @@ def report() -> str:
         if lab.get("speed"):
             lines.append("speed test (active profile): " + ", ".join(
                 f"every {r['every_s']}s {r['pnl']:+.2f}$" for r in lab["speed"]))
+    bd = audit.breakdown()
+    for kind, label in (("hour", "entry hour"), ("age", "token age at entry")):
+        rows = [b for b in bd[kind] if b["n"]]
+        if rows:
+            worst = min(rows, key=lambda b: b["pnl"])
+            lines.append(f"by {label}: " + ", ".join(f"{b['bucket']} {b['pnl']:+.2f}$ ({b['n']})" for b in rows)
+                         + f" -> worst: {worst['bucket']}")
     a = audit.summary()
     up, down = a["regime"]["SOL up"], a["regime"]["SOL down"]
     if up["n"] or down["n"]:

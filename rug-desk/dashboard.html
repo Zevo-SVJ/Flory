@@ -299,6 +299,15 @@ a { color: #8fb8f0; text-decoration: none; } a:hover { text-decoration: underlin
     </section>
   </div>
   <section class="card mt">
+    <h2 class="section">Où le desk gagne et perd</h2>
+    <div class="grid2" style="margin-top:0">
+      <div class="scroll"><table id="byHour"></table></div>
+      <div class="scroll"><table id="byAge"></table></div>
+    </div>
+    <p class="note">Positions clôturées, par heure d'achat et par âge du token à l'achat. Si une tranche perd nettement et régulièrement, c'est une règle à ajouter, chiffres à l'appui.</p>
+  </section>
+
+  <section class="card mt">
     <h2 class="section">Labo de sortie : quand vendre ?</h2>
     <div class="scroll"><table id="lab"></table></div>
     <p class="note" id="labNote"></p>
@@ -504,7 +513,7 @@ const link = (href, text) => el("a", { href, target: "_blank", rel: "noopener no
 const KILLS = { thin_pool: "Pool trop petit", too_fresh: "Trop récent", too_old: "Trop vieux", no_pool: "Pas de pool",
   nobody_can_sell: "Honeypot (aucune vente)", mint_open: "Mint authority ouverte", freeze_open: "Freeze authority ouverte",
   lp_unverified: "LP non vérifiable", lp_unlocked: "LP non brûlé", no_holders: "Holders indisponibles",
-  dev_holds: "Le dev garde > 5 %", dev_unknown: "Dev introuvable", top10_heavy: "Top 10 > 30 %", whale: "Un wallet > 5 %", bundle_same_sol: "Bundle : même solde SOL",
+  dev_holds: "Le dev garde > 5 %", dev_rugged_before: "Dev déjà sur la liste noire", copycat: "Copie d'un ticker plus gros", dev_unknown: "Dev introuvable", top10_heavy: "Top 10 > 30 %", whale: "Un wallet > 5 %", bundle_same_sol: "Bundle : même solde SOL",
   bundle_ladder: "Bundle : sacs identiques", "source en panne": "Source en panne", low_score: "Note trop basse" };
 const FLAG_LABELS = { few_holders: "peu de holders", bot_volume: "volume de bots ?", quiet: "peu d'activité",
   very_young: "très jeune", late: "vieux (> 48 h)", liq_edge: "liquidité juste", one_sided: "achats/ventes déséquilibrés",
@@ -553,6 +562,12 @@ function drawPanels() {
   if (!S.kills.length) kb.append(el("div", { class: "empty" }, "Aucune élimination pour l'instant."));
   $("missed").textContent = a.missed.length ? "À regarder : " + a.missed.map(m => `$${m.symbol} ${pct(m.change_pct, 0)} (tué par ${killLabel(m.reason)})`).join(" · ")
     : "AUDIT re-prix chaque verdict 6 h après. Un bon filtre tue surtout des tokens qui chutent.";
+  const bd = S.breakdown || { hour: [], age: [] };
+  [["byHour", "Heure d'achat", bd.hour], ["byAge", "Âge du token", bd.age]].forEach(([id, head, rows]) =>
+    table(id, [[head], ["Trades", 1], ["Gagnants", 1], ["PnL", 1]],
+      rows.filter(r => r.n).map(r => [r.bucket, String(r.n), Math.round(r.win / r.n * 100) + "%", span(sign(r.pnl), usd(r.pnl))]),
+      "Pas encore de position clôturée."));
+  if (S.ruggers) $("missed").textContent += ` · Liste noire : ${S.ruggers} dev(s) dont un token s'est effondré, tués d'office.`;
   const lab = S.lab || { trades: 0, results: [] };
   table("lab", [["Profil de sortie"], ["Trades", 1], ["Gagnants", 1], ["PnL rejoué", 1], ["1re moitié", 1], ["2e moitié", 1]],
     lab.results.map(r => {

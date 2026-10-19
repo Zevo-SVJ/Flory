@@ -13,7 +13,7 @@ import book
 
 # price and liq_usd at verdict time let AUDIT check later whether a kill or a pass was right
 FIELDS = ["time", "mint", "symbol", "stage", "verdict", "confidence", "reason", "price", "liq_usd",
-          "score", "flags", "sol_1h", "sol_24h"]
+          "score", "flags", "sol_1h", "sol_24h", "age_min", "dev"]
 
 
 def _migrate():
@@ -70,15 +70,18 @@ def check(mint: str) -> dict:
         m = pool(mint)                                           # pool, free
     except Exception as e:
         return {"stage": "pool", "verdict": "SKIP", "reason": f"dexscreener failed: {e}"}
-    seen = {"price": (m or {}).get("price"), "liq_usd": (m or {}).get("liq_usd")}
+    seen = {"price": (m or {}).get("price"), "liq_usd": (m or {}).get("liq_usd"), "age_min": (m or {}).get("age_min")}
     if (k := market_kill(m)):
         return {"stage": "pool", "verdict": "SKIP", "reason": k, "symbol": (m or {}).get("symbol"), **seen}
+    if market.copycat(m, mint):                                  # a bigger token owns this ticker
+        return {"stage": "pool", "verdict": "SKIP", "reason": "copycat", "symbol": m.get("symbol"), **seen}
 
     try:
         token = report(mint, m)                                  # rug filter, free
     except Exception as e:
         return {"stage": "facts", "verdict": "SKIP", "reason": f"facts failed: {e}",
                 "symbol": m["symbol"], **seen}
+    seen["dev"] = token.get("dev")
     if (k := fact_kill(token)):
         return {"stage": "facts", "verdict": "SKIP", "reason": k,
                 "symbol": m["symbol"] or token["symbol"], **seen}
@@ -86,7 +89,7 @@ def check(mint: str) -> dict:
     v = judge(token, m)
     sym = m["symbol"] or token["symbol"]
     sc = score(m, token)
-    return {**v, "symbol": sym, "price": m["price"], "liq_usd": m["liq_usd"], "url": m["url"],
+    return {**v, **seen, "symbol": sym, "price": m["price"], "liq_usd": m["liq_usd"], "url": m["url"],
             "score": sc["score"], "flags": " ".join(sc["flags"]),
             # the free check 14: two links you open yourself. latest posts, not "top"
             "x_ca": f"https://x.com/search?q={mint}&f=live",

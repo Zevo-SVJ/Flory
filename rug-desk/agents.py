@@ -14,7 +14,7 @@ MARKS = os.path.join(DATA, "marks.json")
 INBOX = os.path.join(DATA, "inbox.txt")      # CAs pasted in the dashboard, checked by GARDE
 from events import emit, set_agent, agents as agent_state
 from notify import post
-import book, watch, scan, check, audit, report, pending, exitlab
+import book, watch, scan, check, audit, report, pending, exitlab, ruggers
 
 
 def beat():
@@ -47,6 +47,10 @@ def vigie():
             continue
         emit("VIGIE", "sell", e["text"], symbol=e["symbol"], mint=e["mint"], pnl=round(e["pnl"], 2),
              pct=round(e["pct"], 1), reason=e["reason"], closed=e.get("closed"))
+        if e["reason"] in ("liquidity_pulled", "pool_gone") and ruggers.add(
+                ruggers.dev_of(e["mint"]), e["mint"], e["symbol"], e["reason"]):
+            emit("VIGIE", "kill", f"${e['symbol']}: creator blacklisted ({e['reason']}), "
+                                  "GARDE will kill every token it launches", symbol=e["symbol"])
         post(e["text"])
     log_equity(marks)
     tmp = MARKS + ".tmp"        # live prices for the dashboard, so it never calls an API itself

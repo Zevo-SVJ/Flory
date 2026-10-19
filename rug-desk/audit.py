@@ -5,10 +5,12 @@
 import csv, os, time
 from config import LOG, AUDIT, SCHEDULE, DATA
 from market import pools
+import ruggers
 
 FIELDS = ["time", "mint", "symbol", "stage", "verdict", "reason", "price0", "price_after",
           "change_pct", "hours"]
 CRASH_PCT = -50          # down this much after N hours: the kill was right
+RUG_PCT = -90            # down this much: the creator is blacklisted (ruggers.py)
 
 
 def _done() -> set[str]:
@@ -54,6 +56,9 @@ def audit(limit: int = 60) -> list[dict]:
                    "price_after": p1, "change_pct": round((p1 / p0 - 1) * 100, 1), "hours": round(hours, 1)}
             w.writerow(row)
             out.append(row)
+            if row["change_pct"] <= RUG_PCT:          # near-total collapse: the creator goes on the blacklist
+                ruggers.add(ruggers.dev_of(r["mint"]), r["mint"], r["symbol"],
+                            f"{row['change_pct']:+.0f}% {row['hours']:.0f}h after the verdict")
     return out
 
 
@@ -124,3 +129,39 @@ if __name__ == "__main__":
     for r in audit():
         print(r["symbol"], r["verdict"], r["reason"], f"{r['change_pct']:+.0f}%")
     print(summary())
+
+
+def breakdown() -> dict:
+    """Where the desk wins and loses: closed positions grouped by entry hour and by the token's age
+    at entry. The bot has no 2 AM tilt, but markets have quiet hours and late entries."""
+    from config import TRADES
+    if not os.path.exists(TRADES):
+        return {"hour": [], "age": []}
+    with open(TRADES, newline="") as f:
+        trades = list(csv.DictReader(f))
+    ages = {}
+    if os.path.exists(LOG):
+        with open(LOG, newline="") as f:
+            for r in csv.DictReader(f):
+                if r.get("age_min") not in (None, ""):
+                    ages[r["mint"]] = float(r["age_min"])
+    opened, pnl, closed = {}, {}, set()
+    for t in trades:
+        if t["action"] == "open":
+            opened[t["mint"]] = t["time"]
+            pnl[t["mint"]] = 0.0
+        else:
+            pnl[t["mint"]] = pnl.get(t["mint"], 0.0) + float(t["pnl"])
+            if t["action"] == "close":
+                closed.add(t["mint"])
+    hours = [("00-04", 0, 4), ("04-08", 4, 8), ("08-12", 8, 12), ("12-16", 12, 16), ("16-20", 16, 20), ("20-24", 20, 24)]
+    age_b = [("< 3 h", 0, 180), ("3-12 h", 180, 720), ("12-36 h", 720, 2160), ("36-72 h", 2160, 10**9)]
+    def group(buckets, key):
+        out = []
+        for name, lo, hi in buckets:
+            sel = [m for m in closed if m in opened and key(m) is not None and lo <= key(m) < hi]
+            out.append({"bucket": name, "n": len(sel), "pnl": round(sum(pnl[m] for m in sel), 2),
+                        "win": sum(1 for m in sel if pnl[m] > 0)})
+        return out
+    return {"hour": group(hours, lambda m: int(opened[m][11:13])),
+            "age": group(age_b, lambda m: ages.get(m))}

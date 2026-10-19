@@ -80,3 +80,32 @@ def sol_regime() -> dict | None:
         value = None                      # unknown stays unknown: the verdict is logged without it
     _regime.update(t=time.time(), value=value)
     return value
+
+
+_tickers = {}
+
+
+def copycat(m: dict, mint: str) -> bool | None:
+    """Is another Solana token under the same ticker, launched this week, clearly bigger? Then this one
+    is a copy riding someone else's narrative: copies get the leftovers. Search cached 10 min per ticker.
+    None when the search failed: an unknown is not a kill here, the other checks still run."""
+    sym = (m.get("symbol") or "").strip().lower()
+    if not sym:
+        return None
+    hit = _tickers.get(sym)
+    if not hit or time.time() - hit[0] > 600:
+        try:
+            r = requests.get("https://api.dexscreener.com/latest/dex/search", params={"q": sym}, timeout=15)
+            r.raise_for_status()
+            data = r.json()
+            pairs = (data.get("pairs") if isinstance(data, dict) else None) or []
+        except Exception:
+            return None
+        week_ago_ms = (time.time() - 7 * 86400) * 1000   # an old token reusing the name is not a rival narrative
+        hit = (time.time(), [((p.get("baseToken") or {}).get("address"), (p.get("liquidity") or {}).get("usd") or 0)
+                             for p in pairs if p.get("chainId") == "solana"
+                             and (p.get("pairCreatedAt") or 0) >= week_ago_ms
+                             and ((p.get("baseToken") or {}).get("symbol") or "").strip().lower() == sym])
+        _tickers[sym] = hit
+    bigger = [liq for addr, liq in hit[1] if addr != mint and liq > 1.5 * (m.get("liq_usd") or 0)]
+    return bool(bigger)

@@ -6,6 +6,7 @@
 import base64, struct
 import requests
 from config import FACTS, SOLANA_RPC
+import ruggers
 
 GOPLUS = "https://api.gopluslabs.io/api/v1/solana/token_security"
 SYSTEM_PROGRAM = "11111111111111111111111111111111"
@@ -158,6 +159,7 @@ def report(mint: str, pool: dict) -> dict:
 
 def fact_kill(t: dict) -> str | None:
     """Plain comparisons. First failure wins, the reason gets logged."""
+    if t.get("dev") and t["dev"] in ruggers.known():             return "dev_rugged_before"
     if t["mint_authority"]:                                      return "mint_open"
     if t["freeze_authority"]:                                    return "freeze_open"
     if t["danger"]:                                              return "danger:" + t["danger"][0]
