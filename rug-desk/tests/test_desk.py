@@ -1321,3 +1321,24 @@ class Waiver(Base):
         self.assertEqual(facts.fact_kill(t), "lp_unverified")
         self.assertEqual(facts.fact_kill(t, skip={"lp_unverified"}), "top10_heavy")
         self.assertIsNone(facts.fact_kill(t, skip={"lp_unverified", "top10_heavy"}))
+
+
+class TelegramOwner(Base):
+    def test_pairing_with_the_dashboard_code_makes_alerts_and_leads_flow(self):
+        import tgbot, agents
+        for f in (tgbot.STATE, agents.INBOX):
+            if os.path.exists(f):
+                os.remove(f)
+        sent = []
+        with mock.patch.object(tgbot, "send", lambda tok, chat, msg: sent.append((chat, msg))), \
+             mock.patch.object(tgbot.env, "get", lambda k: "T" if k == "TELEGRAM_BOT_TOKEN" else None), \
+             mock.patch.object(tgbot, "inspect", return_value={"symbol": "X", "flags": [], "context": {}}):
+            tgbot.handle("T", {"chat": {"id": 99}, "text": "/lier 000000x"})
+            self.assertIsNone(tgbot.owner())
+            tgbot.handle("T", {"chat": {"id": 42}, "text": "/lier " + tgbot.pair_code()})
+            self.assertEqual(tgbot.owner(), "42")
+            tgbot.handle("T", {"chat": {"id": 42}, "text": MINT})
+            tgbot.handle("T", {"chat": {"id": 7}, "text": "Other111111111111111111111111111111111111"})
+        with open(agents.INBOX) as f:
+            self.assertEqual(f.read().split(), [MINT])           # only the owner's CA reaches the desk
+        os.remove(agents.INBOX); os.remove(tgbot.STATE)

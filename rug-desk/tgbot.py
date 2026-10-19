@@ -10,7 +10,7 @@
 #   TELEGRAM_DAILY_CAP=200      checks a day for everyone together (each one costs RPC calls)
 #   TELEGRAM_ALLOW=123,456      chat ids allowed; empty = anyone who finds the bot
 import atomic
-import csv, hashlib, json, os, re, threading, time
+import csv, hashlib, json, os, random, re, threading, time
 import requests
 from config import DATA
 import env
@@ -155,6 +155,22 @@ def _save(s: dict):
     os.replace(tmp, STATE)
 
 
+def owner() -> str | None:
+    """The chat that gets the desk's alerts and whose CAs GARDE checks as leads: TELEGRAM_CHAT_ID in .env,
+    or the chat that sent the pairing code shown in the dashboard."""
+    return env.get("TELEGRAM_CHAT_ID") or _state().get("owner")
+
+
+def pair_code() -> str:
+    """Six digits shown in GARDE's panel. Sending /lier <code> to the bot makes that chat the owner:
+    only someone who can see the dashboard (you, on the Mac) can pair."""
+    s = _state()
+    if not s.get("pair_code"):
+        s["pair_code"] = f"{random.SystemRandom().randrange(10**6):06d}"
+        _save(s)
+    return s["pair_code"]
+
+
 def _log(chat: int, mint: str, result: str):
     new = not os.path.exists(LOG)
     with open(LOG, "a", newline="") as f:
@@ -167,7 +183,8 @@ def _log(chat: int, mint: str, result: str):
 
 def stats() -> dict:
     """For the dashboard: is the bot on, how many checks today, how many people in 7 days."""
-    out = {"on": bool(token()), "today": 0, "users_7d": 0, "checks_7d": 0}
+    out = {"on": bool(token()), "today": 0, "users_7d": 0, "checks_7d": 0, "paired": bool(owner()),
+           "code": pair_code() if token() and not owner() else None}
     try:
         with open(LOG, newline="") as f:
             rows = list(csv.DictReader(f))
@@ -196,6 +213,16 @@ def handle(tok: str, message: dict):
     allow = [a.strip() for a in (env.get("TELEGRAM_ALLOW") or "").split(",") if a.strip()]
     if allow and str(chat) not in allow:
         return
+    if body.startswith("/lier"):
+        if body.split()[-1] == pair_code():
+            s = _state()
+            s["owner"] = str(chat)
+            _save(s)
+            send(tok, chat, "Lié. Ce chat reçoit maintenant les alertes du desk (achats, ventes, rapports), "
+                            "et chaque CA que tu envoies passe aussi par GARDE dans le desk.")
+        else:
+            send(tok, chat, "Code incorrect. Le bon code est affiché dans le panneau GARDE du tableau de bord.")
+        return
     mints = list(dict.fromkeys(CA.findall(body)))[:3]
     if body.startswith("/") or not mints:
         send(tok, chat, HELP)
@@ -209,6 +236,10 @@ def handle(tok: str, message: dict):
     if stats()["today"] >= cap:
         send(tok, chat, "Le bot a atteint sa limite du jour. Réessaie demain.")
         return
+    if str(chat) == owner():                 # your CAs are leads for the desk too: GARDE checks, may paper-buy
+        import agents
+        with open(agents.INBOX, "a") as f:
+            f.writelines(m + "\n" for m in mints)
     for mint in mints:
         _recent[chat].append(now)
         try:

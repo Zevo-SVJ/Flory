@@ -2,8 +2,7 @@
 # where the desk "posts". always the terminal and data/desk.log.
 # optional: a free Telegram bot, so alerts reach your phone. put both values in .env:
 #   TELEGRAM_BOT_TOKEN=...   (from @BotFather)
-#   TELEGRAM_CHAT_ID=...     (send your bot a message, then open
-#                             https://api.telegram.org/bot<token>/getUpdates and read chat.id)
+#   TELEGRAM_CHAT_ID=...     (optional: or send the bot "/lier <code>", the code is in GARDE's panel)
 import os, time
 import requests
 from config import DATA
@@ -16,7 +15,8 @@ def post(text: str):
     os.makedirs(DATA, exist_ok=True)
     with open(os.path.join(DATA, "desk.log"), "a") as f:
         f.write(f"[{stamp}] {text}\n")
-    token, chat = env.get("TELEGRAM_BOT_TOKEN"), env.get("TELEGRAM_CHAT_ID")
+    import tgbot                     # TELEGRAM_CHAT_ID in .env, or the chat paired with /lier in the bot
+    token, chat = env.get("TELEGRAM_BOT_TOKEN"), tgbot.owner()
     if token and chat:
         try:
             requests.post(f"https://api.telegram.org/bot{token}/sendMessage",
