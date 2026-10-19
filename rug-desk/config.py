@@ -157,7 +157,8 @@ EXIT = {
     "time_stop_hours": 6,                   # not up 20% after 6 hours -> out, dead money
     "time_stop_min_pct": 20,
 }
-EXIT_AUTOTUNE = True        # the lab may switch profiles by itself, only past the bar in exitlab.py
+EXIT_AUTOTUNE = False       # since Oct 20 VIGIE's self-review switches profiles (reviews.py, coach.py): it learns
+                            # from every shadowed token, ten times the trades, under stricter guards
 
 SCHEDULE = {                # used by agents.py: one entry per agent
     "vigie_every_s": 20,        # VIGIE: prices every open position, applies exits, logs the balance

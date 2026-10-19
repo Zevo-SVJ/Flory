@@ -1,6 +1,6 @@
 # tests/test_desk.py
 # offline tests: every API is faked, so this runs anywhere.  python -m unittest discover tests
-import os, sys, tempfile, threading, time, unittest
+import csv, os, sys, tempfile, threading, time, unittest
 from unittest import mock
 
 os.environ["RUG_DESK_DATA"] = tempfile.mkdtemp()
@@ -572,7 +572,9 @@ class ExitLab(Base):
         import exitlab, exits
         # +60% then a one-tick crash to -50%: no trail can react, only selling into strength helps
         self.paths_of(lambda k: 1 + 0.6 * k / 60 if k <= 60 else 0.5)
-        res = exitlab.run()
+        self.assertIsNone(exitlab.run()["switched"])            # off: VIGIE's guarded self-review decides now
+        with mock.patch.object(exitlab, "EXIT_AUTOTUNE", True):
+            res = exitlab.run()
         self.assertEqual(res["switched"], "early ladder +50% +100%")
         self.assertEqual(exits.active()["ladder"], [[50, 0.33], [100, 0.33]])
 
@@ -1325,7 +1327,8 @@ class Waiver(Base):
     def test_lifted_only_when_clear_and_soft(self):
         import shadow
         res = {"reasons": [
-            {"reason": "bundle_same_sol", "n": 25, "mean": 9.0, "half1": 6.0, "half2": 12.0},
+            {"reason": "bundle_same_sol", "n": 25, "mean": 9.0, "half1": 6.0, "half2": 12.0, "low": 2.0},
+            {"reason": "serial_dev", "n": 25, "mean": 9.0, "half1": 6.0, "half2": 12.0, "low": -4.0},   # noise
             {"reason": "copycat", "n": 25, "mean": 9.0, "half1": -3.0, "half2": 21.0},      # one half only
             {"reason": "low_score", "n": 12, "mean": 30.0, "half1": 20.0, "half2": 40.0},   # too few
             {"reason": "whale", "n": 40, "mean": 20.0, "half1": 20.0, "half2": 20.0},       # hard
@@ -1612,3 +1615,87 @@ class Learning(Base):
             self.assertFalse(check._model_override("whale", {}))
         with mock.patch.object(learn, "expected", return_value=2.0):
             self.assertFalse(check._model_override("bundle_same_sol", {}))  # not enough expected
+
+
+class Coach(Base):
+    """Agents improve themselves only through guarded, logged, reversible changes."""
+    def setUp(self):
+        super().setUp()
+        self.clean()
+        self.addCleanup(self.clean)
+
+    def clean(self):
+        import coach, shadow, pending
+        for f in (coach.JOURNAL, coach.TUNING, coach.REVIEWS, shadow.FILE, pending.X_READS):
+            if os.path.exists(f):
+                os.remove(f)
+
+    def test_the_guards(self):
+        import coach, random
+        rng = random.Random(4)
+        self.assertFalse(coach.paired([200.0])["ok"])                                    # one spectacular case
+        self.assertFalse(coach.paired([rng.gauss(0, 30) for _ in range(200)], k=10)["ok"])   # noise
+        self.assertFalse(coach.paired([-5.0] * 30 + [25.0] * 30)["ok"])                  # one half only
+        self.assertTrue(coach.paired([rng.gauss(8, 10) for _ in range(80)], k=10)["ok"])  # a real, repeated gain
+        # the bar rises with the number of variants tried
+        self.assertGreater(coach.z_for(10), coach.z_for(1))
+
+    def test_one_change_a_day_then_undone_if_it_disappoints(self):
+        import coach
+        ok = {"ok": True, "why": "test", "n": 80, "mean": 5}
+        e = coach.apply("VIGIE", "exit_profile", "no ladder", ok, 900.0)
+        self.assertEqual(coach.get("exit_profile"), "no ladder")
+        self.assertIsNone(coach.apply("VIGIE", "exit_profile", "chandelier k2", ok, 900.0))   # 24 h rule
+        self.assertIsNone(coach.apply("SCOUT", "source_rank", ["a"], {"ok": False}, 900.0))    # no evidence
+        with mock.patch.object(coach, "EVAL_S", 0):
+            out = coach.evaluate({"exit_profile": lambda entry: {"n": 40, "mean": -3.0}})
+        self.assertEqual(out[0]["status"], "rolled_back")
+        self.assertIsNone(coach.get("exit_profile"))                                   # back to the old value
+        self.assertEqual(coach.journal()[-1]["status"], "rolled_back")
+
+    def test_circuit_breaker(self):
+        import coach
+        coach.apply("ECHO", "echo_skip_sells", True, {"ok": True, "why": "t"}, 900.0)
+        self.assertEqual(coach.circuit(880.0), [])                                     # -20: within limits
+        self.assertEqual(len(coach.circuit(790.0)), 1)                                 # -110: tripped
+        self.assertIsNone(coach.get("echo_skip_sells"))
+
+    def shadows(self, n, price_fn, reason="pass"):
+        """n shadowed tokens 7 h old, each with a 6 h price path from price_fn(token, step)."""
+        import shadow, paths
+        t0 = time.time() - 7 * 3600
+        with open(shadow.FILE, "w", newline="") as f:
+            w = csv.DictWriter(f, fieldnames=shadow.FIELDS)
+            w.writeheader()
+            for i in range(n):
+                mint = f"Sh{i:03d}" + "1" * 36
+                w.writerow({"t": t0 + i, "mint": mint, "symbol": f"S{i}", "stage": "pass", "reason": reason,
+                            "price": 1.0, "liq": 80000})
+                for k in range(1, 72):
+                    paths.append(mint, {"t": t0 + i + k * 300, "price": price_fn(i, k), "liq": 80000})
+
+    def test_vigie_learns_from_shadows_and_ignores_a_lone_case(self):
+        import reviews, coach, exits, csv as _c
+        # one token pumps +60% then crashes: only that one would reward selling early. not enough
+        self.shadows(41, lambda i, k: (1 + 0.6 * k / 30 if k <= 30 else 0.5) if i == 0 else 1.0 + 0.001 * k)
+        reviews.vigie(900.0)
+        self.assertIsNone(coach.get("exit_profile"))
+        # the same shape on 60 tokens: a repeated pattern, the profile that sells into strength wins
+        self.shadows(60, lambda i, k: 1 + 0.6 * k / 30 if k <= 30 else 0.5)
+        out = reviews.vigie(900.0)
+        self.assertIsNotNone(coach.get("exit_profile"), out)
+        self.assertNotEqual(exits.active(), dict(config.EXIT))
+        import shadow
+        os.remove(shadow.FILE)
+
+    def test_echo_skips_sell_again_only_if_they_foresee_drops(self):
+        import reviews, coach, pending, shadow
+        self.shadows(90, lambda i, k: (1 - 0.6 * k / 71) if i % 2 == 0 else (1 + 0.2 * k / 71))
+        with open(pending.X_READS, "w") as f:
+            f.write("time,mint,symbol,verdict,raison\n")
+            for i in range(0, 90, 2):                        # ECHO said SKIP to exactly the ones that fell
+                f.write(f"2026-10-20 00:00,Sh{i:03d}{'1' * 36},S{i},SKIP,t\n")
+        reviews.echo(900.0)
+        self.assertTrue(coach.get("echo_skip_sells"))
+        self.assertEqual(pending.sell_on(), ("SCAM", "SKIP"))
+        os.remove(pending.X_READS); os.remove(shadow.FILE)

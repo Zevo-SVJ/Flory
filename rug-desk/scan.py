@@ -189,7 +189,11 @@ def leads() -> list[str]:
                    "feeds_and_search": n_feeds_search_grads - len(graduates), **funnel}
     ok = [m for m in out if not market_kill(live[m])]
     # best pools first, and the two lanes take turns, so momentum's big volumes never crowd out launches
-    ok.sort(key=lambda m: -(live[m].get("vol_1h") or 0))
+    # SCOUT's self-review ranks its sources by what their tokens earned (coach source_rank, guarded):
+    # the best sources first, then by volume. a source is never dropped, only looked at later
+    import coach
+    rank = {s: i for i, s in enumerate(coach.get("source_rank") or [])}
+    ok.sort(key=lambda m: (rank.get(src.get(m, "listes DexScreener"), len(rank)), -(live[m].get("vol_1h") or 0)))
     early = [m for m in ok if market.lane(live[m]) == "early"]
     mom = [m for m in ok if market.lane(live[m]) == "momentum"]
     mixed = [m for pair in zip(early, mom) for m in pair] + early[len(mom):] + mom[len(early):]

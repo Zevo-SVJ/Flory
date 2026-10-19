@@ -255,6 +255,17 @@ def handle(tok: str, message: dict):
         else:
             send(tok, chat, "Code incorrect. Le bon code est affiché dans le panneau GARDE du tableau de bord.")
         return
+    if body.startswith("/journal") and str(chat) == owner():  # what the agents changed in themselves, and why
+        import coach
+        rows = coach.journal(last=10)
+        status = {"active": "en test", "confirmed": "confirmé", "rolled_back": "annulé"}
+        send(tok, chat, "\n".join(f"{time.strftime('%d/%m %H:%M', time.localtime(e['t']))} · {e['agent']} · "
+                                    f"{e['key']} : {e['old']} → {e['new']} · {status.get(e['status'], e['status'])}"
+                                    for e in rows) or "Aucun changement : aucun agent n'a encore assez de preuves.")
+        revs = coach.reviews()
+        if revs:
+            send(tok, chat, "\n".join(f"{a} · {r.get('change')}" for a, r in revs.items() if isinstance(r, dict)))
+        return
     if body.startswith("/rapport") and str(chat) == owner():  # the decision report, any day, as of now
         import report
         send(tok, chat, report.weekly(save=False))         # a look before the day: the official one is saved

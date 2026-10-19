@@ -57,22 +57,30 @@ def note(mint: str, v: dict) -> bool:
     return True
 
 
-def replay(r: dict) -> float | None:
-    """Net % for one shadow buy at the verdict price, the active exit profile, the real costs."""
-    import exits, exitlab
+def path(r: dict):
+    """(price path with features, round-trip cost in %) for one shadow, or None if VIGIE missed it."""
+    import exits, chains
     t0 = float(r["t"])
     entry = {"t": t0, "price": float(r["price"]), "liq": float(r["liq"]), "b5": None, "s5": None, "v5": None}
-    path = [entry] + [p for p in paths.load(r["mint"], since=t0 + 1, until=t0 + HOURS * 3600)]
-    if len(path) < 10:                      # VIGIE missed it (desk stopped): no fair replay
-        return None
-    gross = exitlab.simulate(exits.features(path), EXIT)
-    if gross is None:
+    pts = [entry] + [p for p in paths.load(r["mint"], since=t0 + 1, until=t0 + HOURS * 3600)]
+    if len(pts) < 10:                       # VIGIE missed it (desk stopped): no fair replay
         return None
     impact = 100 * TICKET / (entry["liq"] / 2)
-    import chains
     c = chains.costs(r["mint"])
-    cost = 2 * (c["fee_pct"] + c.get("mev_pct", 0) + impact) / 100 + 2 * c["tx_usd"] / TICKET
-    return (gross / exitlab.TICKET_USD - cost) * 100
+    cost = 2 * (c["fee_pct"] + c.get("mev_pct", 0) + impact) + 2 * c["tx_usd"] / TICKET * 100
+    return exits.features(pts), cost
+
+
+def replay(r: dict, params: dict | None = None, p=None) -> float | None:
+    """Net % for one shadow buy at the verdict price, the exit profile in force (or `params`), real costs."""
+    import exits, exitlab
+    p = p or path(r)
+    if not p:
+        return None
+    gross = exitlab.simulate(p[0], params or exits.active())
+    if gross is None:
+        return None
+    return gross / exitlab.TICKET_USD * 100 - p[1]
 
 
 # never waived, whatever the shadow book says: each one is a way to lose the whole ticket at once
@@ -92,7 +100,8 @@ def waived() -> set:
             _waived["v"] = {d["reason"] for d in r["reasons"]
                             if d["reason"] not in HARD and not d["reason"].startswith("danger:")
                             and d["n"] >= WAIVE_MIN_N and d["mean"] >= WAIVE_MIN_MEAN
-                            and (d.get("half1") or 0) > 0 and (d.get("half2") or 0) > 0}
+                            and (d.get("half1") or 0) > 0 and (d.get("half2") or 0) > 0
+                            and (d.get("low") or -1) > 0}      # and above zero beyond its own noise
         except Exception:
             _waived["v"] = set()
         _waived["t"] = time.time()
@@ -113,8 +122,12 @@ def results() -> dict:
     for reason, x in done:                  # in kill order, so each reason's list splits into two halves
         by.setdefault(reason, []).append(x)
     mean = lambda xs: round(statistics.mean(xs), 1) if xs else None
+    def low(xs):                            # one-sided 90% lower bound of the mean
+        if len(xs) < 2:
+            return None
+        return round(statistics.mean(xs) - 1.645 * statistics.stdev(xs) / len(xs) ** 0.5, 1)
     stat = lambda xs: {"n": len(xs), "mean": mean(xs), "win": round(sum(v > 0 for v in xs) / len(xs), 2),
-                       "half1": mean(xs[:len(xs) // 2]), "half2": mean(xs[len(xs) // 2:])} if xs else None
+                       "half1": mean(xs[:len(xs) // 2]), "half2": mean(xs[len(xs) // 2:]), "low": low(xs)} if xs else None
     import edge
     st = edge.stats()
     return {"waiting": waiting, "all": stat([x for _, x in done]),

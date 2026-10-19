@@ -266,6 +266,7 @@ def state(range_key: str = "auto") -> dict:
         "stracker_today": sources.calls_today("stracker"), "stracker_cap": stracker.DAILY_CAP,
         "last_report": last_report(), "report_at": SCHEDULE["report_at"],
         "backtest": (bt := backtest_state()), "bilan": edge.bilan(bt["card"]), "tgbot": tgbot.stats(), "shadow": shadow_state(), "learn": learn_state(),
+        "reviews": __import__("coach").reviews(), "journal": __import__("coach").journal(last=20),
         "by_chain": edge.split(lambda t: __import__("chains").split(t["mint"])[0]),
     }
 

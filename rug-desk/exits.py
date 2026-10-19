@@ -18,7 +18,13 @@ PROFILE = os.path.join(DATA, "exit_profile.json")   # written by the exit lab wh
 
 
 def active() -> dict:
-    """The exit profile in force: config.py's EXIT, overridden by the lab's choice if it made one."""
+    """The exit profile in force: config.py's EXIT, overridden by VIGIE's self-review (coach.py, guarded)
+    or, before it, the lab's choice if it made one."""
+    import coach
+    name = coach.get("exit_profile")
+    if name:
+        import exitlab
+        return dict(EXIT) if name == "config" else {**EXIT, **exitlab.PROFILES.get(name, {})}
     p = dict(EXIT)
     if os.path.exists(PROFILE):
         try:

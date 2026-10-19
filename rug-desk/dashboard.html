@@ -385,6 +385,13 @@ a { color: #8fb8f0; text-decoration: none; } a:hover { text-decoration: underlin
       <p class="note">« explore » : un token qui a passé tous les contrôles anti-rug mais dont la note est sous 55, acheté petit (papier seulement). S'il fait aussi bien que « base », la note ne sert à rien.</p>
     </section>
     <section class="pane" data-agent="AUDIT" hidden><h3>Dernier rapport</h3><pre class="now" id="plumeReport" style="white-space:pre-wrap;margin:0"></pre></section>
+    <section><h3>Auto-critique : ce que j'ai fait, mes erreurs, ce que je change</h3>
+      <div id="selfReview"></div>
+      <p class="note">Un agent ne change un réglage que sur au moins 40 cas, au-delà du bruit, sur les deux moitiés des données, un changement par jour au plus, re-testé 48 h après et annulé s'il déçoit.</p>
+    </section>
+    <section class="pane" data-agent="AUDIT" hidden><h3>Journal des changements automatiques</h3>
+      <div class="scroll"><table id="journal"></table></div>
+    </section>
     <section><h3>Ses dernières actions</h3><div id="pevents"></div></section>
   </div>
 </dialog>
@@ -613,6 +620,19 @@ function drawPanel() {
   const P = $("panel");
   if (!current || !P.open || !S) return;
   const a = S.agents.find(x => x.name === current); if (!a) return;
+  const R = (S.reviews || {})[current], sr = $("selfReview"); sr.replaceChildren();
+  if (R) {
+    [["Ce que j'ai fait", R.did], ["Mes erreurs", R.mistakes], ["Ce que je change", R.change ? [R.change] : []]].forEach(([h, xs]) => {
+      if (!xs || !xs.length) return;
+      sr.append(el("div", { class: "label", style: "margin-top:8px" }, h), ...xs.map(t => el("div", { class: "now", style: "white-space:normal" }, t)));
+    });
+    sr.append(el("div", { class: "sub", style: "margin-top:6px" }, "revue du " + new Date(S.reviews.t * 1000).toLocaleString("fr-FR", { weekday: "short", hour: "2-digit", minute: "2-digit" })));
+  } else sr.append(el("div", { class: "empty" }, "Première auto-critique au prochain passage d'AUDIT (toutes les 6 h)."));
+  table("journal", [["Quand"], ["Agent"], ["Réglage"], ["Avant → après"], ["Preuve"], ["Statut"]],
+    (S.journal || []).slice().reverse().map(e => [new Date(e.t * 1000).toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }),
+      e.agent, e.key, `${JSON.stringify(e.old)} → ${JSON.stringify(e.new)}`, e.why || "",
+      el("span", { class: "pill", title: e.undone_why || "" }, { active: "en test 48 h", confirmed: "confirmé", rolled_back: "annulé" }[e.status] || e.status)]),
+    "Aucun changement pour l'instant : aucun agent n'a encore assez de preuves.");
   P.style.setProperty("--c", AGENT_COLORS[a.name]);
   $("pname").textContent = a.name; $("prole").textContent = a.role;
   const st = $("pstate"); st.className = a.status || "idle"; st.textContent = STATE_TXT[a.status] || a.status;

@@ -275,6 +275,17 @@ def auditor():
         emit("AUDIT", "info", text)
         if res["trusted"] != before or time.strftime("%H") in ("08", "21"):
             post(text)
+        import reviews, coach                  # every agent reviews itself; the coach guards every change
+        n0 = len(coach.journal())
+        bal = PAPER_BANKROLL_USD + book.realized()
+        revs = reviews.run_all(bal)
+        for e in coach.journal()[n0:]:
+            msg = f"{e['agent']} change « {e['key']} » : {e['old']} → {e['new']} · {e['why']}"
+            emit("AUDIT", "info", msg)
+            post("AUTO-AMÉLIORATION · " + msg + " · re-testé dans 48 h, annulé s'il déçoit")
+        for m in revs.get("AUDIT", {}).get("mistakes", []):
+            emit("AUDIT", "info", m)
+            post("AUTO-AMÉLIORATION · " + m)
     bt = backtest_kick()
     return (f"{s['killed']['crashed']}/{s['killed']['n']} éliminés ont chuté · labo : {lab['trades']} trade(s) rejoué(s), "
             f"profil « {lab['active']} »" + (f" · {bt}" if bt else ""))

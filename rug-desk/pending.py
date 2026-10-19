@@ -61,7 +61,13 @@ def write_queue(p: dict, done: dict):
     os.replace(tmp, X_QUEUE)
 
 
-SELL_ON = ("SCAM",)       # ECHO verdicts that close an open position. SKIP is recorded and measured only
+SELL_ON = ("SCAM",)       # ECHO verdicts that close an open position. SKIP is recorded and measured only,
+                          # unless ECHO's self-review proves its SKIPs foresee drops (coach echo_skip_sells)
+
+
+def sell_on() -> tuple:
+    import coach
+    return ("SCAM", "SKIP") if coach.get("echo_skip_sells") else SELL_ON
 
 
 def echo_silent(done: dict) -> bool:
@@ -98,7 +104,7 @@ def decide() -> list[dict]:
                 if x:
                     out.append({"kind": "info", "symbol": sym, "mint": mint,
                                 "text": f"${sym} X read after the buy: {x['verdict'].upper()} ({x.get('raison', '')[:70]})"})
-                if x and x["verdict"].upper() in SELL_ON and mint in book.load():
+                if x and x["verdict"].upper() in sell_on() and mint in book.load():
                     # only a SCAM closes the position (concrete evidence: a named rug accusation, a bundle).
                     # a SKIP did too until Oct 19 evening: ECHO said SKIP to nearly everything and BUY to none,
                     # so every buy was sold 1-12 min later and paid the round trip (8 of 8 trades, -9.3% each)
@@ -157,7 +163,7 @@ def decide() -> list[dict]:
     # any open position ECHO read as SCAM, whenever that read came: out at the pool's price of this moment
     for mint, pos in book.load().items():
         x = done.get(mint)
-        if not x or x["verdict"].upper() not in SELL_ON or mint in p:
+        if not x or x["verdict"].upper() not in sell_on() or mint in p:
             continue
         m = pool(mint)
         price = (m or {}).get("price") or 0

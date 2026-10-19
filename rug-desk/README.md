@@ -243,6 +243,24 @@ Polygon, Optimism, Berachain and Unichain (chains.py).
 - Not covered yet: the backtest (Solana graduations only), Tron, Sui, TON (other address formats and
   other contract models).
 
+## The desk learns (Oct 20)
+
+Every token GARDE judges, bought or not, is followed 6 h in shadow and replayed with the desk's exits and
+costs: ~150-250 lessons a day where trades alone give ~20.
+- learn.py: a small model on those lessons (ridge regression, outliers clipped), retrained every 6 h.
+  It decides where the soft rules did only if its picks beat the average on tokens it never saw, beyond
+  their noise. On 40 draws of pure noise it was never trusted; on a planted signal, 34 of 40.
+- reviews.py: each agent reviews itself every 6 h (dashboard panel "Auto-critique", Telegram /journal):
+  VIGIE replays every exit profile on the same tokens and switches to a better one; GARDE reports the
+  kills that cost winners and the passes that crashed (its soft rules lift themselves, its model learns);
+  SCOUT ranks its sources by what their tokens earned (never drops one); ECHO checks whether its SKIPs
+  foresee drops, and a SKIP sells again only if they clearly do.
+- coach.py, the guards: 40 cases at least; a gain above its noise with the bar raised for the number of
+  variants tried; on both halves of the data; one change per agent per day, chosen from a closed list;
+  re-tested 48 h later on new data and undone if it disappoints; every recent change undone if the
+  balance loses 10% of the bankroll. Changes live in data/tuning.json and data/journal.jsonl; config.py
+  is never touched.
+
 ## The anti-rug bot (Telegram)
 
 The part of the desk with a value shown on data is GARDE: most tokens it kills do crash. `tgbot.py` offers
