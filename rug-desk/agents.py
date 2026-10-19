@@ -51,7 +51,7 @@ def vigie():
             continue
         emit("VIGIE", "sell", e["text"], symbol=e["symbol"], mint=e["mint"], pnl=round(e["pnl"], 2),
              pct=round(e["pct"], 1), reason=e["reason"], closed=e.get("closed"))
-        if e["reason"] in ("liquidity_pulled", "pool_gone", "x_scam"):
+        if e["reason"] in ("liquidity_pulled", "pool_gone", "x_scam"):   # x_skip is a doubt, not a rug
             n = smart.learn(e["mint"], -100)       # its holders now count one rug each, at once, not in 6 h
             if n:
                 emit("VIGIE", "kill", f"${e['symbol']}: {n} holder wallets remembered as rug holders", symbol=e["symbol"])

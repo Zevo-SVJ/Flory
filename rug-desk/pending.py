@@ -92,14 +92,17 @@ def decide() -> list[dict]:
                 if x:
                     out.append({"kind": "info", "symbol": sym, "mint": mint,
                                 "text": f"${sym} X read after the buy: {x['verdict'].upper()} ({x.get('raison', '')[:70]})"})
-                if x and x["verdict"].upper() == "SCAM" and mint in book.load():
-                    # concrete scam evidence on X: out now, at the pool's price of this moment
+                if x and x["verdict"].upper() in ("SCAM", "SKIP") and mint in book.load():
+                    # Oct 19: the 11 positions ECHO read as SKIP lost $116.81 together, ECHO said BUY to none.
+                    # its SKIPs carry evidence (recycled phishing templates, fake vote portals, a rugged
+                    # name), so a SKIP now closes the position too, at the pool's price of this moment
                     m = pool(mint)
                     price = (m or {}).get("price") or 0
-                    pnl = book.sell(mint, 1.0, price, "x_scam", (m or {}).get("liq_usd"))
-                    out.append({"kind": "sell", "symbol": sym, "mint": mint, "pnl": pnl, "reason": "x_scam",
+                    why = "x_" + x["verdict"].lower()
+                    pnl = book.sell(mint, 1.0, price, why, (m or {}).get("liq_usd"))
+                    out.append({"kind": "sell", "symbol": sym, "mint": mint, "pnl": pnl, "reason": why,
                                 "pct": (price / v["price"] - 1) * 100 if price and v.get("price") else -100,
-                                "closed": True, "text": f"{sym}: sold the rest on ECHO's SCAM read, pnl ${pnl:+.2f}"})
+                                "closed": True, "text": f"{sym}: sold the rest on ECHO's {x['verdict'].upper()} read, pnl ${pnl:+.2f}"})
             continue
         if (not x and PAPER and silent and waited > ECHO_SILENT_MIN * 60
                 and (v.get("score") or 0) >= ECHO_FALLBACK_SCORE):

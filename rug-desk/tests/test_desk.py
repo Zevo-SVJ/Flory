@@ -427,8 +427,9 @@ class Gate(Base):
         with net():
             ev = self.p.decide()
         self.assertEqual(self.p.load(), {})
-        self.assertIn(MINT, book.load())              # the read is recorded, the position stays
         self.assertIn("after the buy", ev[0]["text"])
+        self.assertNotIn(MINT, book.load())           # an X SKIP closes the position (Oct 19: SKIPs lost $117)
+        self.assertTrue(any(e.get("reason") == "x_skip" for e in ev), ev)
 
     def x_read(self, verdict):
         with open(self.p.X_READS, "w") as f:
