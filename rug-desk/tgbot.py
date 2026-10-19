@@ -256,13 +256,15 @@ def loop(stop: threading.Event):
     tok = token()
     if not tok:
         return
-    st = _state()
     while not stop.is_set():
         try:
             r = requests.get(API.format(tok, "getUpdates"), timeout=65,
-                             params={"timeout": 50, "offset": st.get("offset"), "allowed_updates": '["message"]'})
+                             params={"timeout": 50, "offset": _state().get("offset"), "allowed_updates": '["message"]'})
             r.raise_for_status()
             for u in r.json().get("result") or []:
+                # read, change one key, write: the dashboard writes the pairing code into the same file, and
+                # a copy kept across the loop wiped it (Oct 19: every /lier answered "code incorrect")
+                st = _state()
                 st["offset"] = u["update_id"] + 1
                 _save(st)                      # saved before handling: a crash never answers twice
                 try:

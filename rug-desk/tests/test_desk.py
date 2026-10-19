@@ -1,6 +1,6 @@
 # tests/test_desk.py
 # offline tests: every API is faked, so this runs anywhere.  python -m unittest discover tests
-import os, sys, tempfile, time, unittest
+import os, sys, tempfile, threading, time, unittest
 from unittest import mock
 
 os.environ["RUG_DESK_DATA"] = tempfile.mkdtemp()
@@ -1342,3 +1342,26 @@ class TelegramOwner(Base):
         with open(agents.INBOX) as f:
             self.assertEqual(f.read().split(), [MINT])           # only the owner's CA reaches the desk
         os.remove(agents.INBOX); os.remove(tgbot.STATE)
+
+
+class TelegramLoopKeepsCode(Base):
+    def test_polling_does_not_wipe_the_pairing_code(self):
+        import tgbot
+        if os.path.exists(tgbot.STATE):
+            os.remove(tgbot.STATE)
+        stop = threading.Event()
+        calls = []
+        code_box = {}
+
+        def get(url, timeout=None, params=None):
+            calls.append(1)
+            if len(calls) == 1:
+                code_box["code"] = tgbot.pair_code()             # the dashboard shows a code meanwhile
+                return Resp({"result": [{"update_id": 5, "message": {}}]})
+            stop.set()
+            return Resp({"result": []})
+        with mock.patch.object(tgbot, "token", return_value="T"), mock.patch("requests.get", get):
+            tgbot.loop(stop)
+        self.assertEqual(tgbot.pair_code(), code_box["code"])
+        self.assertEqual(tgbot._state()["offset"], 6)
+        os.remove(tgbot.STATE)
