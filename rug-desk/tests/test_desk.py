@@ -488,6 +488,14 @@ class ExitLab(Base):
         self.assertEqual(res["switched"], "early ladder +50% +100%")
         self.assertEqual(exits.active()["ladder"], [[50, 0.33], [100, 0.33]])
 
+    def test_speed_test_replays_three_speeds(self):
+        import exitlab
+        # +60% in 20 min, held 2 min at the top, then -55% in one tick
+        self.paths_of(lambda k: 1 + 0.6 * min(k, 60) / 60 if k <= 66 else 0.45, n=4)
+        sp = exitlab.run()["speed"]
+        self.assertEqual([r["every_s"] for r in sp], [20, 60, 120])
+        self.assertEqual(len({r["n"] for r in sp}), 1)
+
 
 class Regime(Base):
     def test_audit_splits_passes_by_sol_trend(self):

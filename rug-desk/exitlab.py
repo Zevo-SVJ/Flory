@@ -11,6 +11,7 @@ from config import EXIT, TRADES, TICKET_USD, EXIT_AUTOTUNE
 import exits, paths
 
 MIN_TRADES = 30             # below this, the lab reports but never switches
+SPEEDS = [1, 3, 6]          # the speed test: VIGIE looking at every tick (20 s), every 3rd (60 s), every 6th (2 min)
 MIN_EDGE_USD = 5            # a candidate must beat the active profile by at least this much...
 MIN_EDGE_SHARE = 0.20       # ...and by 20% of the active profile's absolute result, on each half
 
@@ -76,10 +77,12 @@ def run() -> dict:
     current = exits.active()
     trades = trades_to_replay()
     replays = []
+    raw = []
     for t in trades:
         opened = time.mktime(time.strptime(t["opened"], "%Y-%m-%d %H:%M"))
         path = paths.load(t["mint"], since=opened - 60)
         if len(path) >= 10:
+            raw.append(path)
             replays.append((t, exits.features(path)))
     candidates = {"actif": current, **{name: {**EXIT, **over} for name, over in PROFILES.items()}}
     results = []
@@ -110,7 +113,22 @@ def run() -> dict:
         with open(exits.PROFILE) as f:
             active_name = json.load(f).get("name", "actif")
     return {"trades": len(replays), "results": [{k: v for k, v in r.items() if k != "params"} for r in results],
-            "switched": switched, "active": active_name, "min_trades": MIN_TRADES}
+            "switched": switched, "active": active_name, "min_trades": MIN_TRADES,
+            "speed": speed_test(raw, exits.active())}
+
+
+def speed_test(raw: list[list[dict]], params: dict) -> list[dict]:
+    """Does VIGIE's speed matter? The active profile replayed as if VIGIE looked every 20 s, 60 s
+    and 2 min. If 60 s barely does worse than 20 s, going faster than 20 s won't pay either."""
+    out = []
+    for k in SPEEDS:
+        pnls = [simulate(exits.features(path[::k]), params) for path in raw]
+        pnls = [p for p in pnls if p is not None]
+        step = round(sum(path[i + 1]["t"] - path[i]["t"] for path in raw for i in range(len(path) - 1))
+                     / max(1, sum(len(path) - 1 for path in raw))) * k if raw else 20 * k
+        out.append({"every_s": step, "n": len(pnls), "pnl": round(sum(pnls), 2),
+                    "win": sum(1 for p in pnls if p > 0)})
+    return out
 
 
 if __name__ == "__main__":

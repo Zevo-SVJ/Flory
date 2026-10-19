@@ -54,6 +54,9 @@ def report() -> str:
         act = next(r for r in lab["results"] if r["name"] == "actif")
         lines.append(f"exit lab on {lab['trades']} trades: best '{top['name']}' {top['pnl']:+.2f}$, "
                      f"active profile '{lab['active']}' {act['pnl']:+.2f}$")
+        if lab.get("speed"):
+            lines.append("speed test (active profile): " + ", ".join(
+                f"every {r['every_s']}s {r['pnl']:+.2f}$" for r in lab["speed"]))
     a = audit.summary()
     up, down = a["regime"]["SOL up"], a["regime"]["SOL down"]
     if up["n"] or down["n"]:

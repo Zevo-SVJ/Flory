@@ -302,6 +302,9 @@ a { color: #8fb8f0; text-decoration: none; } a:hover { text-decoration: underlin
     <h2 class="section">Labo de sortie : quand vendre ?</h2>
     <div class="scroll"><table id="lab"></table></div>
     <p class="note" id="labNote"></p>
+    <h2 class="section" style="margin-top:16px">Test de vitesse : VIGIE doit-il regarder plus souvent ?</h2>
+    <div class="stats3" id="speed"></div>
+    <p class="note" id="speedNote"></p>
   </section>
   </div>
 </main>
@@ -561,6 +564,22 @@ function drawPanels() {
   $("labNote").textContent = `Chaque profil est rejoué sur le vrai trajet de prix de chaque trade clôturé (pendant le trade et 6 h après la vente). `
     + `Le desk change de profil tout seul seulement si un autre gagne sur les deux moitiés des trades, nettement, et à partir de ${lab.min_trades || 30} trades. `
     + (lab.trades ? `Aujourd'hui : ${lab.trades} trade(s) rejoué(s).` : "");
+  const sp = lab.speed || [];
+  $("speed").replaceChildren();
+  if (lab.trades && sp.length) {
+    const base = sp[0].pnl;
+    sp.forEach(r => {
+      const c = el("div", { class: "stat" });
+      c.append(el("div", { class: "label" }, `VIGIE toutes les ${r.every_s} s`),
+               el("div", { class: "v " + sign(r.pnl) }, usd(r.pnl)),
+               el("div", { class: "sub" }, r === sp[0] ? "vitesse actuelle" : `${usd(r.pnl - base)} vs actuelle`));
+      $("speed").append(c);
+    });
+    const loss = base - sp[1].pnl, tol = Math.max(5, Math.abs(base) * 0.05);
+    $("speedNote").textContent = loss <= tol
+      ? "Regarder 3 fois moins souvent ne fait pas pire : aller plus vite que 20 s ne rapporterait rien."
+      : `Regarder 3 fois moins souvent coûte ${usd(loss)} : la vitesse compte, passer à 10 s pourrait valoir la peine.`;
+  } else $("speedNote").textContent = "Le test de vitesse démarre avec les premiers trades clôturés.";
   const xb = a.x.BUY, xs = a.x.SKIP;
   if (xb.n || xs.n) $("missed").textContent += ` · ECHO : ${xs.crashed}/${xs.n} écartés ont chuté, ${xb.crashed}/${xb.n} approuvés ont chuté.`;
   const ru = a.regime["SOL up"], rd = a.regime["SOL down"];
