@@ -148,6 +148,8 @@ def leads() -> list[str]:
     # one batched pool read for every lead: most are bonding-curve tokens with no real pool yet.
     # they are not logged, they just come back next run, so the slots go to tokens that can pass
     live.update(market.pools([m for m in out if m not in live]))
+    import mbacktest                           # every momentum pool seen, for the momentum backtest
+    mbacktest.note(live)
     # a graduate whose pool stayed under $10k two hours after graduating is dead: stop pricing it
     born = grads.load()["mints"]
     grads.forget([m for m in graduates if time.time() - born.get(m, time.time()) > 7200

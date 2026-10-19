@@ -154,6 +154,12 @@ SCHEDULE = {                # used by agents.py: one entry per agent
     "audit_after_hours": 6,
     "report_at": "21:30",       # PLUME: evening report, local time
     "morning_at": "08:00",      # PLUME: what happened overnight, local time
+    # the cumulative backtest (backtest.py --accumulate), started by AUDIT in a child process.
+    # each run: fresh pump.fun graduations replayed from the chain (Helius only, ~50 calls each) and the
+    # momentum sightings old enough to be judged (GeckoTerminal, free)
+    "backtest_every_h": 6,
+    "backtest_n": 40,           # graduations per run: ~3% of them are entries under the current rule
+    "backtest_momentum_n": 40,
 }
 
 DATA = os.environ.get("RUG_DESK_DATA") or os.path.join(HERE, "data")

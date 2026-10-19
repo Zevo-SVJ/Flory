@@ -120,6 +120,30 @@ def last_report() -> str | None:
     return text
 
 
+_card = {"t": 0.0, "card": None}
+
+
+def backtest_state() -> dict:
+    """The cumulative backtest for AUDIT's panel: the last run's scorecard (computed here, cached, until
+    a first run has written one), its history, and when the next run starts."""
+    import backtest
+    st = _json(backtest.STATE, {})
+    card = st.get("card")
+    if not card:
+        if time.time() - _card["t"] > 600:
+            try:
+                _card["card"] = backtest.scorecard()
+            except Exception:
+                _card["card"] = None
+            _card["t"] = time.time()
+        card = _card["card"]
+    nxt = st.get("started", 0) + SCHEDULE["backtest_every_h"] * 3600
+    running = bool(st.get("started")) and st.get("started", 0) > st.get("finished", 0)
+    return {"card": card, "history": backtest.history(), "running": running, "finished": st.get("finished"),
+            "next": nxt if st.get("started") else None, "early_error": st.get("early_error"),
+            "momentum_error": st.get("momentum_error"), "every_h": SCHEDULE["backtest_every_h"]}
+
+
 def state(range_key: str = "auto") -> dict:
     now = time.time()
     first = first_point()
@@ -193,7 +217,7 @@ def state(range_key: str = "auto") -> dict:
     st["ECHO"] = echo_status(waiting, xreads, now)
     agents = [{"name": n, "role": role, "detail": detail, **st.get(n, {"status": "idle", "msg": "pas encore lancé"})}
               for n, role, detail in AGENTS]
-    import facts, stracker, sources
+    import facts, stracker, sources, tgbot
     src = sources.load()
 
     hb = _json(HEARTBEAT, None)
@@ -221,6 +245,7 @@ def state(range_key: str = "auto") -> dict:
         "keys": {"helius": "helius" in facts.RPC_URL, "stracker": bool(stracker.key())},
         "stracker_today": sources.calls_today("stracker"), "stracker_cap": stracker.DAILY_CAP,
         "last_report": last_report(), "report_at": SCHEDULE["report_at"],
+        "backtest": (bt := backtest_state()), "bilan": edge.bilan(bt["card"]), "tgbot": tgbot.stats(),
     }
 
 

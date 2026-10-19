@@ -7,10 +7,12 @@
 #   GARDE  per lead           expensive and deep: the checks, the deep read, the buy (cost asymmetry
 #                              with SCOUT is why they are two). also settles ECHO's reads every 30 s
 #   ECHO   own Claude session the only job that needs a model and a browser (X)
-#   AUDIT  every 30 min       the slow loop: re-prices verdicts, learns wallets, writes the reports
+#   (GARDE also answers on Telegram, tgbot.py, read-only, when TELEGRAM_BOT_TOKEN is in .env)
+#   AUDIT  every 30 min       the slow loop: re-prices verdicts, learns wallets, writes the reports, and
+#                              every 6 h starts the cumulative backtest in a child process
 # one writer at a time on the book (book.LOCK) and on the event log (events._LOCK).
 import json, os, threading, time, traceback
-from config import SCHEDULE, PAPER, JUDGE, DATA, EQUITY, PAPER_BANKROLL_USD, TICKET_USD
+from config import SCHEDULE, PAPER, JUDGE, DATA, EQUITY, PAPER_BANKROLL_USD, TICKET_USD, FACTS
 
 MARKS = os.path.join(DATA, "marks.json")
 INBOX = os.path.join(DATA, "inbox.txt")      # CAs pasted in the dashboard, checked by GARDE
@@ -126,8 +128,11 @@ def scout():
         down.add("gt")
     elif not scan.gt_error:
         down.discard("gt")
+    born = scan.grads.load()["mints"].values()
+    young = sum(1 for t in born if time.time() - t < FACTS["min_age_min"] * 60)
     emit("SCOUT", "scan", f"{len(leads)} token(s) handed to GARDE: {scan.last_lanes['early']} launch(es), "
-                          f"{scan.last_lanes['momentum']} in momentum ({len(scan.grads.recent())} graduates watched)")
+                          f"{scan.last_lanes['momentum']} in momentum ({len(born)} graduates watched, "
+                          f"{young} still in their first {FACTS['min_age_min']} min)")
     set_agent("SCOUT", funnel=scan.last_funnel)
     for mint in leads:
         garde(mint)
@@ -225,8 +230,44 @@ def auditor():
         best = next(r for r in lab["results"] if r["name"] == lab["switched"])
         emit("AUDIT", "info", f"exit profile switched to '{lab['switched']}': "
                               f"{best['pnl']:+.2f}$ on {best['n']} replayed trades, better on both halves")
+    bt = backtest_kick()
     return (f"{s['killed']['crashed']}/{s['killed']['n']} éliminés ont chuté · labo : {lab['trades']} trade(s) rejoué(s), "
-            f"profil « {lab['active']} »")
+            f"profil « {lab['active']} »" + (f" · {bt}" if bt else ""))
+
+
+_bt = {"proc": None, "announced": 0.0}
+
+
+def backtest_kick() -> str | None:
+    """The cumulative backtest, run by AUDIT every SCHEDULE['backtest_every_h'] in a child process: a replay
+    reads the chain for minutes and must never hold up the agents. says once when a batch has finished."""
+    import subprocess, sys, backtest
+    st = {}
+    try:
+        with open(backtest.STATE) as f:
+            st = json.load(f)
+    except (OSError, ValueError):
+        pass
+    if st.get("finished", 0) > _bt["announced"] and _bt["proc"] is not None:
+        _bt["announced"] = st["finished"]
+        rules = (st.get("card") or {}).get("rules") or {}
+        parts = [f"{k} n={v['n']} {v['mean']:+.1f} % [{v['ci95'][0]:+.0f}, {v['ci95'][1]:+.0f}]" for k, v in rules.items()]
+        emit("AUDIT", "info", f"backtest : +{st.get('early_added', 0)} graduation(s), +{st.get('momentum_added', 0)} "
+                              f"momentum · " + " · ".join(parts)
+             + (f" · {st['early_error']}" if st.get("early_error") else ""))
+    if _bt["proc"] is not None and _bt["proc"].poll() is None:
+        return "backtest en cours"
+    if time.time() - st.get("started", 0) < SCHEDULE["backtest_every_h"] * 3600:
+        return None
+    here = os.path.dirname(os.path.abspath(__file__))
+    with open(os.path.join(DATA, "backtest.log"), "a") as log:
+        _bt["proc"] = subprocess.Popen([sys.executable, os.path.join(here, "backtest.py"), "--accumulate"],
+                                       cwd=here, stdout=log, stderr=subprocess.STDOUT)
+    with open(backtest.STATE + ".tmp", "w") as f:     # started now: a restart does not launch it twice
+        json.dump({**st, "started": time.time()}, f)
+    os.replace(backtest.STATE + ".tmp", backtest.STATE)
+    emit("AUDIT", "info", "backtest lancé en arrière-plan : nouvelles graduations et momentum rejoués")
+    return "backtest lancé"
 
 
 def plume():
@@ -310,6 +351,9 @@ def main():
     jobs = list(plan.items())
     stop = threading.Event()
     vigie_thread = start_vigie(stop)
+    import tgbot                            # GARDE as a product, when a bot token is in .env
+    if tgbot.start(stop):
+        emit("DESK", "info", "bot Telegram anti-rug actif : il répond à tout CA qu'on lui envoie")
     last = time.time()
     while True:
         _main_beat["t"] = time.time()

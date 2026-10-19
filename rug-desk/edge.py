@@ -10,7 +10,7 @@
 import csv, os, random, statistics, time
 from config import TRADES, TICKET_USD, PAPER_BANKROLL_USD, LOG, FACTS
 
-MIN_TRADES = 50
+MIN_TRADES = 200           # Oct 19: with ~72% swing per trade, fewer trades cannot tell +5% from 0
 MAX_DRAWDOWN_SHARE = 0.30
 MAX_TICKET_SHARE = 0.05     # never more than 5% of the bankroll on one memecoin, whatever Kelly says
 
@@ -78,6 +78,52 @@ def stats(xs: list[float] | None = None, seed: int = 7, stakes: list[float] | No
         size = max(0.0, min(MAX_TICKET_SHARE, kelly / 4)) * PAPER_BANKROLL_USD
         out.update(verdict="yes", suggested_ticket=round(size, 2),
                    why=f"avantage prouvé : entre {lo_r * 100:+.1f} % et {hi_r * 100:+.1f} % par trade (IC 95 %)")
+    return out
+
+
+# the criteria fixed BEFORE the data came in (Oct 19), so a result can't move the goalposts
+JUDGE_MIN_N = 200          # under this, no conclusion either way
+JUDGE_STOP_N = 300         # at this many trades, a mean at or below zero ends the idea of living off it
+JUDGE_EDGE_PCT = 3.0       # a mean this high, with the whole 95% interval above zero, is an edge
+
+
+def judge(n: int, mean_pct: float | None, lo_pct: float | None) -> dict:
+    """One verdict for any sample of trades (paper or backtest), on the criteria above."""
+    if not n or mean_pct is None:
+        return {"verdict": "wait", "why": "aucun trade"}
+    if lo_pct is not None and lo_pct > 0 and mean_pct >= JUDGE_EDGE_PCT and n >= JUDGE_MIN_N:
+        return {"verdict": "edge", "why": f"avantage probable : {mean_pct:+.1f} % par trade, intervalle entier au-dessus de 0"}
+    if n >= JUDGE_STOP_N and mean_pct <= 0:
+        return {"verdict": "stop", "why": f"{n} trades, moyenne {mean_pct:+.1f} % : abandonner l'idée d'en vivre"}
+    if n < JUDGE_MIN_N:
+        return {"verdict": "wait", "why": f"{n}/{JUDGE_MIN_N} trades : pas de conclusion possible"}
+    return {"verdict": "flat", "why": f"{n} trades, moyenne {mean_pct:+.1f} % : aucun avantage démontré"}
+
+
+BILAN_ON = "2026-10-26"    # the first week of paper trading, compared with the backtest
+
+
+def bilan(card: dict | None) -> dict:
+    """The Oct 26 review, computed by the desk itself: paper trades vs the backtest of the rule the desk
+    runs. the rule set on Oct 19: if both are at or below zero, stop optimizing the trading."""
+    st = stats()
+    bt = ((card or {}).get("rules") or {}).get("early: desk now (60 min + graduation)") or {}
+    paper_mean, bt_mean = st.get("mean_pct"), bt.get("mean")
+    due = time.strftime("%Y-%m-%d") >= BILAN_ON
+    out = {"due": due, "on": BILAN_ON, "paper_n": st["n"], "paper_mean": paper_mean,
+           "paper_ci": [st.get("ci_low_pct"), st.get("ci_high_pct")],
+           "bt_n": bt.get("n"), "bt_mean": bt_mean, "bt_ci": bt.get("ci95")}
+    if paper_mean is None or bt_mean is None:
+        out.update(verdict="wait", why="pas encore de trades clôturés ou pas de backtest")
+    elif paper_mean <= 0 and bt_mean <= 0:
+        out.update(verdict="stop", why="papier et backtest tous deux ≤ 0 : arrêter d'optimiser le trading, "
+                                       "garder le filtre anti-rug comme produit")
+    elif paper_mean > 0 and bt_mean > 0:
+        out.update(verdict="go_on", why="papier et backtest tous deux > 0 : continuer à accumuler jusqu'à 200 trades")
+    else:
+        out.update(verdict="mixed", why="papier et backtest se contredisent : c'est du bruit, continuer à accumuler")
+    if not due:
+        out["why"] = f"bilan officiel le {BILAN_ON} · aujourd'hui : " + out["why"]
     return out
 
 

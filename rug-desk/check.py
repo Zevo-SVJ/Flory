@@ -128,9 +128,10 @@ def check(mint: str) -> dict:
             "x_ticker": f"https://x.com/search?q=%24{sym}&f=live"}
 
 
-def deep_read(mint: str, token: dict) -> dict:
+def deep_read(mint: str, token: dict, desk: bool = True) -> dict:
     """Three outside reads, cheapest first, each one optional: a source that fails is unknown, not a kill.
-    Jupiter (free) -> who funded the top holders (RPC) -> Solana Tracker (key, 2,500 free requests)."""
+    Jupiter (free) -> who funded the top holders (RPC) -> Solana Tracker (key, 2,500 free requests).
+    desk=False (the Telegram bot): reads only, no memory written and Solana Tracker's daily cap kept for the desk."""
     logged, kill = {}, None
     # wallets that held earlier rugs and no winner: a factory reuses its wallet pool (the FOMO and Gemini
     # dump sellers had thousands of transactions each, active since Oct 10)
@@ -152,9 +153,10 @@ def deep_read(mint: str, token: dict) -> dict:
             c = None
         if c:
             logged.update(cluster_pct=c["cluster_pct"], fresh_pct=c["fresh_pct"])
-            ruggers.note_funder(mint, c["cluster_funder"])
+            if desk:
+                ruggers.note_funder(mint, c["cluster_funder"])
             kill = cluster.kill(c, DEEP, ruggers.funders())
-    if not kill:
+    if not kill and desk:
         try:
             s = stracker.fetch(mint)
         except Exception:

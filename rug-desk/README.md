@@ -55,6 +55,10 @@ Optional `.env` (copy `.env.example`, never commit it):
 | ECHO.md | the X reader's instructions. run it from a local Claude session with Claude in Chrome: `/loop 10m Lis et applique ~/Documents/rug-desk-run/rug-desk/ECHO.md` |
 | events.py | the event log and agent status the dashboard reads |
 | ruggers.py | the desk's own creator blacklist: a token that collapses (-90% at audit, or a pulled pool) blacklists its creator, and GARDE kills that wallet's next tokens |
+| backtest.py | replays pump.fun graduations from the chain; `--accumulate` adds a batch to the cumulative sample (AUDIT runs it every 6 h) |
+| mbacktest.py | the momentum lane replayed: tokens SCOUT saw at the time, GeckoTerminal 5-min candles, same costs and exits |
+| edge.py | the go-live gate (200 trades), the criteria fixed on Oct 19, the Oct 26 review, the "can it pay a living" projection |
+| tgbot.py | GARDE as a Telegram bot: any CA in, every rug signal out. reads only, never trades |
 | dashboard.py + .html | private dashboard: `python3 dashboard.py`, then http://localhost:8765 |
 | data/ | checks.csv, trades.csv, positions.json, desk.log |
 
@@ -199,6 +203,37 @@ about 5% of a $50 ticket per round trip). `BT_WINDOW=14,22` picks graduations 14
 The old entry lost on both halves: it was removed. The new one roughly breaks even and its interval
 holds zero: **no edge is proven.** With a ~72% standard deviation per trade, telling +5% from 0 takes
 about 800 trades. Run the backtest again on your Mac (Helius key) to add data; trust nothing below 200.
+
+### The backtest runs by itself
+
+Every 6 h AUDIT starts `backtest.py --accumulate` in a child process (it never holds up the agents):
+- 40 fresh pump.fun graduations replayed from the chain, appended to `data/backtest_rows.jsonl` on top of
+  the 518 of `seeds/backtest_oct19.jsonl`. Helius only: the public RPC rate-limits a replay. About 50 RPC
+  calls per graduation, ~8,000 a day: watch the credits in your Helius dashboard, lower `backtest_n` if needed.
+- the momentum lane (`mbacktest.py`): every momentum pool SCOUT sees with $100k+ liquidity is noted at the
+  time (no survivorship bias), then replayed 7 h later from GeckoTerminal's 5-min candles.
+
+AUDIT's panel shows each rule's n, mean, interval and both halves, and the history of runs: the interval
+must narrow. ~3% of graduations are entries under the current rule, so 200 trades take about 6 weeks.
+
+The criteria were fixed on Oct 19, before the data (edge.py): under 200 trades, no conclusion; 300 trades
+with a mean at or below 0 ends the idea of living off it; 200+ trades with a mean of +3% or more and the
+whole interval above 0 is an edge. **Oct 26 review** (computed by the desk, AUDIT panel): if the paper
+trades and the backtest of the current rule are both at or below 0, stop optimizing the trading.
+
+## The anti-rug bot (Telegram)
+
+The part of the desk with a value shown on data is GARDE: most tokens it kills do crash. `tgbot.py` offers
+it to anyone on Telegram: paste a CA, get every rug signal the desk knows (authorities, LP, holder farms,
+funded clusters, known factory wallets, bot volume, recycled names, Jupiter). It reads only: no book, no
+memory written, Solana Tracker's daily cap left to the desk. On a token a week old or more, cap and holder
+concentration are shown as notes, not red (exchanges and multi-pool liquidity).
+
+Setup: Telegram, @BotFather, /newbot, copy the token, then in the desk folder
+`read -rs T && echo "TELEGRAM_BOT_TOKEN=$T" >> .env && chmod 600 .env` and restart `./start.sh`.
+`TELEGRAM_DAILY_CAP` (default 200) bounds the RPC cost; `TELEGRAM_ALLOW=id1,id2` makes it private.
+GARDE's panel counts checks and distinct users over 7 days: the number that says whether it is a product
+is how many come back. `python3 tgbot.py <CA>` prints the answer without Telegram.
 
 ## Overnight
 

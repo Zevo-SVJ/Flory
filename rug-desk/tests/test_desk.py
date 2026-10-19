@@ -1055,8 +1055,9 @@ class Edge(unittest.TestCase):
         import edge, random
         rng = random.Random(3)
         self.assertEqual(edge.stats([1.0] * 10)["verdict"], "wait")
-        self.assertEqual(edge.stats([rng.gauss(0.1, 8) for _ in range(80)])["verdict"], "no")
-        good = edge.stats([rng.gauss(2.0, 5) for _ in range(80)])
+        self.assertEqual(edge.stats([rng.gauss(0.1, 8) for _ in range(80)])["verdict"], "wait")    # 80 < 200
+        self.assertEqual(edge.stats([rng.gauss(0.1, 8) for _ in range(250)])["verdict"], "no")
+        good = edge.stats([rng.gauss(2.0, 5) for _ in range(250)])
         self.assertEqual(good["verdict"], "yes")
         self.assertLessEqual(good["suggested_ticket"], 0.05 * config.PAPER_BANKROLL_USD)
 
@@ -1086,3 +1087,133 @@ class Narratives(Base):
             scan.searched(["TICK"])
         self.assertEqual(seen[:3], ["gork", "riot", "tick"])
         os.remove(scan.NARRATIVES)
+
+
+class MomentumBacktest(Base):
+    """The momentum lane replayed from 5-min candles, on tokens SCOUT saw at the time."""
+    T0 = 1_000_200
+
+    def candles(self, rise=True):
+        cs, price = [], 1.0
+        for k in range(-300, 85):                       # 25 h before the sighting, 7 h after
+            t = self.T0 + k * 300
+            vol = 1500.0
+            if rise and k >= -12:                       # the move: +0.4% a candle on doubled volume
+                price *= 1.004 if k < 30 else 0.99
+                vol = 3000.0
+            cs.append((t, price, price, price, price, vol))
+        return cs
+
+    def sight(self):
+        return {"mint": MINT, "pair": PAIR, "t": self.T0, "liq": 500000, "mcap": None, "avg_trade": 80, "n1h": 300}
+
+    def test_a_move_on_rising_volume_is_entered_and_costed(self):
+        import mbacktest
+        r = mbacktest.replay(self.sight(), self.candles())
+        self.assertTrue(r.get("entered"), r)
+        self.assertLessEqual(r["wait_min"], 60)
+        self.assertGreater(r["peak_pct"], 0)
+
+    def test_a_flat_token_is_never_entered(self):
+        import mbacktest
+        self.assertEqual(mbacktest.replay(self.sight(), self.candles(rise=False))["skip"], "no_signal")
+
+    def test_scout_notes_a_momentum_pool_once_per_6h(self):
+        import mbacktest
+        if os.path.exists(mbacktest.SEEN):
+            os.remove(mbacktest.SEEN)
+        mbacktest._last_seen.clear()
+        m = {"pair": PAIR, "symbol": "OLD", "liq_usd": 200000, "age_min": 10 * 24 * 60, "mcap": 1e6}
+        young = {**m, "age_min": 90}
+        mbacktest.note({MINT: m, "Young": young})
+        mbacktest.note({MINT: m})
+        self.assertEqual(mbacktest.n_sightings(), 1)
+        os.remove(mbacktest.SEEN)
+        mbacktest._last_seen.clear()
+
+
+class CumulativeBacktest(Base):
+    def test_seed_and_new_rows_merge_by_mint_and_score(self):
+        import backtest, json as _j
+        seed = backtest.rows_all()
+        self.assertGreaterEqual(len(seed), 500)
+        with open(backtest.ROWS, "w") as f:
+            f.write(_j.dumps({**seed[0], "skip": "replayed again"}) + "\n")
+        self.assertEqual(len(backtest.rows_all()), len(seed))
+        card = backtest.scorecard()
+        self.assertIn("early: desk now (60 min + graduation)", card["rules"])
+        self.assertEqual(card["rules"]["early: desk now (60 min + graduation)"]["verdict"], "wait")
+        os.remove(backtest.ROWS)
+
+    def test_audit_starts_one_batch_every_6h(self):
+        import agents, backtest
+        if os.path.exists(backtest.STATE):
+            os.remove(backtest.STATE)
+        started = []
+
+        class Proc:
+            def __init__(self, *a, **k):
+                started.append(a)
+
+            def poll(self):
+                return 0
+        agents._bt["proc"] = None
+        with mock.patch("subprocess.Popen", Proc):
+            agents.backtest_kick()
+            agents.backtest_kick()
+        self.assertEqual(len(started), 1)
+        os.remove(backtest.STATE)
+        agents._bt["proc"] = None
+
+
+class Judge(Base):
+    def test_criteria_fixed_on_oct_19(self):
+        import edge
+        self.assertEqual(edge.judge(18, 2.9, -21)["verdict"], "wait")
+        self.assertEqual(edge.judge(300, -0.5, -9)["verdict"], "stop")
+        self.assertEqual(edge.judge(250, 1.0, -4)["verdict"], "flat")
+        self.assertEqual(edge.judge(250, 4.0, 0.5)["verdict"], "edge")
+
+    def test_bilan_stops_when_paper_and_backtest_are_both_at_or_below_zero(self):
+        import edge
+        card = {"rules": {"early: desk now (60 min + graduation)": {"n": 40, "mean": -3.0, "ci95": [-20, 10]}}}
+        with mock.patch.object(edge, "stats", return_value={"n": 12, "mean_pct": -5.0}):
+            self.assertEqual(edge.bilan(card)["verdict"], "stop")
+        with mock.patch.object(edge, "stats", return_value={"n": 12, "mean_pct": 4.0}):
+            self.assertEqual(edge.bilan(card)["verdict"], "mixed")
+
+
+class TelegramBot(Base):
+    """GARDE as a product: reads only, answers any CA, never touches the book."""
+    def test_answers_a_ca_and_logs_it_without_trading(self):
+        import tgbot
+        sent = []
+        r = {"symbol": "RUG", "flags": ["holder_farm", "no_holders"], "context": {"liq": 30000, "age_min": 90}}
+        with mock.patch.object(tgbot, "inspect", return_value=r), \
+             mock.patch.object(tgbot, "send", lambda tok, chat, msg: sent.append(msg)), \
+             mock.patch.object(tgbot.env, "get", lambda k: None):
+            tgbot.handle("T", {"chat": {"id": 42}, "text": f"regarde {MINT} stp"})
+            tgbot.handle("T", {"chat": {"id": 42}, "text": "/start"})
+        self.assertIn("RISQUE ÉLEVÉ", sent[0])
+        self.assertIn("ferme de wallets", sent[0])
+        self.assertIn("pas un conseil financier", sent[1])
+        self.assertEqual(tgbot.stats()["today"], 1)
+        self.assertEqual(book.load(), {})
+
+    def test_an_established_token_is_not_red_for_its_cap_alone(self):
+        import tgbot
+        r = {"symbol": "BONK", "flags": [], "context": {"age_min": 1000 * 1440, "notes": ["fake_cap"]}}
+        self.assertEqual(tgbot.verdict(r), "green")
+        self.assertIn("exchange", tgbot.text(MINT, {**r, "context": {**r["context"], "notes": ["whale"]}}))
+
+    def test_rate_limit_per_chat(self):
+        import tgbot
+        sent = []
+        tgbot._recent.clear()
+        r = {"symbol": "X", "flags": [], "context": {}}
+        with mock.patch.object(tgbot, "inspect", return_value=r), \
+             mock.patch.object(tgbot, "send", lambda tok, chat, msg: sent.append(msg)), \
+             mock.patch.object(tgbot.env, "get", lambda k: None):
+            for _ in range(tgbot.PER_CHAT_HOUR + 1):
+                tgbot.handle("T", {"chat": {"id": 7}, "text": MINT})
+        self.assertIn("Limite", sent[-1])

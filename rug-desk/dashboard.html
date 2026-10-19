@@ -338,6 +338,7 @@ a { color: #8fb8f0; text-decoration: none; } a:hover { text-decoration: underlin
     </section>
     <section class="pane" data-agent="GARDE" hidden><h3>Sources</h3><div class="srcs" id="gardeSources"></div></section>
     <section class="pane" data-agent="GARDE" hidden><h3>Pourquoi les tokens sont éliminés</h3><div class="bars" id="kills"></div></section>
+    <section class="pane" data-agent="GARDE" hidden><h3>Bot Telegram anti-rug</h3><p class="note" id="tgNote"></p></section>
     <section class="pane" data-agent="ECHO" hidden><h3>La lecture X aide-t-elle ?</h3>
       <div class="stats3" id="groups"></div>
       <div class="scroll"><table id="experiment"></table></div>
@@ -355,6 +356,14 @@ a { color: #8fb8f0; text-decoration: none; } a:hover { text-decoration: underlin
     </section>
     <section class="pane" data-agent="AUDIT" hidden><h3>Peut-on en vivre ?</h3>
       <div class="stats3" id="livingStats"></div><p class="note" id="livingNote"></p>
+    </section>
+    <section class="pane" data-agent="AUDIT" hidden><h3>Bilan du 26 octobre : papier contre backtest</h3>
+      <div class="stats3" id="bilanStats"></div><p class="note" id="bilanNote"></p>
+    </section>
+    <section class="pane" data-agent="AUDIT" hidden><h3>Backtest cumulatif</h3>
+      <div class="scroll"><table id="btRules"></table></div>
+      <div class="scroll"><table id="btHistory"></table></div>
+      <p class="note" id="btNote"></p>
     </section>
     <section class="pane" data-agent="AUDIT" hidden><h3>Le filtre avait-il raison ?</h3>
       <div class="stats3" id="auditStats"></div><p class="note" id="missed"></p>
@@ -575,7 +584,7 @@ const DOES = {
           "Toutes les 2 h, relève les tendances de X : SCOUT cherche ces mots en premier."],
   AUDIT: ["Re-prix chaque verdict 6 h après : le filtre a-t-il tué des rugs ou des gagnants ?",
           "Apprend les wallets gagnants et ceux des rugs, met les devs qui rug sur liste noire.",
-          "Décide si le desk est prêt pour l'argent réel : 50 trades et un gain moyen positif avec 95 % de confiance.",
+          "Décide si le desk est prêt pour l'argent réel : 200 trades et un gain moyen positif avec 95 % de confiance. Rejoue toutes les 6 h de nouvelles graduations et les tokens momentum (backtest cumulatif).",
           "Écrit le rapport du soir et le brief du matin à partir des fichiers du desk, rien de mémoire."],
 };
 const STATE_TXT = { work: "en action", idle: "en attente", error: "erreur" };
@@ -740,7 +749,7 @@ function drawPanels() {
     : "AUDIT re-prix chaque verdict 6 h après. Un bon filtre tue surtout des tokens qui chutent.";
   const es = $("edgeStats"); es.replaceChildren();
   const E = S.edge || {};
-  [["Trades clôturés", `${E.n || 0} / ${E.min_trades || 50}`, "il en faut 50 pour conclure"],
+  [["Trades clôturés", `${E.n || 0} / ${E.min_trades || 200}`, `il en faut ${E.min_trades || 200} pour conclure`],
    ["Rendement moyen par trade", E.mean_pct == null ? "–" : pct(E.mean_pct), E.ci_low_pct == null ? "" : `IC 95 % : ${pct(E.ci_low_pct)} à ${pct(E.ci_high_pct)}`],
    ["Trades gagnants", E.win_rate == null ? "–" : Math.round(E.win_rate * 100) + "%", E.profit_factor ? `profit factor ${E.profit_factor}` : ""],
    ["Pire drawdown", E.max_drawdown == null ? "–" : plain(E.max_drawdown), "limite : 30 % de la banque"]].forEach(([l, v, sub]) => {
@@ -758,6 +767,36 @@ function drawPanels() {
   $("livingNote").textContent = (L.why || "") + ". Revenu = rendement par trade × mise max que le marché accepte × trades par jour × 30, coûts réels inclus (frais, MEV, priorité). Aucune banque ne relève ce plafond : la profondeur des pools le fixe.";
   $("edgeNote").textContent = (E.why || "") + (E.suggested_ticket ? ` Ticket suggéré pour commencer : ${plain(E.suggested_ticket)} (un quart du Kelly, plafonné à 5 % de la banque et à 1 % du pool).` : "")
     + (S.smart ? ` · ${S.smart} wallet(s) « gagnants » appris.` : "");
+  const T = S.tgbot || {};
+  $("tgNote").textContent = T.on
+    ? `Actif · ${T.today} lecture(s) aujourd'hui · ${T.checks_7d} sur 7 jours · ${T.users_7d} personne(s) différente(s). Il lit, il ne trade jamais. Le chiffre qui compte pour en faire un produit : combien reviennent.`
+    : "Éteint. Crée un bot avec @BotFather sur Telegram, puis dans le dossier du desk : read -rs T && echo \"TELEGRAM_BOT_TOKEN=$T\" >> .env && chmod 600 .env, et relance ./start.sh.";
+  const B = S.bilan || {}, bs = $("bilanStats"); bs.replaceChildren();
+  const ci = (c) => c && c[0] != null ? `IC 95 % : ${pct(c[0], 0)} à ${pct(c[1], 0)}` : "";
+  [["Papier : rendement par trade", B.paper_mean == null ? "–" : pct(B.paper_mean), [`${B.paper_n || 0} trades`, ci(B.paper_ci)].filter(Boolean).join(" · ")],
+   ["Backtest : règle actuelle", B.bt_mean == null ? "–" : pct(B.bt_mean), [`${B.bt_n || 0} trades`, ci(B.bt_ci)].filter(Boolean).join(" · ")],
+   ["Décision", { stop: "STOP", go_on: "continuer", mixed: "bruit", wait: "attendre" }[B.verdict] || "–", B.due ? "bilan dû" : "le " + (B.on || "")]
+  ].forEach(([l, v, sub]) => { const c = el("div", { class: "stat" }); c.append(el("div", { class: "label" }, l), el("div", { class: "v" }, v), el("div", { class: "sub" }, sub)); bs.append(c); });
+  $("bilanNote").textContent = (B.why || "") + ". Règle fixée le 19 octobre : si le papier et le backtest sont tous deux ≤ 0, on arrête d'optimiser le trading.";
+  const BT = S.backtest || {}, card = BT.card || { rules: {} };
+  const vtxt = { wait: "trop tôt", flat: "aucun avantage", stop: "abandonner", edge: "avantage probable" };
+  table("btRules", [["Règle"], ["Trades", 1], ["Moyenne", 1], ["IC 95 %", 1], ["1re / 2e moitié", 1], ["Verdict"]],
+    Object.entries(card.rules || {}).map(([k, v]) => [k, String(v.n), span(sign(v.mean), pct(v.mean)),
+      `${pct(v.ci95[0], 0)} à ${pct(v.ci95[1], 0)}`, `${v.half1 == null ? "–" : pct(v.half1, 0)} / ${v.half2 == null ? "–" : pct(v.half2, 0)}`,
+      el("span", { class: "pill", title: v.why || "" }, vtxt[v.verdict] || v.verdict || "–")]),
+    "Pas encore de backtest : le premier part une minute après le démarrage du desk.");
+  const hist = (BT.history || []).slice(-8).reverse();
+  table("btHistory", [["Run"], ["Graduations", 1], ["Règle actuelle", 1], ["Largeur de l'IC", 1], ["Momentum", 1]],
+    hist.map(h => { const r = h.rules["early: desk now (60 min + graduation)"], m = h.rules["momentum: desk rule"];
+      return [new Date(h.t * 1000).toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }),
+        String(h.graduates), r ? `n=${r.n} · ${pct(r.mean)}` : "–", r ? `${(r.ci95[1] - r.ci95[0]).toFixed(0)} pts` : "–",
+        m ? `n=${m.n} · ${pct(m.mean)}` : "–"]; }),
+    "L'historique se remplit à chaque run : l'intervalle doit se resserrer.");
+  const when = (t) => t ? new Date(t * 1000).toLocaleString("fr-FR", { weekday: "short", hour: "2-digit", minute: "2-digit" }) : "–";
+  $("btNote").textContent = (BT.running ? "Run en cours. " : `Dernier run : ${when(BT.finished)} · prochain : ${when(BT.next)}. `)
+    + `Toutes les ${BT.every_h || 6} h, AUDIT rejoue de nouvelles graduations pump.fun (chaîne, Helius) et les tokens momentum vus par SCOUT (${card.sightings || 0} vus), coûts réels inclus. `
+    + "Il faut 200 trades par règle pour conclure ; à 300 trades, une moyenne ≤ 0 met fin à l'idée d'en vivre."
+    + (BT.early_error ? " · " + BT.early_error : "") + (BT.momentum_error ? " · momentum : " + BT.momentum_error : "");
   const bd = S.breakdown || { hour: [], age: [] };
   [["byHour", "Heure d'achat", bd.hour], ["byAge", "Âge du token", bd.age]].forEach(([id, head, rows]) =>
     table(id, [[head], ["Trades", 1], ["Gagnants", 1], ["PnL", 1]],
@@ -803,7 +842,7 @@ function drawTop() {
   $("liveText").textContent = S.alive ? "LIVE" : "DESK ARRÊTÉ";
   $("modeLabel").textContent = (S.paper ? "TRADING MODE · PAPIER" : "TRADING MODE · RÉEL") + (S.marks_age > 90 && S.open.length ? " · prix en retard" : "");
   $("tasks").textContent = `${S.tasks.toLocaleString("fr-FR")} TÂCHES`;
-  const e = S.edge || { verdict: "wait", n: 0, min_trades: 50 };
+  const e = S.edge || { verdict: "wait", n: 0, min_trades: 200 };
   const ready = $("ready");
   ready.className = "live " + (e.verdict === "yes" ? "on" : e.verdict === "no" ? "off" : "");
   ready.style.borderColor = e.verdict === "wait" ? "" : (e.verdict === "yes" ? "rgba(63,211,155,.5)" : "rgba(239,111,111,.5)");
