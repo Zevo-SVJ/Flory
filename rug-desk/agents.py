@@ -176,6 +176,8 @@ def garde(mint: str):
              symbol=sym, mint=mint, reason=reason, stage=v["stage"])
     else:
         flags = v.get("flags") or ""
+        import shadow
+        shadow.note(mint, v)                        # every judged token is a lesson for learn.py, bought or not
         emit("GARDE", "pass", f"${sym} passed every check, score {v.get('score')}" + (f" ({flags})" if flags else ""),
              symbol=sym, mint=mint, url=v.get("url"), x_ca=v.get("x_ca"), score=v.get("score"))
         action = v.get("action", "")
@@ -262,6 +264,17 @@ def auditor():
                                f"{d.get('mean', 0):+.1f} % par trade sur {d.get('n', 0)} trades fantômes")
              if reason in now_waived else f"GARDE applique de nouveau « {reason} »")
     _lifted.clear(); _lifted.update(now_waived)
+    import learn                          # the daily lesson: every judged token, replayed, teaches the model
+    if learn.due():
+        before = learn.load().get("trusted")
+        res = learn.train()
+        learn._cache["t"] = 0
+        lessons = " · ".join(learn.explain(l) for l in res.get("lessons", [])[:4])
+        text = (f"apprentissage : {res['n']} leçons · modèle {'FIABLE, il décide à la place des règles souples' if res['trusted'] else 'pas encore fiable, les règles décident'}"
+                f" · {res.get('why', '')}" + (f" · ce qu'il a appris : {lessons}" if lessons else ""))
+        emit("AUDIT", "info", text)
+        if res["trusted"] != before or time.strftime("%H") in ("08", "21"):
+            post(text)
     bt = backtest_kick()
     return (f"{s['killed']['crashed']}/{s['killed']['n']} éliminés ont chuté · labo : {lab['trades']} trade(s) rejoué(s), "
             f"profil « {lab['active']} »" + (f" · {bt}" if bt else ""))

@@ -1419,7 +1419,7 @@ class ChiefOfStaff(Base):
              mock.patch.object(tgbot.env, "get", lambda k: None):
             tgbot.handle("T", {"chat": {"id": 42}, "text": "/etat"})
             tgbot.handle("T", {"chat": {"id": 7}, "text": "/etat"})
-        self.assertLessEqual(len(sent[0][1].splitlines()), 5)
+        self.assertLessEqual(len(sent[0][1].splitlines()), 6)
         self.assertIn("SCOUT", sent[0][1])
         self.assertNotIn("SCOUT", sent[1][1])                     # a stranger gets the help text
 
@@ -1552,3 +1552,63 @@ class DecisionReport(Base):
         self.assertTrue(any("DÉCISION : NON" in t for t in sent))      # no trades: the rule says no
         for f in glob.glob(os.path.join(config.DATA, "rapport_decision_*.txt")):
             os.remove(f)
+
+
+class Learning(Base):
+    """learn.py: every judged token is a lesson; the model decides only if it beats chance on unseen data."""
+    def synthetic(self, n, signal=True, seed=1):
+        import random
+        rng = random.Random(seed)
+        data = []
+        for i in range(n):
+            bot = rng.random() < 0.5
+            sol = rng.uniform(-5, 5)
+            row = {"score": rng.randint(30, 90), "liq_usd": rng.uniform(15e3, 2e5), "age_min": rng.uniform(60, 3000),
+                   "flags": "bot_volume" if bot else "", "sol_1h": sol, "chain": "solana", "lane": "early"}
+            y = rng.gauss(0, 30) + ((-40 if bot else 10) + 4 * sol if signal else 0)
+            data.append({"x": __import__("learn").features(row), "y": max(-100, min(200, y)), "t": i})
+        return data
+
+    def run_train(self, data):
+        import learn
+        with mock.patch.object(learn, "dataset", return_value=data):
+            return learn.train()
+
+    def test_a_real_signal_is_learned_and_trusted(self):
+        import learn
+        res = self.run_train(self.synthetic(300))
+        self.assertTrue(res["trusted"], res)
+        lessons = {l["feature"]: l["effect"] for l in res["lessons"]}
+        self.assertLess(lessons["flag:bot_volume"], -20)                  # it found the planted -50 gap
+        learn._cache["t"] = 0
+        good = {"flags": "", "sol_1h": 4, "chain": "solana", "lane": "early", "score": 60}
+        bad = {"flags": "bot_volume", "sol_1h": -4, "chain": "solana", "lane": "early", "score": 60}
+        self.assertGreater(learn.expected(good), learn.expected(bad))
+        os.remove(learn.MODEL); learn._cache["t"] = 0
+
+    def test_noise_is_not_trusted(self):
+        import learn
+        # luck must not pass for skill: 15 draws of pure noise, none trusted
+        self.assertEqual(sum(bool(self.run_train(self.synthetic(300, signal=False, seed=s))["trusted"])
+                             for s in range(15)), 0)
+        res = self.run_train(self.synthetic(300, signal=False))
+        self.assertFalse(res["trusted"], res)
+        learn._cache["t"] = 0
+        self.assertIsNone(learn.expected({"flags": ""}))                  # untrusted: the rules decide
+        os.remove(learn.MODEL); learn._cache["t"] = 0
+
+    def test_too_few_lessons_is_not_trusted(self):
+        res = self.run_train(self.synthetic(50))
+        self.assertFalse(res["trusted"])
+        self.assertIn("il en faut", res["why"])
+        os.remove(__import__("learn").MODEL); __import__("learn")._cache["t"] = 0
+
+    def test_the_model_overrides_soft_kills_only(self):
+        import learn
+        with mock.patch.object(learn, "expected", return_value=12.0):
+            self.assertTrue(check._model_override("bundle_same_sol", {}))
+            self.assertFalse(check._model_override("mint_open", {}))       # hard: never
+            self.assertFalse(check._model_override("danger:honeypot", {}))
+            self.assertFalse(check._model_override("whale", {}))
+        with mock.patch.object(learn, "expected", return_value=2.0):
+            self.assertFalse(check._model_override("bundle_same_sol", {}))  # not enough expected

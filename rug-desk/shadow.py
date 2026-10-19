@@ -12,7 +12,7 @@ FILE = os.path.join(DATA, "shadow.csv")
 FIELDS = ["t", "mint", "symbol", "stage", "reason", "price", "liq"]
 HOURS = 6
 TICKET = 40.0
-STAGES = ("pool", "facts", "deep")          # "limits" (book full, already open) is no verdict on the token
+STAGES = ("pool", "facts", "deep", "pass")          # "limits" (book full, already open) is no verdict on the token
 # at the pool stage only GARDE's own kills: a thin or fresh pool pasted in the dashboard is no verdict either
 POOL_KILLS = ("below_graduation", "copycat", "serial_farm", "stale_data")
 
@@ -30,8 +30,13 @@ def note(mint: str, v: dict) -> bool:
     Returns True if the token is now followed."""
     reason = v.get("reason") or ""
     if v.get("verdict") in ("PASS", "BUY") and str(v.get("action", "")).startswith("not bought"):
-        v = {**v, "verdict": "SKIP", "stage": "score", "reason": "low_score"}   # passed every check, note too low
-        reason = "low_score"
+        reason = "model_veto" if "model" in v["action"] else "low_score"      # passed every check, not bought
+        v = {**v, "verdict": "SKIP", "stage": "score", "reason": reason}
+    elif v.get("verdict") in ("PASS", "BUY"):
+        # a pass is followed the same way, bought or not: learn.py gets one label per token GARDE judged,
+        # replayed from the verdict price with the same exits and costs whatever happened to the position
+        v = {**v, "verdict": "SKIP", "stage": "pass", "reason": "pass"}
+        reason = "pass"
     elif v.get("verdict") != "SKIP" or v.get("stage") not in STAGES or " failed" in reason:
         return False
     if v["stage"] == "pool" and reason not in POOL_KILLS:
@@ -71,7 +76,7 @@ def replay(r: dict) -> float | None:
 
 
 # never waived, whatever the shadow book says: each one is a way to lose the whole ticket at once
-HARD = {"dev_rugged_before", "mint_open", "freeze_open", "lp_unlocked", "nobody_can_sell", "holder_farm",
+HARD = {"pass", "model_veto", "dev_rugged_before", "mint_open", "freeze_open", "lp_unlocked", "nobody_can_sell", "holder_farm",
         "factory_wallets", "rug_funder", "st_rugged", "stale_data", "whale", "no_holders"}
 WAIVE_MIN_N = 20            # shadow trades replayed for that reason
 WAIVE_MIN_MEAN = 5.0        # net % per trade, after costs, and positive on both halves

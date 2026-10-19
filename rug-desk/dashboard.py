@@ -124,6 +124,13 @@ _card = {"t": 0.0, "card": None}
 _shadow = {"t": 0.0, "v": None}
 
 
+def learn_state() -> dict:
+    import learn
+    m = learn.load()
+    return {k: m.get(k) for k in ("t", "n", "trusted", "why", "test_n", "test_avg", "picks", "pick_avg")} | \
+        {"lessons": [learn.explain(l) for l in m.get("lessons", [])], "min": learn.MIN_TRAIN + learn.MIN_TEST}
+
+
 def shadow_state() -> dict | None:
     """GARDE's kills bought in shadow, replayed: cached 2 min (each replay reads a price path)."""
     if time.time() - _shadow["t"] > 120:
@@ -258,7 +265,7 @@ def state(range_key: str = "auto") -> dict:
         "keys": {"helius": "helius" in facts.RPC_URL, "stracker": bool(stracker.key())},
         "stracker_today": sources.calls_today("stracker"), "stracker_cap": stracker.DAILY_CAP,
         "last_report": last_report(), "report_at": SCHEDULE["report_at"],
-        "backtest": (bt := backtest_state()), "bilan": edge.bilan(bt["card"]), "tgbot": tgbot.stats(), "shadow": shadow_state(),
+        "backtest": (bt := backtest_state()), "bilan": edge.bilan(bt["card"]), "tgbot": tgbot.stats(), "shadow": shadow_state(), "learn": learn_state(),
         "by_chain": edge.split(lambda t: __import__("chains").split(t["mint"])[0]),
     }
 

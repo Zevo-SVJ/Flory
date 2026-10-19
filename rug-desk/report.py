@@ -169,6 +169,10 @@ def status(hours: float = 1) -> str:
                                                 if sh.get("all") else " · premiers résultats 6 h après")
         + (f" · règles levées : {', '.join(lifted)}" if lifted else ""),
     ]
+    import learn
+    L = learn.load()
+    if L:
+        lines.append(f"Apprentissage : {L.get('n', 0)} leçons · modèle {'fiable' if L.get('trusted') else 'pas encore fiable'}")
     try:
         import backtest
         r = (backtest.scorecard().get("rules") or {}).get("early: desk now (60 min + graduation)")
@@ -176,7 +180,7 @@ def status(hours: float = 1) -> str:
             lines.append(f"Backtest règle actuelle : {r['mean']:+.1f} %/trade sur {r['n']} trades · {r['why']}")
     except Exception:
         pass
-    return "\n".join(lines[:5])
+    return "\n".join(lines[:6])
 
 
 def weekly(save: bool = True) -> str:

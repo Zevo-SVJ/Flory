@@ -360,6 +360,10 @@ a { color: #8fb8f0; text-decoration: none; } a:hover { text-decoration: underlin
     <section class="pane" data-agent="AUDIT" hidden><h3>Peut-on en vivre ?</h3>
       <div class="stats3" id="livingStats"></div><p class="note" id="livingNote"></p>
     </section>
+    <section class="pane" data-agent="AUDIT" hidden><h3>Ce que le desk apprend</h3>
+      <div class="stats3" id="learnStats"></div><ul class="note" id="learnLessons" style="margin:6px 0 0 18px;padding:0"></ul>
+      <p class="note" id="learnNote"></p>
+    </section>
     <section class="pane" data-agent="AUDIT" hidden><h3>Bilan du 26 octobre : papier contre backtest</h3>
       <div class="stats3" id="bilanStats"></div><p class="note" id="bilanNote"></p>
     </section>
@@ -795,6 +799,15 @@ function drawPanels() {
       + (T.paired ? "Lié à ton Telegram : tu reçois les alertes du desk, tes CA passent par GARDE, et /etat te donne en 5 lignes ce que le desk a fait dans l'heure (/etat 6 pour 6 h)."
                   : `Pour recevoir les alertes du desk sur ton téléphone, envoie au bot : /lier ${T.code}`)
     : "Éteint. Crée un bot avec @BotFather sur Telegram, puis dans le dossier du desk : read -rs T && echo \"TELEGRAM_BOT_TOKEN=$T\" >> .env && chmod 600 .env, et relance ./start.sh.";
+  const LN = S.learn || {}, lst = $("learnStats"); lst.replaceChildren();
+  [["Leçons", `${LN.n || 0} / ${LN.min || 110}`, "tokens jugés puis suivis 6 h"],
+   ["Modèle", LN.trusted ? "fiable" : "en apprentissage", LN.trusted ? "il décide à la place des règles souples" : "les règles décident"],
+   ["Ses choix sur des tokens jamais vus", LN.pick_avg == null ? "–" : pct(LN.pick_avg), LN.test_avg == null ? "" : `moyenne de tous : ${pct(LN.test_avg)}`]
+  ].forEach(([l, v, sub]) => { const c = el("div", { class: "stat" }); c.append(el("div", { class: "label" }, l), el("div", { class: "v" }, v), el("div", { class: "sub" }, sub)); lst.append(c); });
+  $("learnLessons").replaceChildren(...(LN.lessons || []).map(t => el("li", {}, t)));
+  $("learnNote").textContent = (LN.why || "Le premier entraînement a lieu au prochain passage d'AUDIT.")
+    + ". Chaque token jugé par GARDE, acheté ou non, est suivi 6 h et rejoué avec les vraies sorties et les vrais coûts : c'est une leçon. "
+    + "Le modèle ne décide que s'il bat la moyenne sur des tokens qu'il n'a jamais vus. Les règles dures (mint, freeze, honeypot, LP retirable, whale) ne bougent jamais.";
   const B = S.bilan || {}, bs = $("bilanStats"); bs.replaceChildren();
   const ci = (c) => c && c[0] != null ? `IC 95 % : ${pct(c[0], 0)} à ${pct(c[1], 0)}` : "";
   [["Papier : rendement par trade", B.paper_mean == null ? "–" : pct(B.paper_mean), [`${B.paper_n || 0} trades`, ci(B.paper_ci)].filter(Boolean).join(" · ")],

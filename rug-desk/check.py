@@ -18,7 +18,10 @@ import book
 FIELDS = ["time", "mint", "symbol", "stage", "verdict", "confidence", "reason", "price", "liq_usd",
           "score", "flags", "sol_1h", "sol_24h", "age_min", "dev", "ticket", "tier",
           "organic", "organic_vol", "dev_mints", "cluster_pct", "fresh_pct", "bundlers_pct", "insiders_pct",
-          "snipers_pct", "factory_wallets", "lane"]
+          "snipers_pct", "factory_wallets", "lane",
+          # what learn.py learns from: the token as GARDE saw it at the verdict
+          "chain", "vol_liq", "avg_trade", "chg_1h", "chg_5m", "buy_ratio", "mcap_liq", "socials",
+          "top10", "max_wallet", "holders", "expected", "override"]
 
 
 def _migrate():
@@ -65,6 +68,29 @@ def judge(token: dict, m: dict) -> dict:
     return {**ans, "stage": "judge", "verdict": verdict, "reason": ans.get("why")}
 
 
+def chains_split(mint: str) -> str:
+    import chains
+    return chains.split(mint)[0]
+
+
+def _expected(seen: dict, reason: str) -> float | None:
+    """learn.py's predicted net % per trade for this token, None until the model is trusted."""
+    import learn
+    try:
+        return learn.expected({**seen, **(market.sol_regime() or {}), "reason": reason})
+    except Exception:
+        return None
+
+
+def _model_override(reason: str, seen: dict) -> bool:
+    """A soft kill the trusted model expects to be wrong. hard kills never reach the model."""
+    import learn
+    if reason not in learn.SOFT:
+        return False
+    exp = _expected(seen, reason)
+    return exp is not None and exp >= learn.OVERRIDE_PCT
+
+
 def check(mint: str) -> dict:
     import shadow
     waived = shadow.waived()             # soft kills the shadow book showed cost money: passed over
@@ -80,8 +106,16 @@ def check(mint: str) -> dict:
         m = pool(mint)                                           # pool, free
     except Exception as e:
         return {"stage": "pool", "verdict": "SKIP", "reason": f"dexscreener failed: {e}"}
-    seen = {"price": (m or {}).get("price"), "liq_usd": (m or {}).get("liq_usd"), "age_min": (m or {}).get("age_min"),
-            "lane": market.lane(m) if m else None}
+    mm = m or {}
+    liq = mm.get("liq_usd") or 0
+    seen = {"chain": chains_split(mint), "vol_liq": round((mm.get("vol_1h") or 0) / liq, 3) if liq else None,
+            "avg_trade": round(mm.get("avg_trade_1h") or 0, 1) if m else None,
+            "chg_1h": mm.get("chg_1h"), "chg_5m": mm.get("chg_5m"),
+            "buy_ratio": round((mm.get("buys_1h") or 0) / max(1, (mm.get("buys_1h") or 0) + (mm.get("sells_1h") or 0)), 3) if m else None,
+            "mcap_liq": round((mm.get("mcap") or 0) / liq, 2) if liq else None,
+            "socials": len(mm.get("socials") or []) if m else None}
+    seen.update({"price": (m or {}).get("price"), "liq_usd": (m or {}).get("liq_usd"), "age_min": (m or {}).get("age_min"),
+            "lane": market.lane(m) if m else None})
     if (k := market_kill(m)):
         return {"stage": "pool", "verdict": "SKIP", "reason": k, "symbol": (m or {}).get("symbol"), **seen}
     import chains
@@ -117,10 +151,18 @@ def check(mint: str) -> dict:
         return {"stage": "facts", "verdict": "SKIP", "reason": f"facts failed: {e}",
                 "symbol": m["symbol"], **seen}
     seen["dev"] = token.get("dev")
+    seen.update(top10=token.get("top10_pct"), max_wallet=token.get("max_wallet_pct"), holders=token.get("holders"))
+    try:                                 # the score of every token that got this far, killed or not: learn.py compares all
+        sc0 = score(m, token)
+        seen.update(score=sc0["score"], flags=" ".join(sc0["flags"]))
+    except Exception:
+        pass
     smart.snapshot(mint, token.get("all_owners") or token.get("wallets"))
-    if (k := fact_kill(token, market.lane(m), waived)):
+    if (k := fact_kill(token, market.lane(m), waived)) and not _model_override(k, seen):
         return {"stage": "facts", "verdict": "SKIP", "reason": k,
                 "symbol": m["symbol"] or token["symbol"], **seen}
+    if k:
+        seen["override"] = k                   # learn.py expects a profit despite this soft rule
 
     v = judge(token, m)
     sym = m["symbol"] or token["symbol"]
@@ -128,10 +170,13 @@ def check(mint: str) -> dict:
     if sc["score"] >= MIN_SCORE and not evm:   # the deep read costs calls, and its sources are Solana's
         deep = deep_read(mint, token, skip=waived)
         seen.update(deep["logged"])
-        if deep["kill"]:
+        if deep["kill"] and not _model_override(deep["kill"], seen):
             return {"stage": "deep", "verdict": "SKIP", "reason": deep["kill"], "symbol": sym, **seen,
                     "score": sc["score"]}
     usd, tier, sig = size.ticket({"score": sc["score"]}, m, token)
+    exp = _expected(seen, "")                  # learn.py's view of a full pass: a loss expected -> not bought
+    if exp is not None:
+        seen["expected"] = round(exp, 1)
     return {**v, **seen, "ticket": usd, "tier": tier, "signals": sig, "symbol": sym, "price": m["price"], "liq_usd": m["liq_usd"], "url": m["url"],
             "score": sc["score"], "flags": " ".join(sc["flags"]),
             # the free check 14: two links you open yourself. latest posts, not "top"
@@ -191,8 +236,12 @@ def run(mint: str) -> dict:
         "organic", "organic_vol", "dev_mints", "cluster_pct", "fresh_pct", "bundlers_pct", "insiders_pct",
         "snipers_pct", "factory_wallets")})
     enter = v["verdict"] == "BUY" or (v["verdict"] == "PASS" and PAPER and PAPER_BUY_ON_PASS)
+    if enter and v.get("expected") is not None and v["expected"] < 0:
+        v["action"] = f"not bought: the model expects {v['expected']:+.1f}% per trade"
+        return v
     import shadow
-    if enter and (v.get("score") or 0) < MIN_SCORE and "low_score" not in shadow.waived():
+    if enter and (v.get("score") or 0) < MIN_SCORE and "low_score" not in shadow.waived() \
+            and not (v.get("expected") is not None and v["expected"] >= __import__("learn").OVERRIDE_PCT):
         if PAPER and (v.get("score") or 0) >= SIZING["explore_min_score"]:
             equity = PAPER_BANKROLL_USD + book.realized()      # the explore tier: small, and logged apart
             usd = min(equity * SIZING["explore"] / 100, (v.get("liq_usd") or 0) * FACTS["max_ticket_share"], book.cash())
