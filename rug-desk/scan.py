@@ -7,7 +7,7 @@
 import csv, json, os, time
 import requests
 from config import LOG, SCHEDULE, FACTS
-import check, market
+import check, market, grads
 from market import market_kill
 
 SOURCES = ["token-profiles/latest/v1", "token-boosts/latest/v1", "token-boosts/top/v1",
@@ -18,6 +18,7 @@ WORDS = ["pump", "sol", "cat", "dog", "ai", "meme", "pepe", "inu", "moon", "coin
          "king", "god", "super", "core", "luke", "gato", "gold", "the", "one", "x", "bull", "bear"]
 WORDS_PER_RUN = 12          # DexScreener allows 300 searches a minute; this is 12 every 10 minutes
 _turn = 0
+grad_error = None           # the on-chain graduation feed's last failure, shown by SCOUT
 # kills that can change with time: a pool grows up, a source comes back. retried after this long
 RETRY_AFTER_MIN = 30
 RETRYABLE = ("too_fresh", "thin_pool", "no_pool", "no_price", "no_holders")
@@ -97,10 +98,26 @@ def leads() -> list[str]:
     if len(errors) == len(SOURCES) and not found:
         raise RuntimeError("; ".join(errors))
     out += [a for a in found if a not in done and a not in out]
+    # every pump.fun graduation, read on chain: the one source that sees each new PumpSwap pool
+    global grad_error
+    try:
+        grads.fetch()
+        grad_error = None
+    except Exception as e:
+        grad_error = f"pump.fun graduations unreadable: {e}"[:200]
+    graduates = [a for a in grads.recent() if a not in done and a not in out]
+    out += graduates
     # one batched pool read for every lead: most are bonding-curve tokens with no real pool yet.
     # they are not logged, they just come back next run, so the slots go to tokens that can pass
     live.update(market.pools([m for m in out if m not in live]))
-    return [m for m in out if not market_kill(live[m])][:SCHEDULE["scan_per_run"]]
+    # a graduate whose pool stayed under $10k two hours after graduating is dead: stop pricing it
+    born = grads.load()["mints"]
+    grads.forget([m for m in graduates if time.time() - born.get(m, time.time()) > 7200
+                  and ((live.get(m) or {}).get("liq_usd") or 0) < 10000])
+    ok = [m for m in out if not market_kill(live[m])]
+    # best pools first, so the per-run cap keeps the tradeable ones
+    ok.sort(key=lambda m: -(live[m].get("vol_1h") or 0))
+    return ok[:SCHEDULE["scan_per_run"]]
 
 
 def scan() -> list[dict]:

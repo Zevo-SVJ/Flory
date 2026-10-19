@@ -32,7 +32,8 @@ def save(p: dict):
 def add(mint: str, v: dict):
     p = load()
     p[mint] = {"symbol": v.get("symbol"), "since": time.time(), "score": v.get("score"),
-               "flags": v.get("flags") or [], "price": v.get("price"), "url": v.get("url")}
+               "flags": v.get("flags") or [], "price": v.get("price"), "url": v.get("url"),
+               "shadow": bool(v.get("shadow"))}     # observe mode: already bought, the read is only recorded
     save(p)
 
 
@@ -85,6 +86,13 @@ def decide() -> list[dict]:
         x = done.get(mint)
         sym = v["symbol"]
         waited = time.time() - v["since"]
+        if v.get("shadow"):
+            if x or waited > ECHO_TIMEOUT_MIN * 60:
+                del p[mint]
+                if x:
+                    out.append({"kind": "info", "symbol": sym, "mint": mint,
+                                "text": f"${sym} X read after the buy: {x['verdict'].upper()} ({x.get('raison', '')[:70]})"})
+            continue
         if (not x and PAPER and silent and waited > ECHO_SILENT_MIN * 60
                 and (v.get("score") or 0) >= ECHO_FALLBACK_SCORE):
             x = {"verdict": "BUY", "raison": "NO X, ECHO silent, score " + str(v.get("score"))}

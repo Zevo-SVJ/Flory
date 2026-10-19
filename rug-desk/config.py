@@ -20,8 +20,11 @@ PAPER_BUY_ON_PASS = True
 # ECHO, the X reader (Claude in Chrome, its own session, instructions in ECHO.md).
 #   "gate":    a PASS waits in data/pending.json until ECHO reads X. BUY -> the desk buys, SKIP -> dropped.
 #              AUDIT still re-prices the skipped ones, so you learn what the X read was worth.
-#   "observe": every PASS is bought at once, ECHO's verdict is only recorded next to it.
-ECHO_MODE = "gate"
+#   "observe": every PASS is bought at once, ECHO still reads it and its verdict is recorded next to the
+#              trade. the dashboard then shows the P&L of ECHO's BUYs vs its SKIPs: what the X read is worth.
+# observe in paper: a closed Chrome or a locked screen no longer stops the desk from trading, and every
+# PASS becomes a data point. go back to "gate" only once the BUY group clearly beats the SKIP group.
+ECHO_MODE = "observe"
 ECHO_TIMEOUT_MIN = 60       # no X read after this long -> the PASS is dropped, never bought blind
 # paper only: when ECHO itself has gone silent (session closed, usage limit, Mac asleep), the desk keeps
 # learning overnight instead of freezing: a PASS this strong is bought without the X read, tagged

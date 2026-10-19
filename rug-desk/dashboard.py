@@ -20,7 +20,7 @@ RANGES = {"1h": 3600, "24h": 86400, "7j": 7 * 86400, "tout": None}
 
 AGENTS = [   # fixed order = fixed color slot on the page
     ("VIGIE", "surveille les positions", "prix toutes les 20 s, stops, prises de profit"),
-    ("SCOUT", "trouve les tokens", "nouveaux tokens DexScreener toutes les 10 min"),
+    ("SCOUT", "trouve les tokens", "graduations pump.fun + DexScreener, toutes les 10 min"),
     ("GARDE", "tue les rugs", "13 checks : pool, autorités, LP, holders, bundles"),
     ("ECHO", "lit X", "Claude dans Chrome, verdict BUY/SKIP par PASS"),
     ("AUDIT", "vérifie le filtre", "re-prix des verdicts 6 h après"),

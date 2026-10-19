@@ -48,7 +48,9 @@ Optional `.env` (copy `.env.example`, never commit it):
 | run.py, agents.py | the desk as 6 agents: VIGIE (exits, 20 s), SCOUT (leads, 10 min), GARDE (13 checks), AUDIT (was the filter right, 30 min), PLUME (21:30 report); ECHO is the Claude-in-Chrome X reader |
 | audit.py | re-prices every verdict 6 h later: killed tokens that crashed vs passed ones, and ECHO's BUY vs SKIP |
 | score.py | ranks every PASS 0-100 like a careful human: holders, distribution, dev, two-way trading, activity, bot volume, age, liquidity margin. below MIN_SCORE it is not bought |
-| pending.py | ECHO_MODE = "gate": a PASS waits for ECHO's X read, BUY -> bought at the price of that moment, SKIP or no read in 60 min -> dropped |
+| pending.py | ECHO_MODE = "observe" (paper default): every PASS is bought at once and queued for ECHO, whose verdict is recorded next to the trade. "gate": a PASS waits for ECHO's BUY |
+| grads.py | SCOUT's main source: every pump.fun graduation to PumpSwap, read from pump.fun's migration account on chain (~40 an hour) |
+| health.py | did the desk run all night: pauses (Mac asleep, desk stopped) in data/pauses.csv plus macOS's own sleep log. `python3 health.py` |
 | ECHO.md | the X reader's instructions. run it from a local Claude session with Claude in Chrome: `/loop 10m Lis et applique ~/Documents/rug-desk-run/rug-desk/ECHO.md` |
 | events.py | the event log and agent status the dashboard reads |
 | ruggers.py | the desk's own creator blacklist: a token that collapses (-90% at audit, or a pulled pool) blacklists its creator, and GARDE kills that wallet's next tokens |
@@ -106,15 +108,17 @@ only when a candidate wins on both halves of at least 30 trades by a clear margi
 
 ## Overnight
 
-`./start.sh` runs the desk and the dashboard, restarts either one 10 s after a crash, and keeps the Mac awake
-while it runs. What can still stop the night, and what the desk does about it:
+`./start.sh` runs the desk and the dashboard, restarts either one 10 s after a crash, and keeps the Mac and
+its screen awake while it runs (a screen that turns off is what locks the Mac). Every pause is logged and
+shown in the journal and the morning brief, with macOS's reason. What can still stop the night, and what the desk does about it:
 
 | what | effect | what the desk does |
 |---|---|---|
-| lid closed, or Mac on battery | macOS sleeps, everything pauses | nothing it can do: keep it open and plugged in |
+| lid closed, or Mac on battery | macOS sleeps, everything pauses | start.sh warns on battery. `sudo pmset -a disablesleep 1` stops lid-close sleep (`0` to undo) |
+| screen locks | Chrome, so ECHO, can stall | caffeinate -d keeps the screen on; in observe mode trading never waits for ECHO anyway |
 | macOS update restart | everything stops | turn off automatic restarts for updates |
 | a crash in the desk or the dashboard | one process dies | start.sh restarts it in 10 s, state is on disk |
-| ECHO's session closes or hits its usage limit | no X reads | after 45 min of silence, paper mode buys only PASSes scoring 75+, tagged NO_X, audited apart |
+| ECHO's session closes or hits its usage limit | no X reads | observe mode: trading goes on, the dashboard's ECHO card turns red. gate mode: after 45 min of silence, only PASSes scoring 75+ are bought, tagged NO_X |
 | DexScreener or the RPC down | no prices / no facts | positions held and retried every 20 s; tokens skipped, retried later |
 | public RPC rate limits (429) | some tokens skipped | a free Helius RPC URL in SOLANA_RPC removes most of them |
 

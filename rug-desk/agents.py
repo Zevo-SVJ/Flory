@@ -14,7 +14,7 @@ MARKS = os.path.join(DATA, "marks.json")
 INBOX = os.path.join(DATA, "inbox.txt")      # CAs pasted in the dashboard, checked by GARDE
 from events import emit, set_agent, agents as agent_state
 from notify import post
-import book, watch, scan, check, audit, report, pending, exitlab, ruggers
+import book, watch, scan, check, audit, report, pending, exitlab, ruggers, health
 
 
 def beat():
@@ -73,7 +73,13 @@ def scout():
             emit("SCOUT", "error", f"DexScreener leads down: {e}")
             down.add("leads")
         raise
-    emit("SCOUT", "scan", f"{len(leads)} token(s) with a real pool handed to GARDE")
+    if scan.grad_error and "grads" not in down:
+        emit("SCOUT", "error", scan.grad_error)
+        down.add("grads")
+    elif not scan.grad_error:
+        down.discard("grads")
+    emit("SCOUT", "scan", f"{len(leads)} token(s) with a real pool handed to GARDE "
+                          f"({len(scan.grads.recent())} pump.fun graduate(s) in the window)")
     for mint in leads:
         garde(mint)
     return f"{len(leads)} lead(s) envoyé(s) à GARDE"
@@ -195,8 +201,19 @@ def main():
     post(f"CLAUDE BOT up. {'PAPER' if PAPER else 'LIVE'} mode, judge={JUDGE}, bankroll ${PAPER_BANKROLL_USD}. "
          f"VIGIE {SCHEDULE['vigie_every_s']}s, SCOUT {SCHEDULE['scout_every_min']}m, "
          f"AUDIT {SCHEDULE['audit_every_min']}m, report {SCHEDULE['report_at']}.")
+    if (t := health.since_last_run()):
+        health.record(t, time.time(), "stopped")
+    if (h := health.summary()):            # what the last 24 h looked like, said once at start
+        emit("DESK", "error", "dernières 24 h : " + h)
     jobs = list(plan.items())
+    last = time.time()
     while True:
+        if time.time() - last > health.GAP_S:   # the loop sleeps 1 s: a long hole means the Mac slept
+            health.record(last, time.time(), "sleep")
+            fmt = lambda t: time.strftime("%H:%M", time.localtime(t))
+            emit("DESK", "error", f"desk en pause {fmt(last)}→{fmt(time.time())} "
+                                  f"({(time.time() - last) / 60:.0f} min) : le Mac a dormi ? lance health.py")
+        last = time.time()
         due = [(name, p) for name, p in jobs if time.time() >= p[2]]
         if time.strftime("%H:%M") >= SCHEDULE["report_at"] and reported_on != time.strftime("%Y-%m-%d"):
             reported_on = time.strftime("%Y-%m-%d")
@@ -225,6 +242,7 @@ def main():
         except Exception as e:
             emit("GARDE", "error", f"dashboard check failed: {e}")
         beat()
+        last = time.time()
         time.sleep(1)
 
 

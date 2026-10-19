@@ -166,6 +166,27 @@ class Filter(Base):
         self.assertEqual(t["max_wallet_pct"], 2.0)          # the pool vault is not counted as a whale
         self.assertIsNone(facts.fact_kill(t))
 
+    def test_graduates_from_the_migration_account(self):
+        import grads
+        if os.path.exists(grads.STATE):
+            os.remove(grads.STATE)
+        now = time.time()
+        txs = {"S1": ["Program log: Instruction: MigrateV2"], "S2": ["Program log: Instruction: Buy"]}
+        def post(url, timeout=None, json=None):
+            m, p = json["method"], json["params"]
+            if m == "getSignaturesForAddress":
+                res = [{"signature": "S1", "blockTime": now, "err": None},
+                       {"signature": "S2", "blockTime": now, "err": None},
+                       {"signature": "S3", "blockTime": now, "err": {"x": 1}}]
+            else:
+                res = {"meta": {"logMessages": txs[p[0]], "postTokenBalances": [
+                    {"mint": grads.WSOL}, {"mint": "Grad" + p[0] + "pump"}]}}
+            return Resp({"jsonrpc": "2.0", "id": 1, "result": res})
+        with mock.patch("requests.post", post):
+            self.assertEqual(grads.fetch(), 1)
+        self.assertEqual(grads.recent(), ["GradS1pump"])     # a non-migration tx adds nothing
+        self.assertEqual(grads.load()["last_sig"], "S1")
+
     def test_goplus_also_says_mintable(self):
         v = self.verdict(gp=goplus(mintable={"status": "1"}))
         self.assertEqual(v["reason"], "mint_open")
@@ -192,7 +213,7 @@ class Filter(Base):
 class Book(Base):
     def test_paper_buy_and_limits(self):
         check.ECHO_MODE = "observe"
-        self.addCleanup(setattr, check, "ECHO_MODE", "gate")
+        self.addCleanup(setattr, check, "ECHO_MODE", check.ECHO_MODE)
         with net():
             v = check.run(MINT)
         self.assertIn("PAPER BUY", v["action"])
@@ -302,7 +323,7 @@ class Agents(Base):
     def test_scout_hands_leads_to_garde(self):
         import agents, events
         check.ECHO_MODE = "observe"
-        self.addCleanup(setattr, check, "ECHO_MODE", "gate")
+        self.addCleanup(setattr, check, "ECHO_MODE", check.ECHO_MODE)
         prof = [{"chainId": "solana", "tokenAddress": MINT}]
         def get(url, timeout=None, params=None):
             if "token-profiles" in url or "token-boosts" in url:
@@ -330,7 +351,7 @@ class Inbox(Base):
     def test_pasted_ca_goes_through_garde(self):
         import agents, events
         check.ECHO_MODE = "observe"
-        self.addCleanup(setattr, check, "ECHO_MODE", "gate")
+        self.addCleanup(setattr, check, "ECHO_MODE", check.ECHO_MODE)
         for f in (config.EVENTS, config.AGENTS):
             if os.path.exists(f):
                 os.remove(f)
@@ -359,9 +380,27 @@ class Gate(Base):
         super().setUp()
         import pending
         self.p = pending
+        self.addCleanup(setattr, check, "ECHO_MODE", check.ECHO_MODE)
+        check.ECHO_MODE = "gate"
         for f in (pending.PENDING, pending.X_READS, pending.X_QUEUE):
             if os.path.exists(f):
                 os.remove(f)
+
+    def test_observe_buys_at_once_and_echo_still_reads(self):
+        check.ECHO_MODE = "observe"
+        with net():
+            v = check.run(MINT)
+        self.assertIn("PAPER BUY", v["action"])
+        self.assertIn(MINT, book.load())
+        self.p.decide()
+        with open(self.p.X_QUEUE) as f:
+            self.assertIn(MINT, f.read())             # ECHO gets it to read
+        self.x_read("SKIP")
+        with net():
+            ev = self.p.decide()
+        self.assertEqual(self.p.load(), {})
+        self.assertIn(MINT, book.load())              # the read is recorded, the position stays
+        self.assertIn("after the buy", ev[0]["text"])
 
     def x_read(self, verdict):
         with open(self.p.X_READS, "w") as f:
@@ -615,9 +654,12 @@ class EchoSilent(Base):
         super().setUp()
         import pending
         self.p = pending
+        self.addCleanup(setattr, check, "ECHO_MODE", check.ECHO_MODE)
+        check.ECHO_MODE = "gate"
         for f in (pending.PENDING, pending.X_READS, pending.X_QUEUE):
             if os.path.exists(f):
                 os.remove(f)
+
 
     def test_a_strong_pass_is_bought_without_x_when_echo_is_silent(self):
         with net():

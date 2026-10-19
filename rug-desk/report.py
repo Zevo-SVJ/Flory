@@ -116,4 +116,6 @@ def morning(hours: float = 10) -> str:
         no_x = sum(1 for r in xr if r["verdict"] == "NO_X")
         lines.append(f"ECHO: {sum(1 for r in xr if r['verdict'] in ('BUY', 'SKIP'))} X read(s)"
                      + (f", {no_x} bought without X (ECHO was silent: check its session)" if no_x else ""))
+    import health
+    lines.append("desk: " + (health.summary(hours) or "no pause, it ran the whole night"))
     return "\n".join(lines)

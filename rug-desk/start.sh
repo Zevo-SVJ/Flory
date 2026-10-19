@@ -1,7 +1,8 @@
 #!/bin/bash
 # start.sh: the desk and its dashboard, kept alive all night.
 #   - each one restarts by itself 10 s after a crash (state lives in data/, so a restart is safe)
-#   - the Mac stays awake while this runs (caffeinate), as long as the lid is open and it is on power
+#   - the Mac AND its screen stay awake while this runs (caffeinate -d): a screen that turns off is what
+#     locks the Mac, and a locked screen can stall Chrome, so ECHO. the lid must stay open, on power
 #   - if the dashboard can't start, the reason is printed here, not hidden
 #   - Ctrl+C stops everything
 # run it:  cd ~/Documents/rug-desk-run/rug-desk && ./start.sh
@@ -9,7 +10,11 @@ cd "$(dirname "$0")" || exit 1
 mkdir -p data
 trap 'echo; echo "stopping the desk..."; kill 0' INT TERM EXIT
 
-command -v caffeinate > /dev/null && caffeinate -ims -w $$ &
+command -v caffeinate > /dev/null && caffeinate -dims -w $$ &
+if command -v pmset > /dev/null; then
+  pmset -g batt | grep -q "Battery Power" && echo ">>> ATTENTION : le Mac est sur BATTERIE. branche le chargeur, sinon il peut dormir."
+  pmset -g | grep -q "SleepDisabled *1" || echo ">>> conseil : refermer l'écran endort le Mac. pour l'éviter : sudo pmset -a disablesleep 1"
+fi
 
 # a dashboard or desk left over from an older terminal would hold the port or run twice
 if lsof -nP -iTCP:8765 -sTCP:LISTEN > /dev/null 2>&1; then

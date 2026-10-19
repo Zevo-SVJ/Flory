@@ -112,6 +112,8 @@ def run(mint: str) -> dict:
     if enter and PAPER:
         book.open_position(mint, v["symbol"], v["price"], v["liq_usd"])
         v["action"] = f"PAPER BUY ${TICKET_USD} at {v['price']}"
+        if v["verdict"] == "PASS" and ECHO_MODE == "observe":   # ECHO still reads it, after the buy
+            pending.add(mint, {**v, "flags": (v.get("flags") or "").split(), "shadow": True})
     elif v["verdict"] in ("BUY", "PASS") and not PAPER:
         pre = "" if v["verdict"] == "BUY" else "no X read: search the ticker and CA on X yourself first. "
         v["action"] = (f"APPROVAL NEEDED: {pre}buy ${TICKET_USD} of {v['symbol']} in your own wallet, "
