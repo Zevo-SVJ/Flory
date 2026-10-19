@@ -103,3 +103,19 @@ So `exits.py` runs that as the starting profile (liquidity, stop, ladder, lock, 
 VIGIE records every traded token's price path during the trade and 6 h after, and `exitlab.py` replays a dozen
 alternative profiles on those real paths every 30 minutes. With `EXIT_AUTOTUNE`, the desk switches profile by itself
 only when a candidate wins on both halves of at least 30 trades by a clear margin (data/exit_profile.json).
+
+## Overnight
+
+`./start.sh` runs the desk and the dashboard, restarts either one 10 s after a crash, and keeps the Mac awake
+while it runs. What can still stop the night, and what the desk does about it:
+
+| what | effect | what the desk does |
+|---|---|---|
+| lid closed, or Mac on battery | macOS sleeps, everything pauses | nothing it can do: keep it open and plugged in |
+| macOS update restart | everything stops | turn off automatic restarts for updates |
+| a crash in the desk or the dashboard | one process dies | start.sh restarts it in 10 s, state is on disk |
+| ECHO's session closes or hits its usage limit | no X reads | after 45 min of silence, paper mode buys only PASSes scoring 75+, tagged NO_X, audited apart |
+| DexScreener or the RPC down | no prices / no facts | positions held and retried every 20 s; tokens skipped, retried later |
+| public RPC rate limits (429) | some tokens skipped | a free Helius RPC URL in SOLANA_RPC removes most of them |
+
+PLUME posts a morning brief at 08:00: what was bought, sold and killed overnight, and whether ECHO went silent.

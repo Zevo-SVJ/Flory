@@ -2,7 +2,15 @@
 # positions, trades, limits. the desk's memory lives in two files you can open yourself.
 import csv, json, os, sys, time
 from config import (DATA, POSITIONS, TRADES, TICKET_USD, MAX_OPEN, MAX_ENTRIES_PER_DAY,
-                    DAILY_LOSS_HALT_USD, COOLDOWN_HOURS, PAPER_BANKROLL_USD)
+                    DAILY_LOSS_HALT_USD, COOLDOWN_HOURS, PAPER_BANKROLL_USD, PAPER_COSTS, PAPER)
+
+COSTS = PAPER        # paper fills pay fees and price impact; live fills are booked at the price you paid
+
+
+def _cost_pct(usd: float, liq: float | None) -> float:
+    """Pool fee + price impact of an order of this size on this pool, in %."""
+    impact = 100 * usd / (liq / 2) if liq else 0
+    return PAPER_COSTS["fee_pct"] + impact
 
 FIELDS = ["time", "mint", "symbol", "action", "usd", "pnl", "reason"]
 
@@ -74,18 +82,27 @@ def guard(mint: str) -> str | None:
 
 def open_position(mint, symbol, price, liq_usd, usd=TICKET_USD):
     book = load()
-    book[mint] = {"symbol": symbol, "entry": price, "qty0": usd / price, "qty": usd / price,
+    if COSTS:   # the entry is what the tokens really cost: fee and impact on top, the tx fee off the ticket
+        price = price * (1 + _cost_pct(usd, liq_usd) / 100)
+        qty = (usd - PAPER_COSTS["tx_usd"]) / price
+    else:
+        qty = usd / price
+    book[mint] = {"symbol": symbol, "entry": price, "qty0": qty, "qty": qty,
                   "peak": price, "peak_t": time.time(), "liq0": liq_usd, "opened": time.time(), "steps": 0}
     save(book)
     record(mint, symbol, "open", usd, 0, "entry")
 
 
-def sell(mint, frac_of_original, price, reason) -> float:
+def sell(mint, frac_of_original, price, reason, liq_usd=None) -> float:
     """Sells a fraction of the ORIGINAL size (1.0 = everything left). Returns realized pnl."""
     book = load()
     p = book[mint]
     q = min(p["qty"], p["qty0"] * frac_of_original)
-    pnl = q * (price - p["entry"])
+    if COSTS and price > 0:
+        price = price * (1 - _cost_pct(q * price, liq_usd or p["liq0"]) / 100)
+        pnl = q * (price - p["entry"]) - PAPER_COSTS["tx_usd"]
+    else:
+        pnl = q * (price - p["entry"])
     p["qty"] -= q
     action = "close" if p["qty"] <= p["qty0"] * 1e-6 else "partial"
     record(mint, p["symbol"], action, q * price, pnl, reason)

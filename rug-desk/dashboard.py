@@ -166,7 +166,7 @@ def state(range_key: str = "auto") -> dict:
                    "status": status(r), "pnl": round(per_mint[r["mint"]], 2), "open": r["mint"] in positions}
                   for r in sorted(passes, key=lambda r: r["time"], reverse=True)]
     groups = {}
-    for g in ("BUY", "SKIP", None):
+    for g in ("BUY", "SKIP", "NO_X", None):
         sel = [e for e in experiment if e["x"] == g]
         groups[g or "non lu"] = {"n": len(sel), "pnl": round(sum(e["pnl"] for e in sel), 2)}
 

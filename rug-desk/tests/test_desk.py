@@ -7,6 +7,7 @@ os.environ["RUG_DESK_DATA"] = tempfile.mkdtemp()
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import config, book, check, watch, report  # noqa: E402
+book.COSTS = False      # the exact-number tests below check the rules; Costs tests the fees on their own
 
 MINT = "Mint111111111111111111111111111111111111111"
 PAIR = "Pair111111111111111111111111111111111111111"
@@ -582,3 +583,49 @@ class Breakdown(Base):
         self.assertEqual((hour["12-16"]["n"], hour["12-16"]["pnl"]), (1, 15.0))
         self.assertEqual(age["< 3 h"]["pnl"], -15.0)
         self.assertEqual(age["12-36 h"]["pnl"], 15.0)
+
+
+class Costs(Base):
+    def test_a_round_trip_pays_fees_impact_and_tx(self):
+        book.COSTS = True
+        self.addCleanup(setattr, book, "COSTS", False)
+        book.open_position(MINT, "T", 1.0, 50000)            # $25 on $50k: 0.1% impact + 0.3% fee
+        p = book.load()[MINT]
+        self.assertAlmostEqual(p["entry"], 1.004, places=6)
+        pnl = book.sell(MINT, 1.0, 1.0, "flat", 50000)       # flat price still loses the round trip
+        self.assertLess(pnl, -0.2)
+        self.assertGreater(pnl, -0.35)
+
+
+class EchoSilent(Base):
+    def setUp(self):
+        super().setUp()
+        import pending
+        self.p = pending
+        for f in (pending.PENDING, pending.X_READS, pending.X_QUEUE):
+            if os.path.exists(f):
+                os.remove(f)
+
+    def test_a_strong_pass_is_bought_without_x_when_echo_is_silent(self):
+        with net():
+            check.run(MINT)
+        p = self.p.load(); p[MINT]["since"] -= 50 * 60; p[MINT]["score"] = 80; self.p.save(p)
+        with net():
+            out = self.p.decide()
+        self.assertEqual(out[0]["kind"], "buy")
+        self.assertEqual(self.p.reads()[MINT]["verdict"], "NO_X")
+
+    def test_a_weaker_pass_still_waits_then_drops(self):
+        with net():
+            check.run(MINT)
+        p = self.p.load(); p[MINT]["since"] -= 50 * 60; p[MINT]["score"] = 60; self.p.save(p)
+        self.assertEqual(self.p.decide(), [])
+        self.assertIn(MINT, self.p.load())
+
+    def test_no_fallback_while_echo_is_reading(self):
+        with open(self.p.X_READS, "w") as f:
+            f.write(f"time,mint,symbol,verdict,raison\n{time.strftime('%Y-%m-%d %H:%M')},OTHER,O,SKIP,lu\n")
+        with net():
+            check.run(MINT)
+        p = self.p.load(); p[MINT]["since"] -= 50 * 60; p[MINT]["score"] = 90; self.p.save(p)
+        self.assertEqual(self.p.decide(), [])

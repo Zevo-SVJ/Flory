@@ -3,7 +3,7 @@
 # has read X: BUY -> the desk re-checks the pool and buys, SKIP -> dropped, no read in time -> dropped.
 # data/x_queue.csv is the list ECHO works from; data/x_reads.csv is what ECHO writes back.
 import csv, json, os, time
-from config import DATA, ECHO_TIMEOUT_MIN, TICKET_USD
+from config import DATA, ECHO_TIMEOUT_MIN, TICKET_USD, PAPER, ECHO_SILENT_MIN, ECHO_FALLBACK_SCORE
 from market import pool, market_kill
 import book
 
@@ -57,12 +57,36 @@ def write_queue(p: dict, done: dict):
     os.replace(tmp, X_QUEUE)
 
 
+def echo_silent(done: dict) -> bool:
+    """ECHO wrote nothing for ECHO_SILENT_MIN minutes: its session is closed, asleep or out of usage."""
+    last = max((r["time"] for r in done.values() if r.get("time")), default=None)
+    if not last:
+        return True
+    return time.time() - time.mktime(time.strptime(last, "%Y-%m-%d %H:%M")) > ECHO_SILENT_MIN * 60
+
+
+def mark_no_x(mint: str, sym: str):
+    """Record in x_reads.csv that this one was bought on its score alone, so AUDIT keeps it apart."""
+    new = not os.path.exists(X_READS)
+    with open(X_READS, "a", newline="") as f:
+        w = csv.writer(f)
+        if new:
+            w.writerow(["time", "mint", "symbol", "verdict", "raison"])
+        w.writerow([time.strftime("%Y-%m-%d %H:%M"), mint, sym, "NO_X", "ECHO silencieux : acheté sur la note seule"])
+
+
 def decide() -> list[dict]:
     """Settle every pending PASS that ECHO has read, or that waited too long. Returns events."""
     p, done, out = load(), reads(), []
+    silent = echo_silent(done)
     for mint, v in list(p.items()):
         x = done.get(mint)
         sym = v["symbol"]
+        waited = time.time() - v["since"]
+        if (not x and PAPER and silent and waited > ECHO_SILENT_MIN * 60
+                and (v.get("score") or 0) >= ECHO_FALLBACK_SCORE):
+            x = {"verdict": "BUY", "raison": "NO X, ECHO silent, score " + str(v.get("score"))}
+            mark_no_x(mint, sym)
         if x and x["verdict"].upper() == "BUY":
             del p[mint]
             if (g := book.guard(mint)):

@@ -23,6 +23,11 @@ PAPER_BUY_ON_PASS = True
 #   "observe": every PASS is bought at once, ECHO's verdict is only recorded next to it.
 ECHO_MODE = "gate"
 ECHO_TIMEOUT_MIN = 60       # no X read after this long -> the PASS is dropped, never bought blind
+# paper only: when ECHO itself has gone silent (session closed, usage limit, Mac asleep), the desk keeps
+# learning overnight instead of freezing: a PASS this strong is bought without the X read, tagged
+# "no X", and AUDIT keeps those trades apart. never used in live mode.
+ECHO_SILENT_MIN = 45        # no X read written at all for this long -> ECHO counts as silent
+ECHO_FALLBACK_SCORE = 75    # only PASSes scoring at least this are bought while ECHO is silent
 
 # SCORE: how organic a PASS looks (0-100), the way a human would rank survivors. see score.py
 MIN_SCORE = 55              # below this a PASS is not bought (still audited)
@@ -35,6 +40,10 @@ MAX_OPEN = 40               # safety net only: cash runs out first (1000 / 25 = 
 MAX_ENTRIES_PER_DAY = 40
 DAILY_LOSS_HALT_USD = 250   # realized loss today hits this -> no new entries until tomorrow
 COOLDOWN_HOURS = 24         # no re-entry into a token you just left
+# paper fills pay what a real fill pays, so paper profit is not a fantasy: the pool fee, the price
+# impact of a $25 order on the pool (constant-product AMM: ~ order / half the liquidity), and a fixed
+# network + priority fee per transaction. a live fill can still be worse (latency, MEV): paper stays a ceiling.
+PAPER_COSTS = {"fee_pct": 0.3, "tx_usd": 0.05}
 MEGA_PROFIT_PCT = 50        # a sale this far in profit fires the dashboard's MEGA PROFIT card
 
 SOLANA_RPC = "https://api.mainnet-beta.solana.com"   # free public RPC. a free Helius/QuickNode URL also works
@@ -85,6 +94,7 @@ SCHEDULE = {                # used by agents.py: one entry per agent
     "audit_every_min": 30,      # AUDIT: re-prices old verdicts to see if the filter was right
     "audit_after_hours": 6,
     "report_at": "21:30",       # PLUME: evening report, local time
+    "morning_at": "08:00",      # PLUME: what happened overnight, local time
 }
 
 DATA = os.environ.get("RUG_DESK_DATA") or os.path.join(HERE, "data")

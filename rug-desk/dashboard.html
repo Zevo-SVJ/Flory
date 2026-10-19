@@ -163,7 +163,7 @@ a { color: #8fb8f0; text-decoration: none; } a:hover { text-decoration: underlin
 .pill { white-space: nowrap; display: inline-block; padding: 1px 8px; border-radius: 6px; font-size: 11px; border: 1px solid var(--ring-strong); color: var(--ink-2); }
 .why { color: var(--ink-2); font-family: var(--sans); font-size: 12px; max-width: 380px; }
 .empty { color: var(--muted); padding: 18px 0; text-align: center; font-family: var(--mono); font-size: 12px; }
-.stats3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 12px; }
+.stats3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin-bottom: 12px; }
 .stat { border: 1px solid var(--ring); border-radius: 12px; padding: 10px 12px; }
 .stat .v { font-family: var(--mono); font-size: 18px; font-weight: 600; margin-top: 4px; }
 .bars .bar { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; margin-bottom: 10px; font-size: 12px; }
@@ -530,7 +530,7 @@ function drawPanels() {
     "Aucune position ouverte : SCOUT et GARDE cherchent.");
 
   const g = $("groups"); g.replaceChildren();
-  [["BUY", "X dit BUY"], ["SKIP", "X dit SKIP"], ["non lu", "Pas lu"]].forEach(([k, l]) => {
+  [["BUY", "X dit BUY"], ["SKIP", "X dit SKIP"], ["NO_X", "Sans X (nuit)"], ["non lu", "Pas lu"]].forEach(([k, l]) => {
     const v = S.groups[k], c = el("div", { class: "stat" });
     c.append(el("div", { class: "label" }, `${l} · ${v.n}`), el("div", { class: "v " + sign(v.pnl) }, usd(v.pnl))); g.append(c);
   });

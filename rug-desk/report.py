@@ -82,3 +82,36 @@ def report() -> str:
 
 if __name__ == "__main__":
     print(report())
+
+
+def morning(hours: float = 10) -> str:
+    """What happened while you slept: the last N hours, from the same files, nothing from memory."""
+    since = time.strftime("%Y-%m-%d %H:%M", time.localtime(time.time() - hours * 3600))
+    trades = [t for t in book.trades() if t["time"] >= since]
+    exits = [t for t in trades if t["action"] != "open"]
+    buys = [t for t in trades if t["action"] == "open"]
+    checks = []
+    if os.path.exists(LOG):
+        with open(LOG, newline="") as f:
+            checks = [r for r in csv.DictReader(f) if r["time"] >= since]
+    kills = Counter(r["reason"] for r in checks if r["verdict"] == "SKIP")
+    pnl = sum(float(t["pnl"]) for t in exits)
+    lines = [f"MORNING BRIEF, last {hours:.0f} h {'(PAPER)' if PAPER else '(LIVE)'}",
+             f"realized: ${pnl:+.2f} on {len(exits)} sale(s) | bought: {len(buys)} | open now: {len(book.load())}",
+             f"tokens checked: {len(checks)}, passed: {sum(1 for r in checks if r['verdict'] in ('PASS', 'BUY'))}"]
+    if exits:
+        best = max(exits, key=lambda t: float(t["pnl"]))
+        worst = min(exits, key=lambda t: float(t["pnl"]))
+        lines.append(f"best: {best['symbol']} ${float(best['pnl']):+.2f} ({best['reason']}) | "
+                     f"worst: {worst['symbol']} ${float(worst['pnl']):+.2f} ({worst['reason']})")
+    if kills:
+        lines.append("top kills: " + ", ".join(f"{k} {n}x" for k, n in kills.most_common(3)))
+    xr = {}
+    x_path = os.path.join(os.path.dirname(LOG), "x_reads.csv")
+    if os.path.exists(x_path):
+        with open(x_path, newline="") as f:
+            xr = [r for r in csv.DictReader(f) if r["time"] >= since]
+        no_x = sum(1 for r in xr if r["verdict"] == "NO_X")
+        lines.append(f"ECHO: {sum(1 for r in xr if r['verdict'] in ('BUY', 'SKIP'))} X read(s)"
+                     + (f", {no_x} bought without X (ECHO was silent: check its session)" if no_x else ""))
+    return "\n".join(lines)

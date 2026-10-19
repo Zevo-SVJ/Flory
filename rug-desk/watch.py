@@ -44,7 +44,7 @@ def watch() -> tuple[list[dict], dict]:
             continue
         frac, why = d
         pct = (s["price"] / pos["entry"] - 1) * 100 if s["price"] > 0 else -100
-        pnl = book.sell(mint, frac, s["price"], why)
+        pnl = book.sell(mint, frac, s["price"], why, s.get("liq"))
         closed = mint not in book.load()
         if closed:
             marks.pop(mint, None)

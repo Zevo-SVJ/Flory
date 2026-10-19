@@ -67,7 +67,7 @@ def summary() -> dict:
     if not os.path.exists(AUDIT):
         empty = {"n": 0, "crashed": 0, "ran": 0}
         return {"killed": {"n": 0, "crashed": 0}, "passed": {"n": 0, "crashed": 0}, "missed": [],
-                "x": {"BUY": dict(empty), "SKIP": dict(empty)},
+                "x": {"BUY": dict(empty), "SKIP": dict(empty), "NO_X": dict(empty)},
                 "regime": {"SOL up": dict(empty), "SOL down": dict(empty)}}
     with open(AUDIT, newline="") as f:
         rows = list(csv.DictReader(f))
@@ -90,7 +90,7 @@ def summary() -> dict:
     def tally(sel):
         return {"n": len(sel), "crashed": sum(1 for r in sel if float(r["change_pct"]) <= CRASH_PCT),
                 "ran": sum(1 for r in sel if float(r["change_pct"]) >= 100)}
-    out["x"] = {v: tally([r for r in groups["passed"] if xr.get(r["mint"]) == v]) for v in ("BUY", "SKIP")}
+    out["x"] = {v: tally([r for r in groups["passed"] if xr.get(r["mint"]) == v]) for v in ("BUY", "SKIP", "NO_X")}
 
     # did passes do worse when SOL was falling? the trend logged with each verdict decides the bucket
     sol = {}

@@ -171,6 +171,13 @@ def plume():
     return "rapport du soir publié"
 
 
+def plume_morning():
+    text = report.morning()
+    emit("PLUME", "report", text)
+    post(text)
+    return "brief du matin publié"
+
+
 def main():
     now = time.time()
     plan = {   # name: (job, seconds between runs or None for daily, next run)
@@ -180,6 +187,8 @@ def main():
         "GARDE": [gate, 30, now + 10],
     }
     reported_on = time.strftime("%Y-%m-%d") if time.strftime("%H:%M") >= SCHEDULE["report_at"] else None
+    # started after 08:00: today's brief is not owed (it would describe the hours before the desk ran)
+    briefed_on = time.strftime("%Y-%m-%d") if time.strftime("%H:%M") >= SCHEDULE["morning_at"] else None
     set_agent("GARDE", status="idle", msg="attend les leads de SCOUT")
     set_agent("PLUME", status="idle", msg=f"rapport à {SCHEDULE['report_at']}")
     emit("DESK", "info", f"Claude Bot up. {'PAPER' if PAPER else 'LIVE'} mode, bankroll ${PAPER_BANKROLL_USD}")
@@ -192,6 +201,10 @@ def main():
         if time.strftime("%H:%M") >= SCHEDULE["report_at"] and reported_on != time.strftime("%Y-%m-%d"):
             reported_on = time.strftime("%Y-%m-%d")
             due.append(("PLUME", [plume, None, 0]))
+        if (SCHEDULE["morning_at"] <= time.strftime("%H:%M") < SCHEDULE["report_at"]
+                and briefed_on != time.strftime("%Y-%m-%d")):
+            briefed_on = time.strftime("%Y-%m-%d")
+            due.append(("PLUME", [plume_morning, None, 0]))
         for name, p in due:
             job, every = p[0], p[1]
             set_agent(name, status="work", msg="au travail…")
