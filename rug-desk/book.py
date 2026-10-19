@@ -11,10 +11,17 @@ COSTS = PAPER        # paper fills pay fees and price impact; live fills are boo
 LOCK = threading.RLock()
 
 
-def _cost_pct(usd: float, liq: float | None) -> float:
-    """Pool fee + price impact of an order of this size on this pool, in %."""
+def _cost_pct(usd: float, liq: float | None, mint: str = "") -> float:
+    """Pool fee + price impact of an order of this size on this pool + MEV, in %, for the token's chain."""
+    import chains
+    c = chains.costs(mint) if mint else PAPER_COSTS
     impact = 100 * usd / (liq / 2) if liq else 0
-    return PAPER_COSTS["fee_pct"] + impact + PAPER_COSTS.get("mev_pct", 0)
+    return c["fee_pct"] + impact + c.get("mev_pct", 0)
+
+
+def _tx_usd(mint: str) -> float:
+    import chains
+    return chains.costs(mint)["tx_usd"] if mint else PAPER_COSTS["tx_usd"]
 
 FIELDS = ["time", "mint", "symbol", "action", "usd", "pnl", "reason"]
 
@@ -88,8 +95,8 @@ def open_position(mint, symbol, price, liq_usd, usd=TICKET_USD, vaults=None, sol
     with LOCK:
         book = load()
         if COSTS:   # the entry is what the tokens really cost: fee and impact on top, the tx fee off the ticket
-            price = price * (1 + _cost_pct(usd, liq_usd) / 100)
-            qty = (usd - PAPER_COSTS["tx_usd"]) / price
+            price = price * (1 + _cost_pct(usd, liq_usd, mint) / 100)
+            qty = (usd - _tx_usd(mint)) / price
         else:
             qty = usd / price
         book[mint] = {"symbol": symbol, "entry": price, "qty0": qty, "qty": qty,
@@ -108,8 +115,8 @@ def sell(mint, frac_of_original, price, reason, liq_usd=None) -> float:
         p = book[mint]
         q = min(p["qty"], p["qty0"] * frac_of_original)
         if COSTS and price > 0:
-            price = price * (1 - _cost_pct(q * price, liq_usd or p["liq0"]) / 100)
-            pnl = q * (price - p["entry"]) - PAPER_COSTS["tx_usd"]
+            price = price * (1 - _cost_pct(q * price, liq_usd or p["liq0"], mint) / 100)
+            pnl = q * (price - p["entry"]) - _tx_usd(mint)
         else:
             pnl = q * (price - p["entry"])
         p["qty"] -= q

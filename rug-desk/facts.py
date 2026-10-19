@@ -317,7 +317,10 @@ def fact_kill(t: dict, lane: str = "early", skip: frozenset | set = frozenset())
         ("freeze_open", lambda: t["freeze_authority"]),
         ("danger:" + (t["danger"] or [""])[0], lambda: t["danger"]),
         ("lp_unverified", lambda: t["lp_burned_pct"] is None and not mom),
-        ("lp_unlocked", lambda: t["lp_burned_pct"] is not None and t["lp_burned_pct"] < FACTS["min_lp_locked_pct"]),
+        # a survivor's liquidity belongs to many providers (CASHCAT on Robinhood Chain: 139, 123 days old):
+        # no single hand pulls it. the LP lock is a launch check, like the burn it reads on Solana
+        ("lp_unlocked", lambda: not mom and t["lp_burned_pct"] is not None
+                                and t["lp_burned_pct"] < FACTS["min_lp_locked_pct"]),
         ("dev_unknown", lambda: t["dev_pct"] is None and not mom),
         ("dev_holds", lambda: gt(t["dev_pct"], FACTS["max_dev_pct"])),
         ("no_holders", lambda: t["top10_pct"] is None),

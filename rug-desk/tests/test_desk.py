@@ -1402,3 +1402,93 @@ class ChiefOfStaff(Base):
         self.assertLessEqual(len(sent[0][1].splitlines()), 5)
         self.assertIn("SCOUT", sent[0][1])
         self.assertNotIn("SCOUT", sent[1][1])                     # a stranger gets the help text
+
+
+EVM = "0x020bfC650A365f8BB26819deAAbF3E21291018b4"
+EVM_PAIR = "0xa70fc67c9f69da90b63a0e4c05d229954574e313"
+
+
+def evm_pair(chain="robinhood", liq=80000, age_min=120, vol=20000, buys=50, sells=30):
+    return [{"chainId": chain, "dexId": "uniswap", "pairAddress": EVM_PAIR, "url": f"https://dexscreener.com/{chain}/x",
+             "baseToken": {"address": EVM, "symbol": "CAT"}, "priceUsd": "0.002", "priceNative": "0.0000006",
+             "liquidity": {"usd": liq}, "pairCreatedAt": (time.time() - age_min * 60) * 1000, "marketCap": liq * 4,
+             "txns": {"h1": {"buys": buys, "sells": sells}}, "volume": {"h1": vol}}]
+
+
+def evm_goplus(**over):
+    g = {"is_honeypot": "0", "buy_tax": "0", "sell_tax": "0", "cannot_sell_all": "0", "is_mintable": "0",
+         "transfer_pausable": "0", "is_blacklisted": "0", "owner_change_balance": "0", "hidden_owner": "0",
+         "is_open_source": "1", "creator_address": "0xCREATOR", "creator_percent": "0.01", "holder_count": "1500",
+         "token_symbol": "CAT",
+         "dex": [{"pair": EVM_PAIR}],
+         "holders": [{"address": EVM_PAIR, "is_contract": 1, "is_locked": 0, "percent": "0.55"}] +
+                    [{"address": f"0xW{i}", "is_contract": 0, "is_locked": 0, "percent": str(0.02 * (1 - 0.1 * i))}
+                     for i in range(9)],
+         "lp_holders": [{"address": "0x000000000000000000000000000000000000dead", "percent": "0.97", "is_locked": 0}]}
+    g.update(over)
+    return g
+
+
+def evm_net(ds=None, gp=None):
+    def get(url, timeout=None, params=None, headers=None):
+        if "gopluslabs" in url:
+            return Resp({"code": 1, "message": "OK", "result": {EVM.lower(): gp or evm_goplus()}})
+        if "dexscreener.com/tokens/v1/" in url or "latest/dex/tokens/" in url:
+            return Resp(ds if ds is not None else evm_pair()) if "tokens/v1/" in url else Resp({"pairs": ds if ds is not None else evm_pair()})
+        if "search" in url:
+            return Resp({"pairs": []})
+        return Resp({})
+    return mock.patch("requests.get", get)
+
+
+class MultiChain(Base):
+    """Robinhood Chain, BNB Chain, Base, Ethereum...: one desk, the EVM checks from GoPlus."""
+    KEY = "robinhood:" + EVM.lower()
+
+    def test_keys_and_prices_per_chain(self):
+        import chains, market
+        self.assertEqual(chains.key("robinhood", EVM), self.KEY)
+        self.assertEqual(chains.split(self.KEY), ("robinhood", EVM.lower()))
+        self.assertEqual(chains.split(MINT), ("solana", MINT))
+        with evm_net():
+            m = market.pool(self.KEY)
+        self.assertEqual((m["chain"], m["symbol"]), ("robinhood", "CAT"))
+
+    def test_a_clean_robinhood_token_passes_and_is_bought_with_its_chain_costs(self):
+        with evm_net(), mock.patch("requests.post", Chain()):
+            v = check.run(self.KEY)
+        self.assertIn(v["verdict"], ("PASS", "BUY"), v)
+        self.assertIn(self.KEY, book.load())
+        self.assertIn(EVM.lower(), v["x_ca"])
+
+    def test_honeypot_and_tax_are_killed_hard(self):
+        with evm_net(gp=evm_goplus(is_honeypot="1")), mock.patch("requests.post", Chain()):
+            self.assertEqual(check.check(self.KEY)["reason"], "danger:honeypot")
+        with evm_net(gp=evm_goplus(sell_tax="0.25")), mock.patch("requests.post", Chain()):
+            self.assertEqual(check.check(self.KEY)["reason"], "danger:high_tax")
+        with evm_net(gp=evm_goplus(is_mintable="1")), mock.patch("requests.post", Chain()):
+            self.assertEqual(check.check(self.KEY)["reason"], "mint_open")
+
+    def test_v3_lp_held_by_a_wallet_is_unlocked_by_a_contract_is_fine(self):
+        import facts_evm
+        nft = [{"NFT_id": "1"}]
+        wallet_lp = [{"address": "0xDEV", "is_contract": 0, "is_locked": 0, "percent": "0.8", "NFT_list": nft},
+                     {"address": "0xLOCKER", "is_contract": 1, "is_locked": 0, "percent": "0.2", "NFT_list": nft}]
+        with evm_net(gp=evm_goplus(lp_holders=wallet_lp)):
+            self.assertEqual(facts_evm.report(self.KEY, {"pair": EVM_PAIR})["lp_burned_pct"], 20.0)
+        locker_lp = [{**wallet_lp[1], "percent": "1.0"}]
+        with evm_net(gp=evm_goplus(lp_holders=locker_lp)):
+            t = facts_evm.report(self.KEY, {"pair": EVM_PAIR})
+        self.assertEqual(t["lp_burned_pct"], 100.0)
+        self.assertAlmostEqual(t["max_wallet_pct"], 2.0)            # the pool's 55% is not a whale
+
+    def test_ethereum_gas_eats_a_small_ticket(self):
+        import market
+        k = "ethereum:" + EVM.lower()
+        with evm_net(ds=evm_pair(chain="ethereum")):
+            self.assertEqual(market.market_kill(market.pool(k)), "fees_eat_ticket")
+
+    def test_a_bare_0x_address_is_found_on_its_chain(self):
+        import market
+        with evm_net():
+            self.assertEqual(market.locate(EVM), self.KEY)

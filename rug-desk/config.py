@@ -85,6 +85,7 @@ FACTS = {                   # the rug filter. code only, no model
     # snipers, devs and factories dump. it limits losses; it does not prove an edge
     "min_age_min": 60,
     "min_vs_graduation": 1.0,   # early lane: price must be at least this x the pool's price at graduation
+    "max_fixed_cost_pct": 5,    # gas paid twice may eat at most this % of the base ticket (kills Ethereum at $25)
     # fake caps: on Oct 19, 20 of 33 graduates with a "real" pool were clones ("US Oil Exchange",
     # "National Oil Dividend Fund", "Ripple USD") showing $10M-$600M caps on $0.2-2M pools that trade
     # ~1% of their pool an hour. the tokens that really ran sat at caps 3-9x their pool, turnover 0.5-15x

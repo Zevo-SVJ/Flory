@@ -17,7 +17,7 @@ import exits
 
 SEEN = os.path.join(DATA, "momentum_seen.jsonl")
 ROWS = os.path.join(DATA, "mbacktest_rows.jsonl")
-OHLCV = "https://api.geckoterminal.com/api/v2/networks/solana/pools/{}/ohlcv/minute"
+OHLCV = "https://api.geckoterminal.com/api/v2/networks/{}/pools/{}/ohlcv/minute"
 CANDLE_S = 300
 ENTRY_WINDOW_S = 3600          # SCOUT sees a trending token every 3 min while it trends: one hour to fire
 HOLD_S = 6 * 3600
@@ -52,7 +52,9 @@ def note(live: dict):
             if (m.get("liq_usd") or 0) < MOMENTUM["min_liq_usd"] or now - _last_seen.get(mint, 0) < EVERY_S:
                 continue
             _last_seen[mint] = now
+            import chains
             new.append({"mint": mint, "pair": m["pair"], "symbol": m.get("symbol"), "t": round(now),
+                        "net": chains.CHAINS.get(m.get("chain") or "solana", chains.CHAINS["solana"])["gt"],
                         "liq": round(m["liq_usd"]), "mcap": m.get("mcap"), "avg_trade": m.get("avg_trade_1h"),
                         "n1h": (m.get("buys_1h") or 0) + (m.get("sells_1h") or 0)})
         if new:
@@ -67,11 +69,11 @@ def n_sightings() -> int:
     return len(_jsonl(SEEN))
 
 
-def candles(pair: str, end: float) -> list[tuple]:
+def candles(pair: str, end: float, net: str = "solana") -> list[tuple]:
     """5-min candles (t, open, high, low, close, volume $) ending at `end`, oldest first."""
     n = int((LOOKBACK_S + ENTRY_WINDOW_S + HOLD_S) / CANDLE_S) + 4
     for attempt in range(3):
-        r = requests.get(OHLCV.format(pair), params={"aggregate": 5, "limit": min(1000, n),
+        r = requests.get(OHLCV.format(net, pair), params={"aggregate": 5, "limit": min(1000, n),
                                                       "before_timestamp": int(end), "currency": "usd"},
                          headers={"accept": "application/json"}, timeout=20)
         if r.status_code == 404:          # GeckoTerminal does not index this pool
@@ -123,7 +125,7 @@ def enters(s: dict, sight: dict) -> bool:
 
 def replay(sight: dict, cs: list[tuple] | None = None) -> dict:
     t0 = sight["t"]
-    cs = cs if cs is not None else candles(sight["pair"], t0 + ENTRY_WINDOW_S + HOLD_S + CANDLE_S)
+    cs = cs if cs is not None else candles(sight["pair"], t0 + ENTRY_WINDOW_S + HOLD_S + CANDLE_S, sight.get("net", "solana"))
     if len(cs) < 20:
         return {**sight, "skip": "no_candles"}
     grid = [c[0] + CANDLE_S for c in cs if t0 <= c[0] + CANDLE_S <= t0 + ENTRY_WINDOW_S]
@@ -139,7 +141,9 @@ def replay(sight: dict, cs: list[tuple] | None = None) -> dict:
     if gross is None:
         return {**sight, "skip": "no_path"}
     impact = 100 * TICKET / (sight["liq"] / 2)
-    cost = 2 * (PAPER_COSTS["fee_pct"] + PAPER_COSTS.get("mev_pct", 0) + impact) / 100 + 2 * PAPER_COSTS["tx_usd"] / TICKET
+    import chains
+    c = chains.costs(sight["mint"])
+    cost = 2 * (c["fee_pct"] + c.get("mev_pct", 0) + impact) / 100 + 2 * c["tx_usd"] / TICKET
     net = (gross / exitlab.TICKET_USD - cost) * 100
     return {**sight, "entered": True, "entry_t": entry, "wait_min": round((entry - t0) / 60),
             "net_pct": round(net, 1), "peak_pct": round((max(p["price"] for p in path) / path[0]["price"] - 1) * 100, 1)}

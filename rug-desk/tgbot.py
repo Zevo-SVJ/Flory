@@ -18,7 +18,7 @@ import env
 API = "https://api.telegram.org/bot{}/{}"
 STATE = os.path.join(DATA, "tgbot.json")
 LOG = os.path.join(DATA, "tgbot.csv")
-CA = re.compile(r"\b[1-9A-HJ-NP-Za-km-z]{32,44}\b")
+CA = re.compile(r"\b0x[0-9a-fA-F]{40}\b|\b[1-9A-HJ-NP-Za-km-z]{32,44}\b")      # EVM, then Solana
 PER_CHAT_HOUR = 15
 
 LABELS = {
@@ -48,6 +48,18 @@ LABELS = {
     "lp_unverified": "liquidité non vérifiable",
     "dev_unknown": "créateur introuvable",
     "no_holders": "holders illisibles",
+    "fees_eat_ticket": "frais de réseau trop lourds pour une petite mise",
+    "danger:honeypot": "HONEYPOT : on peut acheter, pas revendre",
+    "danger:high_tax": "taxe d'achat ou de vente au-dessus de 10 %",
+    "danger:cannot_sell_all": "impossible de tout revendre",
+    "danger:cannot_buy": "achat bloqué par le contrat",
+    "danger:hidden_owner": "propriétaire caché dans le contrat",
+    "danger:selfdestruct": "le contrat peut s'autodétruire",
+    "danger:tax_modifiable": "le propriétaire peut changer la taxe",
+    "danger:tax_per_wallet": "taxe réglable wallet par wallet",
+    "danger:trading_cooldown": "délai imposé entre deux trades",
+    "danger:creator_made_honeypots": "ce créateur a déjà fait des honeypots",
+    "danger:closed_source": "code du contrat non publié",
 }
 UNKNOWN = {"lp_unverified", "dev_unknown", "no_holders"}
 # on a token a week old or more these say little: its liquidity sits in many pools and on exchanges, and
@@ -58,8 +70,9 @@ NOTES = {"fake_cap": "capitalisation très au-dessus de la liquidité de son plu
          "whale": "un wallet détient plus de 5 % (souvent un exchange)",
          "top10_heavy": "top 10 concentré (souvent des exchanges)"}
 
-HELP = ("Colle l'adresse (CA) d'un token Solana : je lis la chaîne, les holders, qui les a financés, "
-        "Jupiter, et je te dis si ça ressemble à une usine à rug.\n\n"
+HELP = ("Colle l'adresse (CA) d'un token : Solana, Robinhood Chain, BNB Chain, Base, Ethereum, Arbitrum et "
+        "d'autres. Je lis le contrat (honeypot, taxes, mint, pause), les holders et la liquidité, et je te dis "
+        "si ça ressemble à une usine à rug.\n\n"
         "Lecture automatique, elle peut se tromper. Ce n'est pas un conseil financier.")
 
 
@@ -72,6 +85,13 @@ def inspect(mint: str) -> dict:
     returns {symbol, flags: [codes], context: {...}}: the desk's own checks, run read-only."""
     import market, facts, check
     from score import score
+    import chains
+    if mint.lower().startswith("0x") and ":" not in mint:      # a bare EVM address: the chain of its deepest pool
+        found = market.locate(mint)
+        if not found:
+            raise RuntimeError("aucun pool trouvé sur les chaînes suivies")
+        mint = found
+    evm = chains.is_evm(mint)
     m = market.pool(mint)
     flags = []
     if m:
@@ -84,11 +104,15 @@ def inspect(mint: str) -> dict:
             c = None
         if c:
             flags.append(c)
-    t = facts.report(mint, m or {})
+    if evm:
+        import facts_evm
+        t = facts_evm.report(mint, m)
+    else:
+        t = facts.report(mint, m or {})
     k = facts.fact_kill(t, market.lane(m) if m else "early")
     if k:
         flags.append(k)
-    deep = check.deep_read(mint, t, desk=False)
+    deep = check.deep_read(mint, t, desk=False) if not evm else {"kill": None, "logged": {}}
     if deep["kill"]:
         flags.append(deep["kill"])
     d = deep["logged"]
@@ -99,7 +123,8 @@ def inspect(mint: str) -> dict:
     if (ctx["age_min"] or 0) >= ESTABLISHED_MIN:
         ctx["notes"] = [f for f in flags if f in CONTEXTUAL]
         flags = [f for f in flags if f not in CONTEXTUAL]
-    return {"symbol": (m or {}).get("symbol") or t.get("symbol") or mint[:6], "flags": flags, "context": ctx}
+    return {"symbol": (m or {}).get("symbol") or t.get("symbol") or mint[:6], "flags": flags, "context": ctx,
+            "key": mint}
 
 
 def verdict(r: dict) -> str:
@@ -135,7 +160,11 @@ def text(mint: str, r: dict) -> str:
         lines.append("À savoir (token établi, pas un signal de rug) : " + " ; ".join(NOTES[f] for f in c["notes"]))
     if v == "green":
         lines.append("Pas de piège trouvé : ça ne dit rien du prix de demain.")
-    lines.append(f"dexscreener.com/solana/{mint}")
+    import chains
+    k = r.get("key") or mint
+    if chains.is_evm(k):
+        lines.insert(1, f"chaîne : {chains.split(k)[0]}")
+    lines.append(chains.link(k).replace("https://", ""))
     return "\n".join(lines)
 
 

@@ -131,7 +131,18 @@ def scout():
         down.discard("gt")
     born = scan.grads.load()["mints"].values()
     young = sum(1 for t in born if time.time() - t < FACTS["min_age_min"] * 60)
-    emit("SCOUT", "scan", f"{len(leads)} token(s) handed to GARDE: {scan.last_lanes['early']} launch(es), "
+    import chains
+    per = {}
+    for m in leads:
+        per[chains.split(m)[0]] = per.get(chains.split(m)[0], 0) + 1
+    where = (" [" + ", ".join(f"{c} {n}" for c, n in sorted(per.items(), key=lambda kv: -kv[1])) + "]") if per else ""
+    if evmnew_err := __import__("evmnew").error:
+        if "evmnew" not in down:
+            emit("SCOUT", "error", evmnew_err)
+            down.add("evmnew")
+    else:
+        down.discard("evmnew")
+    emit("SCOUT", "scan", f"{len(leads)} token(s) handed to GARDE{where}: {scan.last_lanes['early']} launch(es), "
                           f"{scan.last_lanes['momentum']} in momentum ({len(born)} graduates watched, "
                           f"{young} still in their first {FACTS['min_age_min']} min)")
     set_agent("SCOUT", funnel=scan.last_funnel)
@@ -197,7 +208,13 @@ def inbox():
         mints = list(dict.fromkeys(line.strip() for line in f if line.strip()))
     os.remove(work)
     for mint in mints[:10]:
-        emit("GARDE", "scan", f"check requested from the dashboard: {mint[:6]}…{mint[-4:]}", mint=mint)
+        if mint.lower().startswith("0x") and ":" not in mint:      # an EVM address: find its chain first
+            found = market.locate(mint)
+            if not found:
+                emit("GARDE", "kill", f"{mint[:8]}…: aucun pool sur une chaîne suivie", mint=mint, reason="no_pool")
+                continue
+            mint = found
+        emit("GARDE", "scan", f"check requested from the dashboard: {mint[:14]}…{mint[-4:]}", mint=mint)
         garde(mint)
 
 

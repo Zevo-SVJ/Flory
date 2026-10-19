@@ -7,7 +7,7 @@
 import csv, json, os, time
 import requests
 from config import LOG, SCHEDULE, FACTS
-import check, market, grads, sources
+import check, market, grads, sources, chains, evmnew
 from market import market_kill
 
 SOURCES = ["token-profiles/latest/v1", "token-boosts/latest/v1", "token-boosts/top/v1",
@@ -74,14 +74,18 @@ def searched(trending: list[str] = ()) -> list[str]:
         for p in (data.get("pairs") if isinstance(data, dict) else None) or []:
             age_h = (now_ms - (p.get("pairCreatedAt") or 0)) / 3.6e6
             a = (p.get("baseToken") or {}).get("address")
-            if (p.get("chainId") == "solana" and p.get("dexId") == "pumpswap" and a and a not in out
+            chain = p.get("chainId")
+            # Solana: PumpSwap only, the one pool whose LP the desk reads on chain. EVM: any DEX, GoPlus reads it
+            ok_dex = p.get("dexId") == "pumpswap" if chain == "solana" else chains.supported(chain)
+            k = chains.key(chain, a) if a and chains.supported(chain) else None
+            if (ok_dex and k and k not in out
                     and FACTS["min_age_min"] / 60 <= age_h <= FACTS["max_age_hours"]
                     and ((p.get("liquidity") or {}).get("usd") or 0) >= FACTS["min_liquidity_usd"]):
-                out.append(a)
+                out.append(k)
     return out
 
 
-GT = "https://api.geckoterminal.com/api/v2/networks/solana/trending_pools"
+GT = "https://api.geckoterminal.com/api/v2/networks/trending_pools"     # every network at once
 NOT_MEMES = {"So11111111111111111111111111111111111111112", "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
              "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB"}      # SOL, USDC, USDT
 gt_error = None
@@ -97,9 +101,16 @@ def gt_trending() -> list[str]:
             r = requests.get(GT, params={"duration": d, "page": 1}, headers={"accept": "application/json"}, timeout=15)
             r.raise_for_status()
             for p in r.json().get("data") or []:
-                bid = ((((p.get("relationships") or {}).get("base_token") or {}).get("data") or {}).get("id") or "")
-                if bid.startswith("solana_") and bid[7:] not in NOT_MEMES and bid[7:] not in out:
-                    out.append(bid[7:])
+                rel = p.get("relationships") or {}
+                net = ((rel.get("network") or {}).get("data") or {}).get("id") or ""
+                bid = ((rel.get("base_token") or {}).get("data") or {}).get("id") or ""
+                chain = chains.GT_TO_CHAIN.get(net)
+                name = ((p.get("attributes") or {}).get("name") or "").split(" / ")[0].strip().lower()
+                if not chain or not bid.startswith(net + "_") or name in chains.NOT_MEMES:
+                    continue
+                k = chains.key(chain, bid[len(net) + 1:])
+                if k not in NOT_MEMES and k not in out:
+                    out.append(k)
         gt_error = None
         sources.record("geckoterminal", True, f"{len(out)} tokens en tendance")
     except Exception as e:
@@ -118,9 +129,10 @@ def leads() -> list[str]:
             errors.append(f"{src}: {e}")
             continue
         for t in r.json():
-            a = t.get("tokenAddress")
-            if t.get("chainId") == "solana" and a and a not in done and a not in out:
-                out.append(a)
+            a, chain = t.get("tokenAddress"), t.get("chainId")
+            k = chains.key(chain, a) if a and chains.supported(chain) else None
+            if k and k not in done and k not in out:
+                out.append(k)
     live = market.pools(out)
     trending = [(live[m] or {}).get("symbol") for m in out if live.get(m) and not market_kill(live[m])]
     found = searched(trending)
@@ -136,8 +148,12 @@ def leads() -> list[str]:
         grad_error = f"pump.fun graduations unreadable: {e}"[:200]
     graduates = [a for a in grads.recent() if a not in done and a not in out]
     out += graduates
+    evmnew.fetch()                             # the newest pools on the EVM chains, the same role
+    fresh_evm = [k for k in evmnew.recent() if k not in done and k not in out]
+    out += fresh_evm
     n_feeds_search_grads = len(out)
     src = {m: "graduation pump.fun" for m in graduates}
+    src.update({m: f"nouveau pool {chains.split(m)[0]}" for m in fresh_evm})
     trend = [a for a in gt_trending() if a not in done and a not in out]
     out += trend
     import jup                                 # the most organic trading of the hour, per Jupiter
@@ -154,6 +170,9 @@ def leads() -> list[str]:
     born = grads.load()["mints"]
     grads.forget([m for m in graduates if time.time() - born.get(m, time.time()) > 7200
                   and ((live.get(m) or {}).get("liq_usd") or 0) < 10000])
+    seen_evm = evmnew.load()
+    evmnew.forget([m for m in fresh_evm if time.time() - seen_evm.get(m, time.time()) > 7200
+                   and ((live.get(m) or {}).get("liq_usd") or 0) < 10000])
     # the funnel of this run: where every lead died before GARDE, per lane. shown in SCOUT's panel
     global last_funnel
     funnel = {"early": {}, "momentum": {}}
@@ -162,7 +181,11 @@ def leads() -> list[str]:
         k = market_kill(p) or "→ GARDE"
         f = funnel[market.lane(p) if p else "early"]
         f[k] = f.get(k, 0) + 1
-    last_funnel = {"leads": len(out), "graduates": len(graduates), "trending": len(trend), "jupiter_top": len(top),
+    by_chain = {}
+    for m in out:
+        by_chain[chains.split(m)[0]] = by_chain.get(chains.split(m)[0], 0) + 1
+    last_funnel = {"leads": len(out), "graduates": len(graduates), "evm_new": len(fresh_evm), "chains": by_chain,
+                   "trending": len(trend), "jupiter_top": len(top),
                    "feeds_and_search": n_feeds_search_grads - len(graduates), **funnel}
     ok = [m for m in out if not market_kill(live[m])]
     # best pools first, and the two lanes take turns, so momentum's big volumes never crowd out launches

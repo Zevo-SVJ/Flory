@@ -81,7 +81,9 @@ def check(mint: str) -> dict:
             "lane": market.lane(m) if m else None}
     if (k := market_kill(m)):
         return {"stage": "pool", "verdict": "SKIP", "reason": k, "symbol": (m or {}).get("symbol"), **seen}
-    if market.lane(m) == "early":                                # still under its graduation price: the
+    import chains
+    evm = chains.is_evm(mint)
+    if market.lane(m) == "early" and not evm:                    # still under its graduation price: the
         import grads                                             # first-hour dump has not been absorbed
         p0 = grads.birth_price(mint)
         if p0 and m.get("price_native") and m["price_native"] < FACTS["min_vs_graduation"] * p0:
@@ -102,8 +104,12 @@ def check(mint: str) -> dict:
                 return {"stage": "pool", "verdict": "SKIP", "reason": "stale_data", "symbol": m.get("symbol"), **seen}
             seen.update(vaults=vaults, sol0=res[1])        # VIGIE watches these vaults once bought
 
-    try:
-        token = report(mint, m)                                  # rug filter, free
+    try:                                                         # rug filter, free
+        if evm:
+            import facts_evm                                     # GoPlus: honeypot, taxes, mint, pause, LP lock
+            token = facts_evm.report(mint, m)
+        else:
+            token = report(mint, m)
     except Exception as e:
         return {"stage": "facts", "verdict": "SKIP", "reason": f"facts failed: {e}",
                 "symbol": m["symbol"], **seen}
@@ -116,7 +122,7 @@ def check(mint: str) -> dict:
     v = judge(token, m)
     sym = m["symbol"] or token["symbol"]
     sc = score(m, token)
-    if sc["score"] >= MIN_SCORE:            # the deep read costs calls: only for tokens that could be bought
+    if sc["score"] >= MIN_SCORE and not evm:   # the deep read costs calls, and its sources are Solana's
         deep = deep_read(mint, token, skip=waived)
         seen.update(deep["logged"])
         if deep["kill"]:
@@ -126,7 +132,7 @@ def check(mint: str) -> dict:
     return {**v, **seen, "ticket": usd, "tier": tier, "signals": sig, "symbol": sym, "price": m["price"], "liq_usd": m["liq_usd"], "url": m["url"],
             "score": sc["score"], "flags": " ".join(sc["flags"]),
             # the free check 14: two links you open yourself. latest posts, not "top"
-            "x_ca": f"https://x.com/search?q={mint}&f=live",
+            "x_ca": f"https://x.com/search?q={chains.split(mint)[1]}&f=live",
             "x_ticker": f"https://x.com/search?q=%24{sym}&f=live"}
 
 

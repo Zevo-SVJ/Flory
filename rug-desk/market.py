@@ -3,12 +3,17 @@
 import time
 import requests
 from config import FACTS, TICKET_USD, MOMENTUM
+import chains
 
 DS = "https://api.dexscreener.com/tokens/v1/solana"
+DS_TOKENS = "https://api.dexscreener.com/tokens/v1"        # /{chainId}/{addr,addr,...}, 30 at most
 
 
 def _best(pairs: list, mint: str) -> dict | None:
-    pairs = [p for p in pairs if (p.get("baseToken") or {}).get("address") == mint]
+    chain, addr = chains.split(mint)
+    same = (lambda a: a == addr) if chain == "solana" else (lambda a: (a or "").lower() == addr.lower())
+    pairs = [p for p in pairs if same((p.get("baseToken") or {}).get("address"))
+             and p.get("chainId", chain) == chain]
     if not pairs:
         return None
     p = max(pairs, key=lambda x: (x.get("liquidity") or {}).get("usd") or 0)
@@ -17,6 +22,7 @@ def _best(pairs: list, mint: str) -> dict | None:
     born = p.get("pairCreatedAt")
     return {
         "symbol": (p.get("baseToken") or {}).get("symbol"),
+        "chain": chain,
         "dex": p.get("dexId"),
         "pair": p.get("pairAddress"),
         "price": float(p.get("priceUsd") or 0),
@@ -48,16 +54,44 @@ def _best(pairs: list, mint: str) -> dict | None:
 
 
 def pools(mints: list[str]) -> dict[str, dict | None]:
-    """Up to 30 tokens per call. The scanner uses this to drop thin pools before any real check."""
-    out = {}
-    for i in range(0, len(mints), 30):
-        chunk = mints[i:i + 30]
-        r = requests.get(f"{DS}/{','.join(chunk)}", timeout=15)
-        r.raise_for_status()
-        data = r.json()
-        pairs = data if isinstance(data, list) else (data.get("pairs") or [])
-        out.update({m: _best(pairs, m) for m in chunk})
+    """Up to 30 tokens per call and chain. The scanner uses this to drop thin pools before any real check.
+    keys are Solana mints or "chain:0xaddr" (chains.py)."""
+    out, by_chain = {}, {}
+    for m in mints:
+        by_chain.setdefault(chains.split(m)[0], []).append(m)
+    for chain, keys in by_chain.items():
+        if not chains.supported(chain):
+            out.update({k: None for k in keys})
+            continue
+        for i in range(0, len(keys), 30):
+            chunk = keys[i:i + 30]
+            url = f"{DS}/{','.join(chunk)}" if chain == "solana" else \
+                f"{DS_TOKENS}/{chain}/{','.join(chains.split(k)[1] for k in chunk)}"
+            r = requests.get(url, timeout=15)
+            r.raise_for_status()
+            data = r.json()
+            pairs = data if isinstance(data, list) else (data.get("pairs") or [])
+            out.update({m: _best(pairs, m) for m in chunk})
     return out
+
+
+def locate(addr: str) -> str | None:
+    """A bare 0x address (pasted in the dashboard or sent to the bot) is on some EVM chain: the supported
+    chain where its deepest pool sits. Returns the token key, or None."""
+    if ":" in addr or not addr.lower().startswith("0x"):
+        return addr
+    try:
+        r = requests.get(f"https://api.dexscreener.com/latest/dex/tokens/{addr}", timeout=15)
+        r.raise_for_status()
+        pairs = (r.json() or {}).get("pairs") or []
+    except Exception:
+        return None
+    pairs = [p for p in pairs if chains.supported(p.get("chainId")) and p.get("chainId") != "solana"
+             and ((p.get("baseToken") or {}).get("address") or "").lower() == addr.lower()]
+    if not pairs:
+        return None
+    best = max(pairs, key=lambda p: (p.get("liquidity") or {}).get("usd") or 0)
+    return chains.key(best["chainId"], addr)
 
 
 def pool(mint: str) -> dict | None:
@@ -68,6 +102,9 @@ def market_kill(m: dict | None) -> str | None:
     if not m:                                                    return "no_pool"
     if m["price"] <= 0:                                          return "no_price"
     if m["liq_usd"] < FACTS["min_liquidity_usd"]:                return "thin_pool"
+    # gas paid twice on a small ticket: on Ethereum a $25 ticket loses 12% before the price moves
+    if 2 * chains.CHAINS.get(m.get("chain") or "solana", chains.CHAINS["solana"])["tx_usd"] > \
+            FACTS.get("max_fixed_cost_pct", 5) / 100 * TICKET_USD:   return "fees_eat_ticket"
     if TICKET_USD / m["liq_usd"] > FACTS["max_ticket_share"]:    return "ticket_too_big"
     cap_x = MOMENTUM["max_mcap_liq"] if lane(m) == "momentum" else FACTS["max_mcap_liq"]
     if (m.get("mcap") or 0) > cap_x * m["liq_usd"]:              return "fake_cap"
@@ -140,7 +177,8 @@ def copycat(m: dict, mint: str) -> str | None:
     sym = (m.get("symbol") or "").strip().lower()
     if not sym:
         return None
-    hit = _tickers.get(sym)
+    ck = f"{m.get('chain') or 'solana'}:{sym}"
+    hit = _tickers.get(ck)
     if not hit or time.time() - hit[0] > 600:
         try:
             r = requests.get("https://api.dexscreener.com/latest/dex/search", params={"q": sym}, timeout=15)
@@ -156,16 +194,17 @@ def copycat(m: dict, mint: str) -> str | None:
         hit = (time.time(), [((p.get("baseToken") or {}).get("address"), (p.get("liquidity") or {}).get("usd") or 0,
                               p.get("pairCreatedAt") or 0, p.get("dexId"), avg24(p),
                               (p.get("volume") or {}).get("h24") or 0)
-                             for p in pairs if p.get("chainId") == "solana"
+                             for p in pairs if p.get("chainId") == (m.get("chain") or "solana")
                              and (p.get("pairCreatedAt") or 0) >= week_ago_ms
                              and ((p.get("baseToken") or {}).get("symbol") or "").strip().lower() == sym])
-        _tickers[sym] = hit
+        _tickers[ck] = hit
     # only the dead namesakes born BEFORE this token count: a real runner gets copied after it runs, and its
     # copies die (UHI, XBT, HOOT on Oct 19). a factory's previous batches are older than its next one
     recent_ms = (time.time() - 72 * 3600) * 1000
     me_ms = (time.time() - (m.get("age_min") or 0) * 60) * 1000
+    me = chains.split(mint)[1].lower()
     dead = {addr for addr, liq, born, dex, avg, _ in hit[1]
-            if addr != mint and dex == "pumpswap" and recent_ms <= born < me_ms - 10 * 60000
+            if (addr or "").lower() != me and dex == "pumpswap" and recent_ms <= born < me_ms - 10 * 60000
             and liq < 5000 and avg < FACTS["min_avg_trade_usd"]}
     if len(dead) >= 2:
         return "serial_farm"
@@ -174,6 +213,6 @@ def copycat(m: dict, mint: str) -> str | None:
     # it for a while. counting them killed the originals: DAC (1.25M$ traded in 24 h) and Tengu on Oct 19,
     # each "copying" namesakes launched after them. copycat was the desk's first kill reason that evening
     bigger = [liq for addr, liq, born, _, _, vol24 in hit[1]
-              if addr != mint and born < me_ms - 10 * 60000
+              if (addr or "").lower() != me and born < me_ms - 10 * 60000
               and liq > 1.5 * (m.get("liq_usd") or 0) and vol24 >= 0.25 * liq]
     return "copycat" if bigger else None

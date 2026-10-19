@@ -55,6 +55,9 @@ Optional `.env` (copy `.env.example`, never commit it):
 | ECHO.md | the X reader's instructions. run it from a local Claude session with Claude in Chrome: `/loop 10m Lis et applique ~/Documents/rug-desk-run/rug-desk/ECHO.md` |
 | events.py | the event log and agent status the dashboard reads |
 | ruggers.py | the desk's own creator blacklist: a token that collapses (-90% at audit, or a pulled pool) blacklists its creator, and GARDE kills that wallet's next tokens |
+| chains.py | every chain the desk trades: DexScreener, GoPlus and GeckoTerminal ids, gas, pool fee and MEV per swap |
+| facts_evm.py | the rug checks on EVM chains, from GoPlus: honeypot, taxes, mint, pause, blacklist, creator, holders, LP lock |
+| evmnew.py | SCOUT's launch feed on EVM chains: GeckoTerminal's newest pools, followed until they are 60 min old |
 | backtest.py | replays pump.fun graduations from the chain; `--accumulate` adds a batch to the cumulative sample (AUDIT runs it every 6 h) |
 | mbacktest.py | the momentum lane replayed: tokens SCOUT saw at the time, GeckoTerminal 5-min candles, same costs and exits |
 | edge.py | the go-live gate (200 trades), the criteria fixed on Oct 19, the Oct 26 review, the "can it pay a living" projection |
@@ -220,6 +223,25 @@ The criteria were fixed on Oct 19, before the data (edge.py): under 200 trades, 
 with a mean at or below 0 ends the idea of living off it; 200+ trades with a mean of +3% or more and the
 whole interval above 0 is an edge. **Oct 26 review** (computed by the desk, AUDIT panel): if the paper
 trades and the backtest of the current rule are both at or below 0, stop optimizing the trading.
+
+## Every major chain (Oct 19)
+
+The desk was Solana-only. It now reads 14 chains: Solana, Robinhood Chain (mainnet Jul 1 2026; that evening
+7 of DexScreener's 30 paid boosts), BNB Chain, Base, Ethereum, Arbitrum, Monad, Abstract, Sonic, Avalanche,
+Polygon, Optimism, Berachain and Unichain (chains.py).
+- SCOUT: DexScreener's lists and search on every chain, GeckoTerminal trending across networks, and the
+  newest EVM pools (evmnew.py), the EVM counterpart of the pump.fun graduation feed.
+- GARDE: Solana keeps its full pipeline. On EVM chains GoPlus reads the contract: a honeypot, a tax over
+  10%, a hidden owner, a self-destruct, a modifiable tax or unpublished code is a hard kill; mint, pause,
+  blacklist or balance edits count as open authorities; the LP must be burned or locked (on v3/v4 pools a
+  position held by a plain wallet can be pulled: that is the classic rug); creator share, top 10, whale.
+  The deep read (Jupiter, funding clusters, Solana Tracker) stays Solana-only.
+- Costs per chain: gas, the usual meme pool fee, MEV. Ethereum's gas would eat 12% of a $25 ticket:
+  those tokens die as fees_eat_ticket.
+- A token is its Solana mint, or "chain:0xaddress". Paste a bare 0x address in the dashboard or the bot:
+  the desk finds its chain (the deepest pool among the supported chains).
+- Not covered yet: the backtest (Solana graduations only), Tron, Sui, TON (other address formats and
+  other contract models).
 
 ## The anti-rug bot (Telegram)
 

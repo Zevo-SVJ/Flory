@@ -64,7 +64,9 @@ def replay(r: dict) -> float | None:
     if gross is None:
         return None
     impact = 100 * TICKET / (entry["liq"] / 2)
-    cost = 2 * (PAPER_COSTS["fee_pct"] + PAPER_COSTS.get("mev_pct", 0) + impact) / 100 + 2 * PAPER_COSTS["tx_usd"] / TICKET
+    import chains
+    c = chains.costs(r["mint"])
+    cost = 2 * (c["fee_pct"] + c.get("mev_pct", 0) + impact) / 100 + 2 * c["tx_usd"] / TICKET
     return (gross / exitlab.TICKET_USD - cost) * 100
 
 

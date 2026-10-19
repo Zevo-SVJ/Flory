@@ -6,6 +6,7 @@
 # an ECHO reason quoted from X stays a quote.
 import atomic
 import json, os, threading, time
+import chains
 from config import DATA
 
 DIR = os.path.join(DATA, "dossiers")
@@ -17,7 +18,7 @@ def add(mint: str, agent: str, what: str, **facts):
     """Append one entry. Never raises: a dossier is a record, not a reason to stop an agent."""
     try:
         os.makedirs(DIR, exist_ok=True)
-        path = os.path.join(DIR, f"{mint}.json")
+        path = os.path.join(DIR, f"{chains.fname(mint)}.json")
         with _LOCK:
             d = load(mint)
             d["mint"] = mint
@@ -34,7 +35,7 @@ def add(mint: str, agent: str, what: str, **facts):
 
 def load(mint: str) -> dict:
     try:
-        with open(os.path.join(DIR, f"{mint}.json")) as f:
+        with open(os.path.join(DIR, f"{chains.fname(mint)}.json")) as f:
             return json.load(f)
     except (OSError, ValueError):
         return {"mint": mint, "entries": []}

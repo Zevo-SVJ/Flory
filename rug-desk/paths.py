@@ -2,6 +2,7 @@
 # every price VIGIE sees for a traded token, kept on disk: during the trade and for 6 hours after the
 # exit (a "ghost"), so the exit lab can replay other exit rules and see what each would have earned.
 import csv, json, os, time
+import chains
 from config import PATHS, DATA
 
 GHOSTS = os.path.join(DATA, "ghosts.json")
@@ -10,7 +11,7 @@ FIELDS = ["t", "price", "liq", "b5", "s5", "v5"]
 
 
 def _file(mint: str) -> str:
-    return os.path.join(PATHS, f"{mint}.csv")
+    return os.path.join(PATHS, f"{chains.fname(mint)}.csv")
 
 
 def append(mint: str, s: dict):

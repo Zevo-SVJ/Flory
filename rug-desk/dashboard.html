@@ -620,7 +620,8 @@ function drawPanel() {
     srcCards($("scoutSources"), [["geckoterminal", "GeckoTerminal"], ["jupiter_top", "Jupiter top organique"]]);
     const F = a.funnel || {};
     $("funnelHead").textContent = F.leads == null ? "Pas encore de passage depuis la mise à jour." :
-      `${F.leads} tokens examinés : ${F.graduates} graduations pump.fun, ${F.trending} en tendance (GeckoTerminal), ${F.jupiter_top} top organique (Jupiter), ${F.feeds_and_search} listes DexScreener.`;
+      `${F.leads} tokens examinés : ${F.graduates} graduations pump.fun, ${F.evm_new || 0} nouveaux pools EVM, ${F.trending} en tendance (GeckoTerminal), ${F.jupiter_top} top organique (Jupiter), ${F.feeds_and_search} listes DexScreener.`
+      + (F.chains ? " Par chaîne : " + Object.entries(F.chains).sort((x, y) => y[1] - x[1]).map(([c, n]) => `${c} ${n}`).join(" · ") + "." : "");
     const bars = (id, obj) => {
       const rows = Object.entries(obj || {}).sort((x, y) => y[1] - x[1]), max = Math.max(1, ...rows.map(r => r[1]));
       $(id).replaceChildren(...(rows.length ? rows.map(([k, n]) => {
@@ -654,7 +655,7 @@ function tokenCell(mint, symbol) {
 }
 async function openDossier(mint, symbol) {
   $("dname").textContent = "$" + (symbol || mint.slice(0, 6));
-  $("dlink").href = `https://dexscreener.com/solana/${mint}`;
+  $("dlink").href = mint.includes(":") ? `https://dexscreener.com/${mint.split(":")[0]}/${mint.split(":")[1]}` : `https://dexscreener.com/solana/${mint}`;
   $("dbody").replaceChildren(el("div", { class: "empty" }, "chargement…"));
   $("dossier").showModal();
   const d = await fetch("/api/dossier?mint=" + encodeURIComponent(mint)).then(r => r.json()).catch(() => ({ entries: [] }));
@@ -704,12 +705,15 @@ const KILLS = { thin_pool: "Pool trop petit", too_fresh: "Trop récent", too_old
   ticket_too_big: "Pool trop petit pour la mise", no_momentum: "Pas de momentum", below_graduation: "Sous son prix de graduation", overextended: "Bougie verticale (trop tard)", jup_sus: "Jupiter : suspect", serial_dev: "Dev lanceur en série",
   inorganic_volume: "Volume non organique (Jupiter)", low_organic: "Score organique bas", rug_funder: "Financé par un rugger connu",
   funded_cluster: "Cluster financé par un même wallet", fresh_wallets: "Holders = wallets neufs", st_rugged: "Déjà rug (Solana Tracker)",
-  factory_wallets: "Wallets d'usine à rugs connus", bundled: "Bundlers > 15 %", insiders: "Insiders > 15 %", snipers: "Snipers > 25 %" };
+  factory_wallets: "Wallets d'usine à rugs connus", fees_eat_ticket: "Frais de réseau trop lourds (Ethereum)", bundled: "Bundlers > 15 %", insiders: "Insiders > 15 %", snipers: "Snipers > 25 %" };
 const FLAG_LABELS = { few_holders: "peu de holders", bot_volume: "volume de bots ?", quiet: "peu d'activité",
   very_young: "très jeune", smart_money: "wallets gagnants déjà vus", no_socials: "ni X ni Telegram ni site", late: "vieux (> 48 h)", liq_edge: "liquidité juste", one_sided: "achats/ventes déséquilibrés",
   concentrated: "top 10 un peu lourd" };
 const flagText = (f) => (f || "").split(" ").filter(Boolean).map(x => FLAG_LABELS[x] || x).join(" · ");
-const killLabel = (k) => KILLS[k] || (k && k.startsWith("danger:") ? "Piège Token-2022 : " + k.slice(7) : k);
+const DANGERS = { honeypot: "honeypot (revente impossible)", high_tax: "taxe > 10 %", cannot_sell_all: "impossible de tout revendre",
+  cannot_buy: "achat bloqué", hidden_owner: "propriétaire caché", selfdestruct: "contrat autodestructible", tax_modifiable: "taxe modifiable",
+  tax_per_wallet: "taxe par wallet", trading_cooldown: "délai entre trades", creator_made_honeypots: "créateur de honeypots", closed_source: "code non publié" };
+const killLabel = (k) => KILLS[k] || (k && k.startsWith("danger:") ? "Piège du contrat : " + (DANGERS[k.slice(7)] || k.slice(7)) : k);
 
 function drawPanels() {
   table("open", [["Token"], ["Entrée", 1], ["Prix", 1], ["Variation", 1], ["Plus haut", 1], ["Reste", 1], ["Depuis", 1], ["PnL latent", 1]],
