@@ -26,6 +26,7 @@ only posts an approval line telling you to read X yourself before you buy.
     python -m unittest discover -s tests      # 17 offline tests, should print OK
     python check.py <any Solana mint>         # one verdict, as JSON
     python run.py                             # the desk: watch 10m, scan 30m, report 21:30
+    python dashboard.py                       # private dashboard on http://localhost:8765
 
 Optional `.env` (copy `.env.example`, never commit it):
 - `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID` → alerts on your phone, free.
@@ -45,6 +46,7 @@ Optional `.env` (copy `.env.example`, never commit it):
 | scan.py | leads: fresh Solana tokens with a paid DexScreener profile |
 | report.py | evening report from the CSVs |
 | run.py | scheduler (replaces Grok Bot routines) |
+| dashboard.py + .html | private dashboard: `python3 dashboard.py`, then http://localhost:8765 |
 | data/ | checks.csv, trades.csv, positions.json, desk.log |
 
 ## Rules that are in the code
