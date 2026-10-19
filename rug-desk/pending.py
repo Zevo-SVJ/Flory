@@ -61,6 +61,9 @@ def write_queue(p: dict, done: dict):
     os.replace(tmp, X_QUEUE)
 
 
+SELL_ON = ("SCAM",)       # ECHO verdicts that close an open position. SKIP is recorded and measured only
+
+
 def echo_silent(done: dict) -> bool:
     """ECHO wrote nothing for ECHO_SILENT_MIN minutes: its session is closed, asleep or out of usage."""
     last = max((r["time"] for r in done.values() if r.get("time")), default=None)
@@ -95,10 +98,10 @@ def decide() -> list[dict]:
                 if x:
                     out.append({"kind": "info", "symbol": sym, "mint": mint,
                                 "text": f"${sym} X read after the buy: {x['verdict'].upper()} ({x.get('raison', '')[:70]})"})
-                if x and x["verdict"].upper() in ("SCAM", "SKIP") and mint in book.load():
-                    # Oct 19: the 11 positions ECHO read as SKIP lost $116.81 together, ECHO said BUY to none.
-                    # its SKIPs carry evidence (recycled phishing templates, fake vote portals, a rugged
-                    # name), so a SKIP now closes the position too, at the pool's price of this moment
+                if x and x["verdict"].upper() in SELL_ON and mint in book.load():
+                    # only a SCAM closes the position (concrete evidence: a named rug accusation, a bundle).
+                    # a SKIP did too until Oct 19 evening: ECHO said SKIP to nearly everything and BUY to none,
+                    # so every buy was sold 1-12 min later and paid the round trip (8 of 8 trades, -9.3% each)
                     m = pool(mint)
                     price = (m or {}).get("price") or 0
                     why = "x_" + x["verdict"].lower()
@@ -151,11 +154,10 @@ def decide() -> list[dict]:
                         "reason": "x_timeout"})
     save(p)
     write_queue(p, done)
-    # any open position ECHO already read as SKIP or SCAM, whenever that read came (including reads made
-    # before the SKIP rule existed): out at the pool's price of this moment
+    # any open position ECHO read as SCAM, whenever that read came: out at the pool's price of this moment
     for mint, pos in book.load().items():
         x = done.get(mint)
-        if not x or x["verdict"].upper() not in ("SKIP", "SCAM") or mint in p:
+        if not x or x["verdict"].upper() not in SELL_ON or mint in p:
             continue
         m = pool(mint)
         price = (m or {}).get("price") or 0

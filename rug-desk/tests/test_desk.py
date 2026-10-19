@@ -428,8 +428,12 @@ class Gate(Base):
             ev = self.p.decide()
         self.assertEqual(self.p.load(), {})
         self.assertIn("after the buy", ev[0]["text"])
-        self.assertNotIn(MINT, book.load())           # an X SKIP closes the position (Oct 19: SKIPs lost $117)
-        self.assertTrue(any(e.get("reason") == "x_skip" for e in ev), ev)
+        self.assertIn(MINT, book.load())              # a SKIP is recorded only: ECHO said SKIP to nearly all
+        self.x_read("SCAM")
+        with net():
+            ev = self.p.decide()
+        self.assertNotIn(MINT, book.load())           # a SCAM (concrete evidence) closes it
+        self.assertTrue(any(e.get("reason") == "x_scam" for e in ev), ev)
 
     def x_read(self, verdict):
         with open(self.p.X_READS, "w") as f:
@@ -808,13 +812,21 @@ class EchoSkipRetro(Base):
         for f in (pending.PENDING, pending.X_READS, pending.X_QUEUE):
             if os.path.exists(f):
                 os.remove(f)
-        book.open_position(MINT, "TEST", 0.001, 80000)              # bought before the SKIP rule
+        book.open_position(MINT, "TEST", 0.001, 80000)
         with open(pending.X_READS, "w") as f:
-            f.write(f"time,mint,symbol,verdict,raison\n2026-10-19 12:00,{MINT},TEST,SKIP,phishing recycle\n")
+            f.write(f"time,mint,symbol,verdict,raison\n2026-10-19 12:00,{MINT},TEST,SKIP,pas de narratif\n")
+        with net():
+            pending.decide()
+        self.assertIn(MINT, book.load())                            # an old SKIP no longer sells
+        with open(pending.X_READS, "w") as f:
+            f.write(f"time,mint,symbol,verdict,raison\n2026-10-19 12:00,{MINT},TEST,SCAM,phishing recycle\n")
         with net():
             ev = pending.decide()
-        self.assertNotIn(MINT, book.load())
-        self.assertEqual(ev[-1]["reason"], "x_skip")
+        self.assertNotIn(MINT, book.load())                         # an old SCAM does
+        self.assertEqual(ev[-1]["reason"], "x_scam")
+        with net():
+            self.assertEqual(check.check(MINT)["reason"], "x_scam_before")   # and it is never bought again
+        os.remove(pending.X_READS)
 
 
 class Living(Base):
@@ -1378,7 +1390,12 @@ class ExploreTier(Base):
     def test_low_score_pass_is_bought_small_as_explore(self):
         import shadow
         shadow._waived.update(t=time.time(), v=set())
-        with mock.patch.object(check, "check", return_value={"verdict": "PASS", "stage": "judge", "reason": "ok",
+        low = {"verdict": "PASS", "stage": "judge", "reason": "ok", "symbol": "LOW", "price": 0.001,
+               "liq_usd": 80000, "score": 40, "flags": "bot_volume"}
+        with mock.patch.object(check, "check", return_value=dict(low)):
+            self.assertTrue(check.run("Mint3333333333333333333333333333333333333")["action"].startswith("not bought"))
+        # off by default since Oct 19 (low scores at -85% median 6 h later); the floor turns it back on
+        with mock.patch.dict(config.SIZING, {"explore_min_score": 30}), mock.patch.object(check, "check", return_value={"verdict": "PASS", "stage": "judge", "reason": "ok",
                                "symbol": "LOW", "price": 0.001, "liq_usd": 80000, "score": 40, "ticket": 40,
                                "tier": "base", "flags": "bot_volume"}):
             v = check.run(MINT)

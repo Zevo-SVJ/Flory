@@ -68,6 +68,9 @@ def judge(token: dict, m: dict) -> dict:
 def check(mint: str) -> dict:
     import shadow
     waived = shadow.waived()             # soft kills the shadow book showed cost money: passed over
+    x = pending.reads().get(mint)                                # ECHO already found a scam on X: never again
+    if x and (x.get("verdict") or "").upper() == "SCAM":
+        return {"stage": "limits", "verdict": "SKIP", "reason": "x_scam_before", "symbol": x.get("symbol")}
     if (g := book.guard(mint)):                                  # limits, free
         return {"stage": "limits", "verdict": "SKIP", "reason": g}
 

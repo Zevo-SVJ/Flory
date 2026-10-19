@@ -49,7 +49,10 @@ SIZING = {"base": 4, "strong": 8, "max": 14,
           # small, in its own tier. on Oct 19 the score's bot-volume cap held 18 of 23 full passes at 40,
           # and the passes bought on a good score were at -28% median 6 h later: whether the score
           # picks anything is the open question, and small paper trades answer it fastest
-          "explore": 2, "explore_min_score": 30}
+          # OFF since Oct 19 23:30: AUDIT's 6 h re-price had the full passes scored under 55 at -85% median,
+          # 75% of them down 50% or more (n=8), against -16% for those scored 55+ (n=11). the score protects.
+          # the floor above MIN_SCORE switches the tier off; lower it to test again
+          "explore": 2, "explore_min_score": 101}
 MAX_OPEN = 40               # safety net only: cash runs out first (1000 / 25 = 40)
 MAX_ENTRIES_PER_DAY = 40
 DAILY_LOSS_HALT_USD = 250   # realized loss today hits this -> no new entries until tomorrow
@@ -171,7 +174,7 @@ SCHEDULE = {                # used by agents.py: one entry per agent
 # the rules the real-money decision judges: every trade opened before this ran under rules that no longer
 # exist (15 min entry, Solana only, the copycat bug, no explore tier). they stay in the files and in the
 # all-time lines of the reports; the go-live gate, the projection and the review count only these
-RULES_SINCE = "2026-10-19 21:00"
+RULES_SINCE = "2026-10-20 00:00"     # Oct 19 23:30: no sale on an ECHO SKIP, explore tier off
 
 DATA = os.environ.get("RUG_DESK_DATA") or os.path.join(HERE, "data")
 LOG = os.path.join(DATA, "checks.csv")
