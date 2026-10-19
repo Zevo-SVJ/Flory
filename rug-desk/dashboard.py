@@ -63,6 +63,30 @@ def curve(range_s: int | None, now: float) -> list[list[float]]:
     return pts
 
 
+def first_point() -> float | None:
+    """When the balance log starts: the auto range shows everything until there is a full day."""
+    if not os.path.exists(EQUITY):
+        return None
+    with open(EQUITY) as f:
+        next(f, None)
+        line = f.readline()
+    return float(line.split(",")[0]) if line else None
+
+
+def megas(since: float | None) -> list[dict]:
+    """Every MEGA sale in the window, not just the ones still in the activity log's tail."""
+    out = []
+    if os.path.exists(events.EVENTS):
+        with open(events.EVENTS) as f:
+            for line in f:
+                if '"kind": "sell"' not in line:
+                    continue
+                e = json.loads(line)
+                if (e.get("pct") or 0) >= MEGA_PROFIT_PCT and (since is None or e["t"] >= since):
+                    out.append({"t": e["t"], "symbol": e.get("symbol"), "pct": e["pct"], "pnl": e.get("pnl")})
+    return out
+
+
 def echo_status(passes: list[dict], xreads: list[dict], now: float) -> dict:
     """ECHO runs in its own Claude session. It is late if a PASS waits more than 45 min unread."""
     read = {r["mint"] for r in xreads}
@@ -79,8 +103,13 @@ def echo_status(passes: list[dict], xreads: list[dict], now: float) -> dict:
             "last": last}
 
 
-def state(range_key: str = "24h") -> dict:
+def state(range_key: str = "auto") -> dict:
     now = time.time()
+    first = first_point()
+    auto = range_key not in RANGES
+    if auto:      # everything until the desk has a full day of history, then the last 24 h
+        range_key = "tout" if first is None or now - first < 86400 else "24h"
+    range_s = RANGES[range_key]
     checks, trades, xreads = _csv(LOG), book.trades(), _csv(X_READS)
     positions = book.load()
     marks = _json(MARKS, {"t": 0, "marks": {}})
@@ -141,8 +170,8 @@ def state(range_key: str = "24h") -> dict:
         "pnl": balance - PAPER_BANKROLL_USD, "today": book.today_pnl(), "loss_limit": DAILY_LOSS_HALT_USD,
         "cash": book.cash(positions), "marks_age": now - marks.get("t", 0),
         "wins": wins, "losses": len(closed) - wins, "mega_pct": MEGA_PROFIT_PCT,
-        "curve": curve(RANGES.get(range_key, 86400), now), "range": range_key,
-        "range_s": RANGES.get(range_key, 86400),
+        "curve": curve(range_s, now), "range": range_key, "range_s": range_s, "auto": auto,
+        "megas": megas(None if range_s is None else now - range_s),
         "events": events.recent(40), "tasks": events.count(),
         "agents": agents, "open": sorted(open_rows, key=lambda r: -(r["pct"] or -1e9)),
         "experiment": experiment[:30], "groups": groups,
@@ -155,7 +184,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         url = urlparse(self.path)
         if url.path == "/api/state":
-            rng = parse_qs(url.query).get("range", ["24h"])[0]
+            rng = parse_qs(url.query).get("range", ["auto"])[0]
             body, kind = json.dumps(state(rng)).encode(), "application/json"
         elif url.path in ("/", "/index.html"):
             with open(os.path.join(HERE, "dashboard.html"), "rb") as f:
