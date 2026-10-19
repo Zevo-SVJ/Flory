@@ -41,7 +41,7 @@ def fetch() -> int:
     new = 0
     for sig in [x for x in sigs if not x.get("err")][:PER_RUN]:
         try:
-            tx = facts._rpc("getTransaction", [sig["signature"], {"maxSupportedTransactionVersion": 0,
+            tx = facts._rpc("getTransaction", [sig["signature"], {"maxSupportedTransactionVersion": 1,
                                                                   "encoding": "jsonParsed"}])
         except Exception:
             continue                      # one unreadable transaction is not a reason to stop

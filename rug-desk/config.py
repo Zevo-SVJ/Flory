@@ -80,6 +80,21 @@ FACTS = {                   # the rug filter. code only, no model
     "max_age_hours": 72,
 }
 
+# the deep read, for tokens that passed every check above (jup.py, cluster.py, stracker.py).
+# thresholds are first guesses from the sources named in each file: every value is logged with the
+# verdict, so AUDIT can tell within a week which ones kill crashers and which ones kill winners.
+DEEP = {
+    "max_factory_wallets": 5,       # holders that held 2+ earlier rugs and no winner (smart.py) -> factory_wallets
+    "max_dev_mints": 20,            # Jupiter: the creator launched this many tokens -> serial_dev
+    "min_organic_vol_share": 10,    # Jupiter: under 10% of the hour's volume organic, 50+ traders -> inorganic_volume
+    "min_organic_score": 0,         # Jupiter organicScore: logged only until AUDIT shows a useful cut
+    "max_cluster_pct": 10,          # 3+ top holders funded by one (non-exchange) wallet, 10%+ of supply
+    "max_fresh_pct": 60,            # top holders in wallets under 100 transactions old
+    "max_bundlers_pct": 15,         # Solana Tracker: supply still held by launch-bundle wallets
+    "max_insiders_pct": 15,         # Solana Tracker: supply held by wallets linked to the creator
+    "max_snipers_pct": 25,          # Solana Tracker: supply held by first-block buyers
+}
+
 # exits. no study gives "the" best exit for memecoins (see README, "Exits"), so this is the starting
 # profile and the exit lab (exitlab.py) replays alternatives on your own recorded price paths.
 EXIT = {

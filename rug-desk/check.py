@@ -5,7 +5,8 @@ import csv, json, os, sys, time
 from config import (DATA, LOG, JUDGE, MIN_CONFIDENCE, PAPER, PAPER_BUY_ON_PASS, TICKET_USD,
                     ECHO_MODE, MIN_SCORE)
 from score import score
-import pending, smart, size
+import pending, smart, size, jup, cluster, stracker, ruggers
+from config import DEEP
 from facts import report, fact_kill
 import facts
 from market import pool, market_kill
@@ -14,7 +15,9 @@ import book
 
 # price and liq_usd at verdict time let AUDIT check later whether a kill or a pass was right
 FIELDS = ["time", "mint", "symbol", "stage", "verdict", "confidence", "reason", "price", "liq_usd",
-          "score", "flags", "sol_1h", "sol_24h", "age_min", "dev", "ticket", "tier"]
+          "score", "flags", "sol_1h", "sol_24h", "age_min", "dev", "ticket", "tier",
+          "organic", "organic_vol", "dev_mints", "cluster_pct", "fresh_pct", "bundlers_pct", "insiders_pct",
+          "snipers_pct", "factory_wallets"]
 
 
 def _migrate():
@@ -96,7 +99,7 @@ def check(mint: str) -> dict:
         return {"stage": "facts", "verdict": "SKIP", "reason": f"facts failed: {e}",
                 "symbol": m["symbol"], **seen}
     seen["dev"] = token.get("dev")
-    smart.snapshot(mint, token.get("wallets"))
+    smart.snapshot(mint, token.get("all_owners") or token.get("wallets"))
     if (k := fact_kill(token)):
         return {"stage": "facts", "verdict": "SKIP", "reason": k,
                 "symbol": m["symbol"] or token["symbol"], **seen}
@@ -104,12 +107,55 @@ def check(mint: str) -> dict:
     v = judge(token, m)
     sym = m["symbol"] or token["symbol"]
     sc = score(m, token)
+    if sc["score"] >= MIN_SCORE:            # the deep read costs calls: only for tokens that could be bought
+        deep = deep_read(mint, token)
+        seen.update(deep["logged"])
+        if deep["kill"]:
+            return {"stage": "deep", "verdict": "SKIP", "reason": deep["kill"], "symbol": sym, **seen,
+                    "score": sc["score"]}
     usd, tier, sig = size.ticket({"score": sc["score"]}, m, token)
     return {**v, **seen, "ticket": usd, "tier": tier, "signals": sig, "symbol": sym, "price": m["price"], "liq_usd": m["liq_usd"], "url": m["url"],
             "score": sc["score"], "flags": " ".join(sc["flags"]),
             # the free check 14: two links you open yourself. latest posts, not "top"
             "x_ca": f"https://x.com/search?q={mint}&f=live",
             "x_ticker": f"https://x.com/search?q=%24{sym}&f=live"}
+
+
+def deep_read(mint: str, token: dict) -> dict:
+    """Three outside reads, cheapest first, each one optional: a source that fails is unknown, not a kill.
+    Jupiter (free) -> who funded the top holders (RPC) -> Solana Tracker (key, 2,500 free requests)."""
+    logged, kill = {}, None
+    # wallets that held earlier rugs and no winner: a factory reuses its wallet pool (the FOMO and Gemini
+    # dump sellers had thousands of transactions each, active since Oct 10)
+    n_toxic = smart.toxic(token.get("all_owners") or token.get("wallets") or [])
+    logged["factory_wallets"] = n_toxic
+    if n_toxic >= DEEP["max_factory_wallets"]:
+        return {"kill": "factory_wallets", "logged": logged}
+    try:
+        j = jup.fetch(mint)
+    except Exception:
+        j = None
+    if j:
+        logged.update(organic=j["organic"], organic_vol=j["organic_vol_share"], dev_mints=j["dev_mints"])
+        kill = jup.kill(j, DEEP)
+    if not kill:
+        try:
+            c = cluster.analyze(token.get("holder_pcts") or [])
+        except Exception:
+            c = None
+        if c:
+            logged.update(cluster_pct=c["cluster_pct"], fresh_pct=c["fresh_pct"])
+            ruggers.note_funder(mint, c["cluster_funder"])
+            kill = cluster.kill(c, DEEP, ruggers.funders())
+    if not kill:
+        try:
+            s = stracker.fetch(mint)
+        except Exception:
+            s = None
+        if s:
+            logged.update(bundlers_pct=s["bundlers_pct"], insiders_pct=s["insiders_pct"], snipers_pct=s["snipers_pct"])
+            kill = stracker.kill(s, DEEP)
+    return {"kill": kill, "logged": logged}
 
 
 def run(mint: str) -> dict:

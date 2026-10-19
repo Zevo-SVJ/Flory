@@ -41,3 +41,46 @@ def dev_of(mint: str) -> str | None:
             if r["mint"] == mint and r.get("dev"):
                 dev = r["dev"]
     return dev
+
+
+# the factory's money: funders of linked holder groups (cluster.py) on tokens that then rugged.
+# a factory reuses its funding wallets, so a holder funded by one of them kills the next token.
+import json
+FUNDERS = os.path.join(DATA, "rug_funders.json")
+SEEN = os.path.join(DATA, "token_funders.json")        # mint -> cluster funder found at check time
+
+
+def _load(path: str) -> dict:
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def _save(path: str, d: dict):
+    os.makedirs(DATA, exist_ok=True)
+    with open(path + ".tmp", "w") as f:
+        json.dump(d, f)
+    os.replace(path + ".tmp", path)
+
+
+def note_funder(mint: str, funder: str | None):
+    if funder:
+        d = _load(SEEN)
+        d[mint] = funder
+        _save(SEEN, d)
+
+
+def funder_rugged(mint: str, symbol: str) -> str | None:
+    """The token rugged: its cluster funder goes on the list. Returns the funder, if one was known."""
+    f = _load(SEEN).get(mint)
+    if f:
+        d = _load(FUNDERS)
+        d[f] = {"mint": mint, "symbol": symbol, "time": time.strftime("%Y-%m-%d %H:%M")}
+        _save(FUNDERS, d)
+    return f
+
+
+def funders() -> set[str]:
+    return set(_load(FUNDERS))

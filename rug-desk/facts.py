@@ -225,7 +225,7 @@ def report(mint: str, pool: dict) -> dict:
         except Exception as e:         # the public RPC refuses this call (429): a private RPC is needed
             holders, chain_holders_error = [], str(e)[:160]
     count = g.get("holder_count")
-    farm_n, farm_pct = 0, 0.0
+    farm_n, farm_pct, top30, all_owners = 0, 0.0, [], []
     try:                                    # the whole holder list (Helius): farms hide below the top 10
         accs = _das_accounts(mint)
     except Exception:
@@ -234,6 +234,11 @@ def report(mint: str, pool: dict) -> dict:
         count = count or len(accs)
         supply_raw = int(_rpc("getTokenSupply", [mint])["value"]["amount"])
         farm_n, farm_pct = holder_farm(accs, supply_raw, {pool.get("pair")})
+        all_owners = sorted({a["owner"] for a in accs if a.get("owner") != pool.get("pair")
+                             and supply_raw and int(a["amount"]) >= supply_raw * 0.0001})
+        if supply_raw:                      # the 30 biggest holders, for the funding-cluster read
+            big = sorted((a for a in accs if a.get("owner") != pool.get("pair")), key=lambda a: -int(a["amount"]))[:30]
+            top30 = [(a["owner"], int(a["amount"]) / supply_raw * 100) for a in big]
     owners = [h["account"] for h in holders]
     kinds = _rpc("getMultipleAccounts", [owners, {"encoding": "base64",
                  "dataSlice": {"offset": 0, "length": 0}}])["value"] if owners else []
@@ -277,6 +282,9 @@ def report(mint: str, pool: dict) -> dict:
         "farm_pct": farm_pct,
         "holders_source": source if holders else None,
         "wallets": [w["address"] for w in wallets],      # top holder wallets, for the smart-wallet memory
+        # (wallet, % of supply), biggest first, for cluster.py. the top 30 with Helius, else the top 10
+        "all_owners": all_owners,           # every holder above 0.01% (Helius), for the factory-wallet memory
+        "holder_pcts": top30 or [(w["address"], w["pct"]) for w in sorted(wallets, key=lambda w: -w["pct"])],
         "not_checked": ["risk_score", "insider_graph"],
     }
 

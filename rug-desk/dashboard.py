@@ -110,6 +110,15 @@ def echo_status(waiting: dict, xreads: list[dict], now: float) -> dict:
             "last": last}
 
 
+def garde_detail() -> str:
+    """Which outside sources GARDE really has, so a missing key shows on the page, not in a log."""
+    import facts, stracker
+    helius = "helius" in facts.RPC_URL
+    return ("pool, contrat, holders, usines à rugs · "
+            + ("Helius ✓" if helius else "Helius ✗ (holders limités)") + " · Jupiter ✓ · "
+            + ("Solana Tracker ✓" if stracker.key() else "Solana Tracker ✗ (clé manquante)"))
+
+
 def state(range_key: str = "auto") -> dict:
     now = time.time()
     first = first_point()
@@ -180,7 +189,8 @@ def state(range_key: str = "auto") -> dict:
 
     st = events.agents()
     st["ECHO"] = echo_status(waiting, xreads, now)
-    agents = [{"name": n, "role": role, "detail": detail, **st.get(n, {"status": "idle", "msg": "pas encore lancé"})}
+    agents = [{"name": n, "role": role, "detail": garde_detail() if n == "GARDE" else detail,
+               **st.get(n, {"status": "idle", "msg": "pas encore lancé"})}
               for n, role, detail in AGENTS]
 
     hb = _json(HEARTBEAT, None)

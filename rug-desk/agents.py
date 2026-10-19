@@ -14,7 +14,7 @@ MARKS = os.path.join(DATA, "marks.json")
 INBOX = os.path.join(DATA, "inbox.txt")      # CAs pasted in the dashboard, checked by GARDE
 from events import emit, set_agent, agents as agent_state
 from notify import post
-import book, watch, scan, check, audit, report, pending, exitlab, ruggers, health, facts
+import book, watch, scan, check, audit, report, pending, exitlab, ruggers, health, facts, smart
 
 
 def beat():
@@ -47,6 +47,13 @@ def vigie():
             continue
         emit("VIGIE", "sell", e["text"], symbol=e["symbol"], mint=e["mint"], pnl=round(e["pnl"], 2),
              pct=round(e["pct"], 1), reason=e["reason"], closed=e.get("closed"))
+        if e["reason"] in ("liquidity_pulled", "pool_gone", "x_scam"):
+            n = smart.learn(e["mint"], -100)       # its holders now count one rug each, at once, not in 6 h
+            if n:
+                emit("VIGIE", "kill", f"${e['symbol']}: {n} holder wallets remembered as rug holders", symbol=e["symbol"])
+        if e["reason"] in ("liquidity_pulled", "pool_gone") and (f := ruggers.funder_rugged(e["mint"], e["symbol"])):
+            emit("VIGIE", "kill", f"${e['symbol']}: its holders' funder {f[:6]}… blacklisted, GARDE kills any "
+                                  "token whose holders it funded", symbol=e["symbol"])
         if e["reason"] in ("liquidity_pulled", "pool_gone") and ruggers.add(
                 ruggers.dev_of(e["mint"]), e["mint"], e["symbol"], e["reason"]):
             emit("VIGIE", "kill", f"${e['symbol']}: creator blacklisted ({e['reason']}), "

@@ -674,6 +674,63 @@ class Farms(Base):
             self.assertEqual(check.check(MINT)["reason"], "stale_data")
 
 
+class DeepRead(Base):
+    def test_jupiter_kills(self):
+        import jup
+        t = {"id": MINT, "organicScore": 12.5, "audit": {"devMints": 3},
+             "stats1h": {"buyVolume": 50000, "sellVolume": 50000, "buyOrganicVolume": 1000,
+                         "sellOrganicVolume": 1000, "numTraders": 400}}
+        with mock.patch("requests.get", lambda *a, **k: Resp([t])):
+            j = jup.fetch(MINT)
+        self.assertEqual(j["organic_vol_share"], 2.0)
+        self.assertEqual(jup.kill(j, config.DEEP), "inorganic_volume")
+        self.assertEqual(jup.kill(dict(j, sus=True), config.DEEP), "jup_sus")
+        self.assertEqual(jup.kill(dict(j, dev_mints=80), config.DEEP), "serial_dev")
+        # nothing known is never a kill
+        self.assertIsNone(jup.kill({k: None for k in j} | {"sus": False}, config.DEEP))
+
+    def test_solana_tracker_kills_bundles(self):
+        import stracker
+        risk = {"risk": {"rugged": False, "snipers": {"totalPercentage": 3}, "insiders": {"totalPercentage": 2},
+                         "bundlers": {"totalPercentage": 31, "totalInitialPercentage": 40}, "top10": 20,
+                         "dev": {"percentage": 0}, "risks": [], "score": 4}}
+        with mock.patch.object(stracker, "key", lambda: "K"), mock.patch("requests.get", lambda *a, **k: Resp(risk)):
+            st = stracker.fetch(MINT)
+        self.assertEqual(stracker.kill(st, config.DEEP), "bundled")
+
+    def test_one_funder_behind_the_top_holders(self):
+        import cluster
+        holders = [(f"H{i}", 3.0) for i in range(6)]
+        def rpc(method, params):
+            if method == "getSignaturesForAddress":
+                return [{"signature": "S" + params[0]}] * (5 if params[0].startswith("H") else 10)
+            if method == "getTransaction":       # H0-H3 got their first SOL from FARM, the rest from elsewhere
+                w = params[0][1:]
+                src = "FARM" if w in ("H0", "H1", "H2", "H3") else "X" + w
+                return {"transaction": {"message": {"accountKeys": [src, w]}},
+                        "meta": {"preBalances": [10**10, 0], "postBalances": [10**10 - 10**8, 10**8]}}
+        with mock.patch.object(facts, "_rpc", rpc):
+            c = cluster.analyze(holders)
+        self.assertEqual((c["cluster_funder"], c["cluster_wallets"], c["cluster_pct"]), ("FARM", 4, 12.0))
+        self.assertEqual(cluster.kill(c, config.DEEP, set()), "funded_cluster")
+        self.assertEqual(cluster.kill(c, config.DEEP, {"XH4"}), "rug_funder")
+
+    def test_factory_wallets_are_remembered(self):
+        import smart
+        wallets = [f"W{i}" for i in range(8)]
+        for i, mint in enumerate(("RUG1", "RUG2")):
+            smart.snapshot(mint, wallets)
+            smart.learn(mint, -95)
+        self.assertEqual(smart.toxic(wallets + ["OTHER"]), 8)
+        self.assertEqual(smart.learn("RUG2", -95), 0)          # never counted twice
+        token = {"all_owners": wallets}
+        self.assertEqual(check.deep_read(MINT, token)["kill"], "factory_wallets")
+        import shutil
+        shutil.rmtree(smart.HOLDERS, ignore_errors=True)
+        if os.path.exists(smart.MEMORY):
+            os.remove(smart.MEMORY)
+
+
 class EchoScam(Base):
     def test_a_scam_read_sells_the_open_position(self):
         import pending

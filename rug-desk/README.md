@@ -128,6 +128,23 @@ VIGIE also reads each PumpSwap position's pool vaults on chain every 20 s, so a 
 on the next tick even when DexScreener lags or drops the pair. ECHO can answer SCAM (concrete evidence on
 X): the desk sells at once.
 
+## The deep read (GARDE, last stage)
+
+Only for tokens that passed everything above and score high enough to be bought, cheapest first.
+Any source that fails or has no key is skipped: unknown is never a kill.
+
+| step | source | kills |
+|---|---|---|
+| factory wallets | the desk's memory (smart.py + seeds/factory_wallets.json) | 5+ holders that held 2+ rugs and no winner |
+| Jupiter | lite-api.jup.ag, free, no key | isSus, creator with 20+ launches, < 10% organic volume |
+| funding clusters | your RPC (Helius) | 3+ top holders funded by one non-exchange wallet holding 10%+; 60%+ in fresh wallets; a funder from an earlier rug |
+| Solana Tracker | data.solanatracker.io, key in .env as SOLANATRACKER_KEY (2,500 free requests) | rugged, bundlers > 15%, insiders > 15%, snipers > 25% |
+
+Every value is logged in checks.csv with the verdict, so AUDIT can say within a week which cut kills
+crashers and which kills winners. A rug (VIGIE) marks every holder wallet at once, and the cluster's funder.
+
+Not wired: Bubblemaps (API keys come with its paid Pro plan), GMGN (no public API), RugCheck (dead).
+
 ## Overnight
 
 `./start.sh` runs the desk and the dashboard, restarts either one 10 s after a crash, and keeps the Mac and
