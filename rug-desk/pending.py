@@ -146,4 +146,19 @@ def decide() -> list[dict]:
                         "reason": "x_timeout"})
     save(p)
     write_queue(p, done)
+    # any open position ECHO already read as SKIP or SCAM, whenever that read came (including reads made
+    # before the SKIP rule existed): out at the pool's price of this moment
+    for mint, pos in book.load().items():
+        x = done.get(mint)
+        if not x or x["verdict"].upper() not in ("SKIP", "SCAM") or mint in p:
+            continue
+        m = pool(mint)
+        price = (m or {}).get("price") or 0
+        if not price:
+            continue                          # no price now: VIGIE's chain read decides, not a blind sale at 0
+        why = "x_" + x["verdict"].lower()
+        pnl = book.sell(mint, 1.0, price, why, (m or {}).get("liq_usd"))
+        out.append({"kind": "sell", "symbol": pos["symbol"], "mint": mint, "pnl": pnl, "reason": why, "closed": True,
+                    "pct": (price / pos["entry"] - 1) * 100,
+                    "text": f"{pos['symbol']}: sold on ECHO's {x['verdict'].upper()} read, pnl ${pnl:+.2f}"})
     return out

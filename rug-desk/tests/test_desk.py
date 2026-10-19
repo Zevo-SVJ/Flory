@@ -775,6 +775,21 @@ class EchoScam(Base):
         self.assertTrue(any(e["kind"] == "sell" and e["reason"] == "x_scam" for e in ev), ev)
 
 
+class EchoSkipRetro(Base):
+    def test_a_position_echo_already_skipped_is_sold(self):
+        import pending
+        for f in (pending.PENDING, pending.X_READS, pending.X_QUEUE):
+            if os.path.exists(f):
+                os.remove(f)
+        book.open_position(MINT, "TEST", 0.001, 80000)              # bought before the SKIP rule
+        with open(pending.X_READS, "w") as f:
+            f.write(f"time,mint,symbol,verdict,raison\n2026-10-19 12:00,{MINT},TEST,SKIP,phishing recycle\n")
+        with net():
+            ev = pending.decide()
+        self.assertNotIn(MINT, book.load())
+        self.assertEqual(ev[-1]["reason"], "x_skip")
+
+
 class OnChainVigie(Base):
     def test_a_drained_pool_is_sold_even_if_dexscreener_lags(self):
         book.open_position(MINT, "TEST", 0.001, 80000, vaults=["VB", "VQ"], sol0=200)
