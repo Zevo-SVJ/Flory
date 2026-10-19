@@ -28,17 +28,20 @@ body { min-height: 100vh; overflow-x: hidden;
     radial-gradient(900px 600px at 10% -10%, rgba(90, 60, 140, 0.20), transparent 60%),
     var(--page); }
 #stars { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
-main { position: relative; z-index: 1; max-width: 1240px; margin: 0 auto; padding: 22px 16px 60px; }
+main { position: relative; z-index: 1; padding: 0 18px 40px; }
+.screen { height: 100vh; min-height: 520px; display: grid; gap: 10px; padding: 14px 0 12px;
+          grid-template-rows: auto auto minmax(160px, 1fr) auto auto; }
+.details { max-width: 1400px; margin: 0 auto; }
 .label { font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-2); }
-.card { background: var(--card); border: 1px solid var(--ring); border-radius: 16px; padding: 18px 18px;
+.card { background: var(--card); border: 1px solid var(--ring); border-radius: 14px; padding: 12px 16px;
         backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
 
 /* header */
-header { display: flex; align-items: center; gap: 16px; margin-bottom: 18px; }
-.logo { width: 62px; height: 62px; border-radius: 16px; display: grid; place-items: center;
+header { display: flex; align-items: center; gap: 14px; }
+.logo { width: 52px; height: 52px; border-radius: 14px; display: grid; place-items: center;
         background: linear-gradient(160deg, #2a2230, #18131c); border: 1px solid var(--ring-strong);
         box-shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 8px 24px rgba(0,0,0,.35); }
-.brand h1 { margin: 0; font-size: 42px; font-weight: 800; letter-spacing: -0.03em; line-height: 1; }
+.brand h1 { margin: 0; font-size: 36px; font-weight: 800; letter-spacing: -0.03em; line-height: 1; }
 .brand .label { margin-top: 6px; display: block; }
 .spacer { flex: 1; }
 .tasks { font-family: var(--mono); font-size: 12px; color: var(--muted); letter-spacing: .06em; }
@@ -51,8 +54,19 @@ header { display: flex; align-items: center; gap: 16px; margin-bottom: 18px; }
 @keyframes ping { 0% { box-shadow: 0 0 0 0 rgba(63,211,155,.55); } 80%,100% { box-shadow: 0 0 0 10px rgba(63,211,155,0); } }
 
 /* tiles */
-.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
-.big { font-family: var(--mono); font-size: 30px; font-weight: 600; letter-spacing: -0.02em; margin-top: 8px; }
+.tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.card, .agent { min-width: 0; }
+/* short windows (a laptop with the browser bar): the four tiles go on one row so the chart keeps room */
+@media (max-height: 760px) and (min-width: 900px) {
+  .tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .tiles .sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .winrate svg { width: 46px; height: 46px; }
+  .screen { gap: 8px; padding: 10px 0 8px; }
+  .logo { width: 44px; height: 44px; } .brand h1 { font-size: 30px; }
+  .blob { width: 38px; height: 33px; margin: 4px auto 4px; }
+  .agent .when { display: none; }
+}
+.big { font-family: var(--mono); font-size: 24px; font-weight: 600; letter-spacing: -0.02em; margin-top: 4px; }
 .sub { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-top: 4px; }
 .accent { position: relative; padding-left: 26px; }
 .accent::before { content: ""; position: absolute; left: 12px; top: 18px; bottom: 18px; width: 3px; border-radius: 3px; background: var(--up); }
@@ -62,14 +76,15 @@ header { display: flex; align-items: center; gap: 16px; margin-bottom: 18px; }
 .wl { font-family: var(--mono); font-size: 12px; line-height: 1.7; }
 
 /* chart + log */
-.mainrow { display: grid; grid-template-columns: 1.22fr 1fr; gap: 14px; }
+.mainrow { display: grid; grid-template-columns: minmax(0, 1.22fr) minmax(0, 1fr); gap: 10px; min-height: 0; }
+.mainrow > .card { display: flex; flex-direction: column; min-height: 0; }
 .cardhead { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
 .clock { font-family: var(--mono); font-size: 11px; color: var(--muted); letter-spacing: .06em; }
 .ranges { display: inline-flex; gap: 4px; }
 .ranges button { font-family: var(--mono); font-size: 10px; letter-spacing: .06em; color: var(--muted); background: transparent;
                  border: 1px solid transparent; border-radius: 6px; padding: 3px 7px; cursor: pointer; }
 .ranges button[aria-pressed="true"] { color: var(--ink); border-color: var(--ring-strong); background: rgba(255,255,255,.04); }
-#chart { position: relative; height: 340px; }
+#chart { position: relative; flex: 1; min-height: 0; }
 #chart svg { width: 100%; height: 100%; display: block; overflow: visible; }
 #chart text { font-family: var(--mono); font-size: 10px; fill: var(--muted); }
 .bubble { position: absolute; transform: translate(-100%, -130%); background: #13241e; border: 1px solid rgba(63,211,155,.35);
@@ -78,9 +93,9 @@ header { display: flex; align-items: center; gap: 16px; margin-bottom: 18px; }
 .bubble.neg { background: #2a1517; border-color: rgba(239,111,111,.35); color: var(--down); }
 .pulse { transform-box: fill-box; transform-origin: center; animation: pulse 1.6s ease-out infinite; }
 @keyframes pulse { 0% { opacity: .7; transform: scale(1); } 100% { opacity: 0; transform: scale(3.2); } }
-#log { font-family: var(--mono); font-size: 12px; line-height: 1.55; height: 340px; overflow: hidden; position: relative;
+#log { font-family: var(--mono); font-size: 12px; line-height: 1.55; flex: 1; min-height: 0; overflow: hidden; position: relative;
        mask-image: linear-gradient(to bottom, #000 80%, transparent); -webkit-mask-image: linear-gradient(to bottom, #000 80%, transparent); }
-.ev { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: baseline; padding: 3px 0; }
+.ev { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: baseline; padding: 3px 0; }
 .ev .tag { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-2); font-size: 11px; }
 .ev .tag::before { content: ""; width: 7px; height: 7px; border-radius: 2px; background: var(--c, var(--muted)); }
 .ev .txt { color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -89,7 +104,7 @@ header { display: flex; align-items: center; gap: 16px; margin-bottom: 18px; }
 @keyframes fresh { from { background: rgba(255,255,255,.07); } to { background: transparent; } }
 
 /* daily bar */
-.daily { display: grid; grid-template-columns: auto 1fr auto; gap: 14px; align-items: center; margin: 16px 4px; }
+.daily { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 14px; align-items: center; margin: 2px 4px; }
 .track { height: 8px; border-radius: 99px; background: rgba(255,255,255,.07); overflow: hidden; }
 .fill { height: 100%; border-radius: 99px; width: 0; transition: width .6s ease;
         background: linear-gradient(90deg, #3fd39b, #f2c46d); }
@@ -97,13 +112,13 @@ header { display: flex; align-items: center; gap: 16px; margin-bottom: 18px; }
 .pctlabel { font-family: var(--mono); font-size: 12px; font-weight: 600; }
 
 /* agents */
-.agents { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; }
-.agent { position: relative; text-align: center; padding: 16px 10px 14px; border-radius: 16px; background: var(--card);
+.agents { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; }
+.agent { position: relative; text-align: center; padding: 10px 8px 8px; border-radius: 16px; background: var(--card);
          border: 1px solid var(--ring); transition: border-color .3s, box-shadow .3s, transform .3s; min-width: 0; }
 .agent::before { content: ""; position: absolute; left: 14px; top: 10px; width: 18px; height: 4px; border-radius: 4px; background: var(--c); }
 .agent.active { border-color: color-mix(in srgb, var(--c) 70%, white 10%); box-shadow: 0 0 0 1px color-mix(in srgb, var(--c) 45%, transparent), 0 0 28px color-mix(in srgb, var(--c) 30%, transparent); transform: translateY(-2px); }
 .agent.err { border-color: rgba(239,111,111,.6); }
-.blob { width: 58px; height: 50px; margin: 6px auto 10px; border-radius: 46% 46% 42% 42% / 52% 52% 44% 44%; position: relative;
+.blob { width: 46px; height: 40px; margin: 6px auto 6px; border-radius: 46% 46% 42% 42% / 52% 52% 44% 44%; position: relative;
         background: radial-gradient(circle at 32% 28%, rgba(255,255,255,.55), transparent 32%),
                     radial-gradient(circle at 50% 120%, color-mix(in srgb, var(--c) 60%, black), var(--c) 70%);
         box-shadow: 0 8px 18px color-mix(in srgb, var(--c) 35%, transparent), inset 0 -6px 10px rgba(0,0,0,.18); }
@@ -116,9 +131,10 @@ header { display: flex; align-items: center; gap: 16px; margin-bottom: 18px; }
 @keyframes blink { 0%, 92%, 100% { transform: scaleY(1); } 95% { transform: scaleY(.1); } }
 .agent .name { font-family: var(--mono); font-weight: 600; font-size: 13px; letter-spacing: .1em; }
 .agent .role { font-size: 11px; color: var(--ink-2); margin-top: 2px; }
-.agent .msg { font-family: var(--mono); font-size: 10px; color: var(--muted); margin-top: 8px; min-height: 28px;
-              overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-.agent .when { font-family: var(--mono); font-size: 10px; color: var(--muted); margin-top: 4px; }
+.agent .msg { font-family: var(--mono); font-size: 10px; color: var(--muted); margin-top: 4px; min-height: 0;
+              overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.agent .when { font-family: var(--mono); font-size: 10px; color: var(--muted); margin-top: 2px; opacity: .8; }
+.hint { text-align: center; font-family: var(--mono); font-size: 10px; letter-spacing: .1em; color: var(--muted); margin: 6px 0 14px; }
 
 /* details below the fold */
 h2.section { font-family: var(--mono); font-size: 11px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase;
@@ -165,13 +181,17 @@ a { color: #8fb8f0; text-decoration: none; } a:hover { text-decoration: underlin
 @keyframes pop { from { transform: scale(.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 @keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
 
+@media (max-width: 980px), (max-height: 520px) {
+  .screen { height: auto; min-height: 0; grid-template-rows: none; }
+  #chart, #log { flex: none; height: 300px; }
+}
 @media (max-width: 980px) {
-  .mainrow, .grid2 { grid-template-columns: 1fr; }
-  .agents { grid-template-columns: repeat(3, 1fr); }
+  .mainrow, .grid2 { grid-template-columns: minmax(0, 1fr); }
+  .agents { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 @media (max-width: 560px) {
-  .row2 { grid-template-columns: 1fr; }
-  .agents { grid-template-columns: repeat(2, 1fr); }
+  .tiles { grid-template-columns: 1fr; }
+  .agents { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .brand h1 { font-size: 30px; }
   .logo { width: 50px; height: 50px; }
   .tasks { display: none; }
@@ -185,6 +205,7 @@ a { color: #8fb8f0; text-decoration: none; } a:hover { text-decoration: underlin
 <body>
 <canvas id="stars"></canvas>
 <main id="app">
+ <div class="screen">
   <header>
     <div class="logo" aria-hidden="true">
       <svg width="34" height="34" viewBox="-20 -20 40 40" id="spark"></svg>
@@ -198,11 +219,9 @@ a { color: #8fb8f0; text-decoration: none; } a:hover { text-decoration: underlin
     <span class="live" id="live"><i></i><span id="liveText">…</span></span>
   </header>
 
-  <section class="row2">
+  <section class="tiles">
     <div class="card"><div class="label">Balance</div><div class="big" id="balance">–</div><div class="sub" id="balanceSub"></div></div>
     <div class="card accent" id="pnlCard"><div class="label">Total P&amp;L</div><div class="big" id="pnl">–</div><div class="sub" id="pnlSub"></div></div>
-  </section>
-  <section class="row2">
     <div class="card"><div class="label">Coût du desk</div><div class="big">$0.00</div><div class="sub">aucun abonnement · APIs gratuites · lecture X via Claude</div></div>
     <div class="card winrate">
       <svg width="64" height="64" viewBox="0 0 64 64" id="donut" role="img"></svg>
@@ -236,8 +255,11 @@ a { color: #8fb8f0; text-decoration: none; } a:hover { text-decoration: underlin
   </section>
 
   <section class="agents" id="agents"></section>
+ </div>
+ <div class="details">
+  <div class="hint">▼ positions · lecture X · audit du filtre</div>
 
-  <section class="card mt">
+  <section class="card">
     <h2 class="section">Positions ouvertes</h2>
     <div class="scroll"><table id="open"></table></div>
   </section>
@@ -255,6 +277,7 @@ a { color: #8fb8f0; text-decoration: none; } a:hover { text-decoration: underlin
       <div class="bars" id="kills"></div>
       <p class="note" id="missed"></p>
     </section>
+  </div>
   </div>
 </main>
 <div id="tip"></div>
@@ -326,11 +349,13 @@ function drawChart() {
   const pts = S.curve.slice();
   if (!pts.length) pts.push([now - 60, S.bankroll]);
   pts.push([now, S.balance]);                         // the live edge: the line grows every second
-  const t0 = pts[0][0], t1 = now;
+  // the window is the real one you picked: 1h, 24h, 7 days, or everything since the first point
+  const t1 = now, t0 = S.range_s ? now - S.range_s : pts[0][0];
+  const before = pts[0][0] > t0 + 1 ? pts[0][0] : null;     // the desk wasn't logging yet
   const vals = pts.map(p => p[1]);
   let lo = Math.min(...vals), hi = Math.max(...vals);
   const padv = Math.max((hi - lo) * 0.12, 0.5); lo -= padv; hi += padv;
-  const L = 6, R = 10, T = 26, B = 22;
+  const L = 6, R = 10, T = 24, B = 20;
   const x = (t) => L + (W - L - R) * ((t - t0) / Math.max(1, t1 - t0));
   const y = (v) => T + (H - T - B) * (1 - (v - lo) / (hi - lo));
   const svg = el("svg:svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": `Balance ${plain(S.balance)}` });
@@ -346,12 +371,23 @@ function drawChart() {
   const base = S.bankroll;
   if (base > lo && base < hi) svg.append(el("svg:line", { x1: L, x2: W - R, y1: y(base), y2: y(base), stroke: "rgba(255,255,255,.14)", "stroke-dasharray": "3 4" }));
   svg.append(el("svg:text", { x: L + 4, y: T - 8 }, plain(hi - padv)));
-  svg.append(el("svg:text", { x: L + 4, y: H - 6 }, plain(lo + padv)));
+  svg.append(el("svg:text", { x: L + 4, y: y(lo + padv) - 6 }, plain(lo + padv)));
+  // time ticks, so each range reads as what it is
+  const span = t1 - t0, dayFmt = span > 2 * 86400;
+  for (let i = 0; i <= 4; i++) {
+    const t = t0 + span * i / 4, d = new Date(t * 1000);
+    const label = dayFmt ? d.toLocaleDateString("fr-FR", { weekday: "short", day: "numeric" }) : d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+    svg.append(el("svg:text", { x: x(t), y: H - 6, "text-anchor": i === 0 ? "start" : i === 4 ? "end" : "middle" }, label));
+  }
+  if (before) {
+    svg.append(el("svg:line", { x1: x(t0), x2: x(before), y1: y(S.bankroll), y2: y(S.bankroll), stroke: "rgba(255,255,255,.18)", "stroke-dasharray": "2 5" }));
+    if (x(before) - x(t0) > 150) svg.append(el("svg:text", { x: (x(t0) + x(before)) / 2, y: y(S.bankroll) - 8, "text-anchor": "middle" }, "desk pas encore lancé"));
+  }
 
   // stepped line: the balance only changes when VIGIE re-prices, so it holds flat between ticks
   let d = `M${x(pts[0][0]).toFixed(1)} ${y(pts[0][1]).toFixed(1)}`;
   for (let i = 1; i < pts.length; i++) d += ` L${x(pts[i][0]).toFixed(1)} ${y(pts[i][1]).toFixed(1)}`;
-  svg.append(el("svg:path", { d: d + ` L${x(t1)} ${H - B} L${x(t0)} ${H - B} Z`, fill: "url(#area)" }));
+  svg.append(el("svg:path", { d: d + ` L${x(t1)} ${H - B} L${x(pts[0][0])} ${H - B} Z`, fill: "url(#area)" }));
   svg.append(el("svg:path", { d, fill: "none", stroke: "var(--up)", "stroke-width": 2, "stroke-linejoin": "round", filter: "url(#glow)" }));
 
   // MEGA markers on the curve
@@ -382,7 +418,7 @@ function drawChart() {
   svg.append(hit);
   box.append(svg);
   const b = el("div", { class: "bubble" + (S.pnl < 0 ? " neg" : "") }, plain(S.balance));
-  b.style.left = Math.max(110, ex) + "px"; b.style.top = ey + "px";
+  b.style.left = Math.max(110, ex) + "px"; b.style.top = Math.max(44, ey) + "px";
   box.append(b);
 }
 

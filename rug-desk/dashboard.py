@@ -43,15 +43,20 @@ def _json(path: str, default):
 
 def curve(range_s: int | None, now: float) -> list[list[float]]:
     """Balance points [t, balance], thinned to ~400 so a week of 20-second ticks stays light."""
-    pts = []
+    pts, before = [], None
+    start = None if range_s is None else now - range_s
     if os.path.exists(EQUITY):
         with open(EQUITY) as f:
             next(f, None)
             for line in f:
                 t, bal = line.split(",")[:2]
                 t = float(t)
-                if range_s is None or t >= now - range_s:
+                if start is None or t >= start:
                     pts.append([t, float(bal)])
+                else:
+                    before = [start, float(bal)]   # the balance as the window opens
+    if before:
+        pts.insert(0, before)
     if len(pts) > 400:
         step = len(pts) / 399
         pts = [pts[int(i * step)] for i in range(399)] + [pts[-1]]
@@ -137,6 +142,7 @@ def state(range_key: str = "24h") -> dict:
         "cash": book.cash(positions), "marks_age": now - marks.get("t", 0),
         "wins": wins, "losses": len(closed) - wins, "mega_pct": MEGA_PROFIT_PCT,
         "curve": curve(RANGES.get(range_key, 86400), now), "range": range_key,
+        "range_s": RANGES.get(range_key, 86400),
         "events": events.recent(40), "tasks": events.count(),
         "agents": agents, "open": sorted(open_rows, key=lambda r: -(r["pct"] or -1e9)),
         "experiment": experiment[:30], "groups": groups,
