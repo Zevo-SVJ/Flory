@@ -3,6 +3,7 @@
 # pump.fun's migration account signs one transaction (sometimes two) per graduation, nothing else,
 # so its signature list is the full feed of new PumpSwap pools, without DexScreener's paid lists.
 # the DexScreener search mostly returns old pools: on a live test, 0 young PumpSwap pools out of 6 words.
+import atomic
 import json, os, time
 from config import DATA, FACTS
 import facts
@@ -23,7 +24,7 @@ def load() -> dict:
 
 def save(s: dict):
     os.makedirs(DATA, exist_ok=True)
-    tmp = STATE + ".tmp"
+    tmp = atomic.tmp(STATE)
     with open(tmp, "w") as f:
         json.dump(s, f)
     os.replace(tmp, STATE)

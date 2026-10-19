@@ -1,5 +1,6 @@
 # book.py
 # positions, trades, limits. the desk's memory lives in two files you can open yourself.
+import atomic
 import csv, json, os, sys, threading, time
 from config import (DATA, POSITIONS, TRADES, TICKET_USD, MAX_OPEN, MAX_ENTRIES_PER_DAY,
                     DAILY_LOSS_HALT_USD, COOLDOWN_HOURS, PAPER_BANKROLL_USD, PAPER_COSTS, PAPER)
@@ -27,7 +28,7 @@ def load() -> dict:
 
 def save(book: dict):
     os.makedirs(DATA, exist_ok=True)
-    tmp = POSITIONS + ".tmp"
+    tmp = atomic.tmp(POSITIONS)
     with open(tmp, "w") as f:
         json.dump(book, f, indent=2)
     os.replace(tmp, POSITIONS)        # a crash mid-write never leaves half a book

@@ -4,6 +4,7 @@
 # sale and AUDIT's 6 h price land next to the checks that let the token in, and the dashboard shows the
 # whole story of a token on one page. a fact here is what an agent measured or read, never an order:
 # an ECHO reason quoted from X stays a quote.
+import atomic
 import json, os, threading, time
 from config import DATA
 
@@ -23,7 +24,7 @@ def add(mint: str, agent: str, what: str, **facts):
             d.setdefault("entries", []).append({"t": time.time(), "agent": agent, "what": what,
                                                 **{k: v for k, v in facts.items() if v not in (None, "", [])}})
             d["entries"] = d["entries"][-KEEP:]
-            tmp = path + ".tmp"
+            tmp = atomic.tmp(path)
             with open(tmp, "w") as f:
                 json.dump(d, f)
             os.replace(tmp, path)

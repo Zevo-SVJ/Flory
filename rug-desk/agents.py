@@ -11,6 +11,7 @@
 #   AUDIT  every 30 min       the slow loop: re-prices verdicts, learns wallets, writes the reports, and
 #                              every 6 h starts the cumulative backtest in a child process
 # one writer at a time on the book (book.LOCK) and on the event log (events._LOCK).
+import atomic
 import json, os, threading, time, traceback
 from config import SCHEDULE, PAPER, JUDGE, DATA, EQUITY, PAPER_BANKROLL_USD, TICKET_USD, FACTS
 
@@ -24,7 +25,7 @@ import book, watch, scan, check, audit, report, pending, exitlab, ruggers, healt
 def beat():
     """dashboard.py reads this to show whether the desk is alive."""
     os.makedirs(DATA, exist_ok=True)
-    tmp = os.path.join(DATA, "heartbeat.json.tmp")
+    tmp = atomic.tmp(os.path.join(DATA, "heartbeat.json"))
     with open(tmp, "w") as f:
         json.dump({"time": time.time(), "paper": PAPER, "judge": JUDGE}, f)
     os.replace(tmp, os.path.join(DATA, "heartbeat.json"))
@@ -59,7 +60,7 @@ def vigie():
             on_rug(e["mint"], e["symbol"], e["reason"])
         post(e["text"])
     log_equity(marks)
-    tmp = MARKS + ".tmp"        # live prices for the dashboard, so it never calls an API itself
+    tmp = atomic.tmp(MARKS)        # live prices for the dashboard, so it never calls an API itself
     with open(tmp, "w") as f:
         json.dump({"t": time.time(), "marks": marks}, f)
     os.replace(tmp, MARKS)
@@ -263,9 +264,10 @@ def backtest_kick() -> str | None:
     with open(os.path.join(DATA, "backtest.log"), "a") as log:
         _bt["proc"] = subprocess.Popen([sys.executable, os.path.join(here, "backtest.py"), "--accumulate"],
                                        cwd=here, stdout=log, stderr=subprocess.STDOUT)
-    with open(backtest.STATE + ".tmp", "w") as f:     # started now: a restart does not launch it twice
+    tmp = atomic.tmp(backtest.STATE)
+    with open(tmp, "w") as f:     # started now: a restart does not launch it twice
         json.dump({**st, "started": time.time()}, f)
-    os.replace(backtest.STATE + ".tmp", backtest.STATE)
+    os.replace(tmp, backtest.STATE)
     emit("AUDIT", "info", "backtest lancé en arrière-plan : nouvelles graduations et momentum rejoués")
     return "backtest lancé"
 

@@ -9,6 +9,7 @@
 # the desk starts the bot by itself when the token is there. optional in .env:
 #   TELEGRAM_DAILY_CAP=200      checks a day for everyone together (each one costs RPC calls)
 #   TELEGRAM_ALLOW=123,456      chat ids allowed; empty = anyone who finds the bot
+import atomic
 import csv, hashlib, json, os, re, threading, time
 import requests
 from config import DATA
@@ -148,9 +149,10 @@ def _state() -> dict:
 
 def _save(s: dict):
     os.makedirs(DATA, exist_ok=True)
-    with open(STATE + ".tmp", "w") as f:
+    tmp = atomic.tmp(STATE)
+    with open(tmp, "w") as f:
         json.dump(s, f)
-    os.replace(STATE + ".tmp", STATE)
+    os.replace(tmp, STATE)
 
 
 def _log(chat: int, mint: str, result: str):

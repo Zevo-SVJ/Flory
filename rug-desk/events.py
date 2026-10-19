@@ -1,5 +1,6 @@
 # events.py
 # the desk's shared memory between agents and the dashboard: one line per thing that happened.
+import atomic
 import json, os, threading, time
 from config import DATA, EVENTS, AGENTS
 
@@ -52,7 +53,7 @@ def set_agent(name: str, **fields):
         a = state.setdefault(name, {"runs": 0, "errors": 0})
         a.update(fields)
         a["t"] = time.time()
-        tmp = AGENTS + f".{threading.get_ident()}.tmp"
+        tmp = atomic.tmp(AGENTS)
         with open(tmp, "w") as f:
             json.dump(state, f)
         os.replace(tmp, AGENTS)

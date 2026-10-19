@@ -2,6 +2,7 @@
 # the desk's own blacklist of token creators. no free API says "this dev rugged before", so the desk
 # learns it: when a token it saw crashes (AUDIT: -80% or worse) or its pool is pulled (VIGIE), the
 # creator wallet goes on the list, and GARDE kills every later token from that wallet.
+import atomic
 import csv, os, time
 from config import DATA
 
@@ -60,9 +61,10 @@ def _load(path: str) -> dict:
 
 def _save(path: str, d: dict):
     os.makedirs(DATA, exist_ok=True)
-    with open(path + ".tmp", "w") as f:
+    tmp = atomic.tmp(path)
+    with open(tmp, "w") as f:
         json.dump(d, f)
-    os.replace(path + ".tmp", path)
+    os.replace(tmp, path)
 
 
 def note_funder(mint: str, funder: str | None):

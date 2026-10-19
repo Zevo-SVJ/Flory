@@ -8,7 +8,20 @@
 # run it:  cd ~/Documents/rug-desk-run/rug-desk && ./start.sh
 cd "$(dirname "$0")" || exit 1
 mkdir -p data
-trap 'echo; echo "stopping the desk..."; kill 0' INT TERM EXIT
+
+# an older start.sh still open in another window would restart ITS desk 10 s after we stop it: two desks
+# writing the same files (Oct 19 crash). stop it first
+# (a plain kill is not enough: bash runs its trap only once its foreground tail ends, so never. the whole
+# process group goes: the old script, its tail, its restart loops, its desk and dashboard)
+me=$(ps -o pgid= -p $$ | tr -d ' ')
+for pid in $(pgrep -f "start\.sh$"); do
+  pg=$(ps -o pgid= -p "$pid" | tr -d ' ')
+  [ -z "$pg" ] || [ "$pg" = "$me" ] && continue                      # ourselves and our own subshells
+  echo "an older start.sh was still running (pid $pid): stopping it and its desk"
+  kill -TERM -- "-$pg" 2> /dev/null
+  sleep 2
+done
+trap 'trap - INT TERM EXIT; echo; echo "stopping the desk..."; kill 0' INT TERM EXIT   # disarmed first: kill 0 hits us too
 
 command -v caffeinate > /dev/null && caffeinate -dims -w $$ &
 if command -v pmset > /dev/null; then
@@ -22,7 +35,8 @@ if lsof -nP -iTCP:8765 -sTCP:LISTEN > /dev/null 2>&1; then
   lsof -nP -iTCP:8765 -sTCP:LISTEN | tail -n +2
   kill $(lsof -t -iTCP:8765 -sTCP:LISTEN) 2> /dev/null; sleep 1
 fi
-pkill -f "^python3 run\.py$" 2> /dev/null && echo "an old desk was still running: stopped" && sleep 1
+pkill -f "run\.py$" 2> /dev/null && echo "an old desk was still running: stopped" && sleep 1
+pkill -f "backtest\.py --accumulate$" 2> /dev/null
 
 keep_alive() {   # name, script
   while true; do

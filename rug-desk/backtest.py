@@ -10,6 +10,7 @@
 # list cheaply), ECHO, and name factories. so it measures the pool rules + exits alone: a floor for
 # the whole desk if the later checks help, the honest base rate either way.
 # run:  python3 backtest.py 120        (with a Helius SOLANA_RPC in .env it is ~10x faster)
+import atomic
 import json, os, random, statistics, sys, time
 from config import DATA, FACTS, EXIT, PAPER_COSTS
 import facts, exits
@@ -317,7 +318,7 @@ def run_batch() -> dict:
     card = scorecard()
     record_history(card)
     st.update(finished=time.time(), card=card)
-    tmp = STATE + ".tmp"
+    tmp = atomic.tmp(STATE)
     with open(tmp, "w") as f:
         json.dump(st, f)
     os.replace(tmp, STATE)

@@ -2,6 +2,7 @@
 # the waiting room between GARDE and the book. in ECHO_MODE = "gate", a PASS waits here until ECHO
 # has read X: BUY -> the desk re-checks the pool and buys, SKIP -> dropped, no read in time -> dropped.
 # data/x_queue.csv is the list ECHO works from; data/x_reads.csv is what ECHO writes back.
+import atomic
 import csv, json, os, time
 from config import DATA, ECHO_TIMEOUT_MIN, TICKET_USD, PAPER, ECHO_SILENT_MIN, ECHO_FALLBACK_SCORE
 from market import pool, market_kill
@@ -23,7 +24,7 @@ def load() -> dict:
 
 def save(p: dict):
     os.makedirs(DATA, exist_ok=True)
-    tmp = PENDING + ".tmp"
+    tmp = atomic.tmp(PENDING)
     with open(tmp, "w") as f:
         json.dump(p, f, indent=2)
     os.replace(tmp, PENDING)
@@ -49,7 +50,7 @@ def write_queue(p: dict, done: dict):
     """What ECHO still has to read, best score first."""
     rows = sorted(((m, v) for m, v in p.items() if m not in done), key=lambda kv: -(kv[1].get("score") or 0))
     os.makedirs(DATA, exist_ok=True)
-    tmp = X_QUEUE + ".tmp"
+    tmp = atomic.tmp(X_QUEUE)
     with open(tmp, "w", newline="") as f:
         w = csv.writer(f)
         w.writerow(["mint", "symbol", "score", "flags", "waiting_min", "x_by_ca", "x_by_ticker", "contexte"])

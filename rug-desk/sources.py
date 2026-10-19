@@ -1,6 +1,7 @@
 # sources.py
 # what each outside source last answered, written by the desk, read by the dashboard (two processes).
 # without it, a source that silently fails (a key revoked, an API moved) looks the same as a clean token.
+import atomic
 import json, os, time
 from config import DATA
 
@@ -15,9 +16,10 @@ def record(name: str, ok: bool, detail: str = ""):
         d = {}
     d[name] = {"ok": ok, "t": time.time(), "detail": detail[:120]}
     os.makedirs(DATA, exist_ok=True)
-    with open(FILE + ".tmp", "w") as f:
+    tmp = atomic.tmp(FILE)
+    with open(tmp, "w") as f:
         json.dump(d, f)
-    os.replace(FILE + ".tmp", FILE)
+    os.replace(tmp, FILE)
 
 
 def load() -> dict:
@@ -39,9 +41,10 @@ def count_call(name: str):
     day = time.strftime("%Y-%m-%d")
     c = d.get(f"{name}_count") or {}
     d[f"{name}_count"] = {"day": day, "n": (c.get("n", 0) if c.get("day") == day else 0) + 1}
-    with open(FILE + ".tmp", "w") as f:
+    tmp = atomic.tmp(FILE)
+    with open(tmp, "w") as f:
         json.dump(d, f)
-    os.replace(FILE + ".tmp", FILE)
+    os.replace(tmp, FILE)
 
 
 USDC = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
