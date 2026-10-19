@@ -64,8 +64,10 @@ def fetch() -> int:
                 token = max(toks, key=lambda m: bal[m])
                 quote = next(m for m in bal if m != token)
                 s.setdefault("p0", {})[token] = bal[quote] / bal[token]
-        for b in meta.get("postTokenBalances") or []:
-            m = b.get("mint")
+        # the launched token only: a pool quoted in USDC, PUMP or a tokenized stock lists its quote too,
+        # and those are not launches (USDC, TSLAx, SPCX were "graduates" on Oct 19)
+        launched = [token] if pairs and toks else [b.get("mint") for b in meta.get("postTokenBalances") or []]
+        for m in launched:
             if m and m != WSOL and m not in s["mints"]:
                 s["mints"][m] = sig.get("blockTime") or time.time()
                 new += 1

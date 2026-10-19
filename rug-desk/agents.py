@@ -159,8 +159,10 @@ def garde(mint: str):
         elif reason == "no_holders" and not facts.chain_holders_error:
             down.discard("holders")
         verb = "skipped (limits)" if v["stage"] == "limits" else "killed"
-        emit("GARDE", "kill", f"${sym} {verb}: {reason}", symbol=sym, mint=mint, reason=reason,
-             stage=v["stage"])
+        import shadow                   # bought in shadow: VIGIE follows it 6 h, AUDIT scores the kill
+        followed = shadow.note(mint, v)
+        emit("GARDE", "kill", f"${sym} {verb}: {reason}" + (" · suivi 6 h en fantôme" if followed else ""),
+             symbol=sym, mint=mint, reason=reason, stage=v["stage"])
     else:
         flags = v.get("flags") or ""
         emit("GARDE", "pass", f"${sym} passed every check, score {v.get('score')}" + (f" ({flags})" if flags else ""),

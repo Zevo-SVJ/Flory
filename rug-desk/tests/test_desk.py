@@ -1258,3 +1258,31 @@ class BacktestAlive(Base):
         self.assertTrue(backtest.alive({"started": time.time(), "pid": os.getpid()}))
         os.remove(backtest.STATE)
         agents._bt["proc"] = None
+
+
+class Shadow(Base):
+    """GARDE's kills bought in shadow and replayed: the measure of the filter's value."""
+    def test_a_kill_is_followed_once_and_scored_after_6h(self):
+        import shadow, paths
+        for f in (shadow.FILE, paths.GHOSTS):
+            if os.path.exists(f):
+                os.remove(f)
+        v = {"verdict": "SKIP", "stage": "facts", "reason": "top10_heavy", "price": 1.0, "liq_usd": 50000, "symbol": "K"}
+        self.assertTrue(shadow.note(MINT, v))
+        self.assertFalse(shadow.note(MINT, v))                     # a retried kill is the same token
+        self.assertIn(MINT, paths.ghosts())
+        self.assertFalse(shadow.note("Other", {**v, "stage": "limits", "reason": "max_open"}))
+        self.assertFalse(shadow.note("Thin", {**v, "stage": "pool", "reason": "thin_pool"}))
+        self.assertEqual(shadow.results()["waiting"], 1)
+        rows = shadow._rows()
+        t0 = time.time() - 7 * 3600
+        with open(shadow.FILE, "w", newline="") as f:              # the kill was 7 h ago, the token crashed
+            import csv as _c
+            w = _c.DictWriter(f, fieldnames=shadow.FIELDS); w.writeheader(); w.writerow({**rows[0], "t": t0})
+        for k in range(1, 40):
+            paths.append(MINT, {"t": t0 + k * 300, "price": max(0.05, 1 - k * 0.03), "liq": 50000})
+        r = shadow.results()
+        self.assertEqual(r["all"]["n"], 1)
+        self.assertLess(r["all"]["mean"], 0)                       # GARDE was right
+        self.assertEqual(r["reasons"][0]["reason"], "top10_heavy")
+        os.remove(shadow.FILE)

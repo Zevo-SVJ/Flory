@@ -338,6 +338,9 @@ a { color: #8fb8f0; text-decoration: none; } a:hover { text-decoration: underlin
     </section>
     <section class="pane" data-agent="GARDE" hidden><h3>Sources</h3><div class="srcs" id="gardeSources"></div></section>
     <section class="pane" data-agent="GARDE" hidden><h3>Pourquoi les tokens sont éliminés</h3><div class="bars" id="kills"></div></section>
+    <section class="pane" data-agent="GARDE" hidden><h3>Et si on avait acheté ce que GARDE a écarté ?</h3>
+      <div class="scroll"><table id="shadowTable"></table></div><p class="note" id="shadowNote"></p>
+    </section>
     <section class="pane" data-agent="GARDE" hidden><h3>Bot Telegram anti-rug</h3><p class="note" id="tgNote"></p></section>
     <section class="pane" data-agent="ECHO" hidden><h3>La lecture X aide-t-elle ?</h3>
       <div class="stats3" id="groups"></div>
@@ -767,6 +770,16 @@ function drawPanels() {
   $("livingNote").textContent = (L.why || "") + ". Revenu = rendement par trade × mise max que le marché accepte × trades par jour × 30, coûts réels inclus (frais, MEV, priorité). Aucune banque ne relève ce plafond : la profondeur des pools le fixe.";
   $("edgeNote").textContent = (E.why || "") + (E.suggested_ticket ? ` Ticket suggéré pour commencer : ${plain(E.suggested_ticket)} (un quart du Kelly, plafonné à 5 % de la banque et à 1 % du pool).` : "")
     + (S.smart ? ` · ${S.smart} wallet(s) « gagnants » appris.` : "");
+  const SH = S.shadow || { reasons: [], waiting: 0 };
+  table("shadowTable", [["Raison de l'élimination"], ["Tokens", 1], ["Rendement net s'il avait été acheté", 1], ["Gagnants", 1]],
+    (SH.all ? [{ reason: "tous les écartés", ...SH.all }] : []).concat(SH.reasons || []).map(r => [
+      r.reason === "tous les écartés" ? el("b", {}, "tous les écartés") : killLabel(r.reason), String(r.n),
+      span(sign(r.mean), pct(r.mean)), Math.round(r.win * 100) + "%"]),
+    "Les premiers résultats arrivent 6 h après les premières éliminations.");
+  const B0 = (SH.bought || {});
+  $("shadowNote").textContent = `${SH.waiting || 0} token(s) écarté(s) suivi(s) en ce moment. Chaque token que GARDE élimine après les règles de pool est suivi 6 h par VIGIE, puis rejoué avec le vrai moteur de sortie et les coûts réels. `
+    + (SH.all && B0.mean != null ? `Écartés : ${pct(SH.all.mean)} par trade · achetés : ${pct(B0.mean)} (${B0.n} trades). ` : "")
+    + "Si les écartés font mieux que les achetés, le filtre coûte de l'argent au lieu d'en sauver. Un rendement négatif ici veut dire que GARDE a eu raison.";
   const T = S.tgbot || {};
   $("tgNote").textContent = T.on
     ? `Actif · ${T.today} lecture(s) aujourd'hui · ${T.checks_7d} sur 7 jours · ${T.users_7d} personne(s) différente(s). Il lit, il ne trade jamais. Le chiffre qui compte pour en faire un produit : combien reviennent.`
