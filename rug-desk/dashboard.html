@@ -325,6 +325,11 @@ a { color: #8fb8f0; text-decoration: none; } a:hover { text-decoration: underlin
     <section><h3>Ce qu'il fait</h3><ul class="does" id="pdoes"></ul></section>
     <section><h3>En ce moment</h3><div class="now" id="pnow"></div></section>
     <section class="pane" data-agent="SCOUT" hidden><h3>Sources</h3><div class="srcs" id="scoutSources"></div></section>
+    <section class="pane" data-agent="SCOUT" hidden><h3>Dernier passage : où meurent les tokens</h3>
+      <div class="now" id="funnelHead"></div>
+      <div class="grid2" style="margin-top:8px"><div><div class="label">Lancements</div><div class="bars" id="funnelEarly"></div></div>
+      <div><div class="label">Momentum (plus de 72 h)</div><div class="bars" id="funnelMom"></div></div></div>
+    </section>
     <section class="pane" data-agent="GARDE" hidden><h3>Sources</h3><div class="srcs" id="gardeSources"></div></section>
     <section class="pane" data-agent="GARDE" hidden><h3>Pourquoi les tokens sont éliminés</h3><div class="bars" id="kills"></div></section>
     <section class="pane" data-agent="ECHO" hidden><h3>La lecture X aide-t-elle ?</h3>
@@ -580,7 +585,22 @@ function drawPanel() {
   $("pnow").textContent = (a.status === "error" ? "⚠ " : "") + (a.msg || "–");
   for (const p of document.querySelectorAll("#panel .pane")) p.hidden = p.dataset.agent !== a.name;
   const K = S.keys || {};
-  if (a.name === "SCOUT") srcCards($("scoutSources"), [["geckoterminal", "GeckoTerminal"], ["jupiter_top", "Jupiter top organique"]]);
+  if (a.name === "SCOUT") {
+    srcCards($("scoutSources"), [["geckoterminal", "GeckoTerminal"], ["jupiter_top", "Jupiter top organique"]]);
+    const F = a.funnel || {};
+    $("funnelHead").textContent = F.leads == null ? "Pas encore de passage depuis la mise à jour." :
+      `${F.leads} tokens examinés : ${F.graduates} graduations pump.fun, ${F.trending} en tendance (GeckoTerminal), ${F.jupiter_top} top organique (Jupiter), ${F.feeds_and_search} listes DexScreener.`;
+    const bars = (id, obj) => {
+      const rows = Object.entries(obj || {}).sort((x, y) => y[1] - x[1]), max = Math.max(1, ...rows.map(r => r[1]));
+      $(id).replaceChildren(...(rows.length ? rows.map(([k, n]) => {
+        const row = el("div", { class: "bar" }), t = el("div", { class: "t" }), i = el("i");
+        i.style.width = (n / max * 100) + "%"; if (k === "→ GARDE") i.style.background = "var(--up)";
+        t.append(i); row.append(el("span", {}, k === "→ GARDE" ? "passent à GARDE" : killLabel(k)), el("span", {}, String(n)), t);
+        return row;
+      }) : [el("div", { class: "empty" }, "aucun")]));
+    };
+    bars("funnelEarly", F.early); bars("funnelMom", F.momentum);
+  }
   if (a.name === "GARDE") srcCards($("gardeSources"), [
     ["helius_das", "Helius (holders)", K.helius ? null : "RPC public : liste des holders limitée"],
     ["jupiter", "Jupiter"],
@@ -741,7 +761,7 @@ function drawTop() {
   $("pnlSub").textContent = `${pct(S.pnl / S.bankroll * 100)} · réalisé ${usd(S.realized)} · latent ${usd(S.unrealized)}`;
   $("pnlSub").className = "sub " + sign(S.pnl);
   $("posCount").textContent = String(S.open.length);
-  $("posSub").textContent = `${plain(S.open.reduce((s, p) => s + (p.cost || 0), 0))} engagés · cash libre ${plain(S.cash)}`;
+  $("posSub").textContent = `${plain(S.open.reduce((s, p) => s + (p.cost ?? S.ticket), 0))} engagés · cash libre ${plain(S.cash)}`;
   const n = S.wins + S.losses, rate = n ? S.wins / n : 0;
   $("wins").textContent = S.wins + "W"; $("losses").textContent = S.losses + "L";
   const d = $("donut"); d.replaceChildren();

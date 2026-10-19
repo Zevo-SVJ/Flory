@@ -20,6 +20,7 @@ WORDS_PER_RUN = 4           # every 3 minutes. the search mostly returns old poo
 _turn = 0
 grad_error = None           # the on-chain graduation feed's last failure, shown by SCOUT
 last_lanes = {"early": 0, "momentum": 0}
+last_funnel = {}
 # kills that can change with time: a pool grows up, a source comes back. retried after this long
 RETRY_AFTER_MIN = 30
 RETRYABLE = ("too_fresh", "thin_pool", "no_pool", "no_price", "no_holders")
@@ -135,9 +136,12 @@ def leads() -> list[str]:
         grad_error = f"pump.fun graduations unreadable: {e}"[:200]
     graduates = [a for a in grads.recent() if a not in done and a not in out]
     out += graduates
-    out += [a for a in gt_trending() if a not in done and a not in out]
+    n_feeds_search_grads = len(out)
+    trend = [a for a in gt_trending() if a not in done and a not in out]
+    out += trend
     import jup                                 # the most organic trading of the hour, per Jupiter
-    out += [a for a in jup.top_organic("1h") if a not in done and a not in out and a not in NOT_MEMES]
+    top = [a for a in jup.top_organic("1h") if a not in done and a not in out and a not in NOT_MEMES]
+    out += top
     # one batched pool read for every lead: most are bonding-curve tokens with no real pool yet.
     # they are not logged, they just come back next run, so the slots go to tokens that can pass
     live.update(market.pools([m for m in out if m not in live]))
@@ -145,6 +149,16 @@ def leads() -> list[str]:
     born = grads.load()["mints"]
     grads.forget([m for m in graduates if time.time() - born.get(m, time.time()) > 7200
                   and ((live.get(m) or {}).get("liq_usd") or 0) < 10000])
+    # the funnel of this run: where every lead died before GARDE, per lane. shown in SCOUT's panel
+    global last_funnel
+    funnel = {"early": {}, "momentum": {}}
+    for m in out:
+        p = live.get(m)
+        k = market_kill(p) or "→ GARDE"
+        f = funnel[market.lane(p) if p else "early"]
+        f[k] = f.get(k, 0) + 1
+    last_funnel = {"leads": len(out), "graduates": len(graduates), "trending": len(trend), "jupiter_top": len(top),
+                   "feeds_and_search": n_feeds_search_grads - len(graduates), **funnel}
     ok = [m for m in out if not market_kill(live[m])]
     # best pools first, and the two lanes take turns, so momentum's big volumes never crowd out launches
     ok.sort(key=lambda m: -(live[m].get("vol_1h") or 0))

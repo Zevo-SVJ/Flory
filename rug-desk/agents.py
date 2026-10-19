@@ -96,6 +96,7 @@ def scout():
         down.discard("gt")
     emit("SCOUT", "scan", f"{len(leads)} token(s) handed to GARDE: {scan.last_lanes['early']} launch(es), "
                           f"{scan.last_lanes['momentum']} in momentum ({len(scan.grads.recent())} graduates watched)")
+    set_agent("SCOUT", funnel=scan.last_funnel)
     for mint in leads:
         garde(mint)
         # one process runs every agent: a batch of deep reads can take minutes, and open positions must
