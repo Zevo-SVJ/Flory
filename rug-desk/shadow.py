@@ -29,7 +29,10 @@ def note(mint: str, v: dict) -> bool:
     """Called by GARDE after a kill. One shadow per token (a retried kill is the same token).
     Returns True if the token is now followed."""
     reason = v.get("reason") or ""
-    if v.get("verdict") != "SKIP" or v.get("stage") not in STAGES or " failed" in reason:
+    if v.get("verdict") in ("PASS", "BUY") and str(v.get("action", "")).startswith("not bought"):
+        v = {**v, "verdict": "SKIP", "stage": "score", "reason": "low_score"}   # passed every check, note too low
+        reason = "low_score"
+    elif v.get("verdict") != "SKIP" or v.get("stage") not in STAGES or " failed" in reason:
         return False
     if v["stage"] == "pool" and reason not in POOL_KILLS:
         return False

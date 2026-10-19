@@ -1286,3 +1286,15 @@ class Shadow(Base):
         self.assertLess(r["all"]["mean"], 0)                       # GARDE was right
         self.assertEqual(r["reasons"][0]["reason"], "top10_heavy")
         os.remove(shadow.FILE)
+
+
+class ShadowLowScore(Base):
+    def test_a_pass_not_bought_for_its_score_is_followed(self):
+        import shadow
+        if os.path.exists(shadow.FILE):
+            os.remove(shadow.FILE)
+        v = {"verdict": "PASS", "stage": "judge", "reason": "passed", "price": 1.0, "liq_usd": 30000,
+             "action": "not bought: score 40 < 55 (bot_volume)"}
+        self.assertTrue(shadow.note(MINT, v))
+        self.assertEqual(shadow._rows()[0]["reason"], "low_score")
+        os.remove(shadow.FILE)

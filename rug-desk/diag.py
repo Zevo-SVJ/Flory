@@ -4,7 +4,7 @@
 # reads only: no network call, nothing written.
 import csv, json, os, sys, time
 from collections import Counter
-from config import LOG, TRADES, EVENTS, DATA, MIN_SCORE, DAILY_LOSS_HALT_USD, FACTS
+from config import LOG, TRADES, EVENTS, DATA, MIN_SCORE, DAILY_LOSS_HALT_USD, FACTS, AUDIT
 import book
 
 H = float(sys.argv[1]) if len(sys.argv) > 1 else 6
@@ -75,3 +75,24 @@ tr = [t for t in rows(TRADES) if t["time"] >= cut]
 print(f"ACHATS : {sum(1 for t in tr if t['action'] == 'open')} · ventes : {sum(1 for t in tr if t['action'] != 'open')}")
 print(f"RÈGLES D'ENTRÉE : âge min {FACTS['min_age_min']} min, pool min {FACTS['min_liquidity_usd']} $, "
       f"top 10 max {FACTS['max_top10_pct']} %, prix >= {FACTS.get('min_vs_graduation')} x graduation")
+
+# was each kind of verdict right? AUDIT's 6 h re-price of every verdict, the whole history
+score = {r["mint"]: r.get("score") for r in rows(LOG)}
+groups = {}
+for a in rows(AUDIT):
+    try:
+        ch_pct = float(a["change_pct"])
+    except (TypeError, ValueError):
+        continue
+    if a["verdict"] in ("PASS", "BUY"):
+        sc = score.get(a["mint"])
+        key = "PASS note < %d (pas acheté)" % MIN_SCORE if sc and int(float(sc)) < MIN_SCORE else "PASS acheté"
+    else:
+        key = a["reason"] or "?"
+    groups.setdefault(key, []).append(ch_pct)
+print("6 H APRÈS LE VERDICT (tout l'historique d'AUDIT) : n · médiane · chute ≤ -50 % · hausse ≥ +100 %")
+for key, xs in sorted(groups.items(), key=lambda kv: -len(kv[1]))[:20]:
+    xs.sort()
+    med = xs[len(xs) // 2]
+    print(f"  {len(xs):3d} · {med:+7.0f} % · {sum(x <= -50 for x in xs) / len(xs):4.0%} · "
+          f"{sum(x >= 100 for x in xs) / len(xs):4.0%} · {key}")

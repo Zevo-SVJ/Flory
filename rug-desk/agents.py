@@ -176,7 +176,10 @@ def garde(mint: str):
         elif action.startswith("waiting"):
             emit("ECHO", "x", f"${sym} queued for the X read (score {v.get('score')})", symbol=sym, mint=mint)
         elif action.startswith("not bought"):
-            emit("GARDE", "kill", f"${sym} {action}", symbol=sym, mint=mint, reason="low_score")
+            import shadow
+            followed = shadow.note(mint, v)
+            emit("GARDE", "kill", f"${sym} {action}" + (" · suivi 6 h en fantôme" if followed else ""),
+                 symbol=sym, mint=mint, reason="low_score")
         post(f"{v['verdict']} {sym} {v.get('url', '')}\nX by CA: {v.get('x_ca')}\n"
              f"X by ticker: {v.get('x_ticker')}\n{v.get('action', '')}")
     set_agent("GARDE", status="idle", msg=f"${sym}: {v['verdict']} {reason[:60]}",
