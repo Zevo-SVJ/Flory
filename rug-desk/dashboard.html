@@ -148,6 +148,8 @@ header { display: flex; align-items: center; gap: 14px; }
 .agent .when { font-family: var(--mono); font-size: 10px; color: var(--muted); margin-top: 2px; opacity: .8; }
 .hint { text-align: center; font-family: var(--mono); font-size: 10px; letter-spacing: .1em; color: var(--muted); margin: 6px 0 14px; }
 
+.sources { font-family: var(--mono); font-size: 11px; color: var(--muted, #9a8fa3); text-align: center;
+  margin: 8px 0 0; letter-spacing: .04em; overflow-wrap: anywhere; }
 /* details below the fold */
 h2.section { font-family: var(--mono); font-size: 11px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase;
              color: var(--ink-2); margin: 0 0 12px; }
@@ -276,6 +278,7 @@ a { color: #8fb8f0; text-decoration: none; } a:hover { text-decoration: underlin
   </section>
 
   <section class="agents" id="agents"></section>
+  <div class="sources" id="sources"></div>
  </div>
  <div class="details">
   <div class="hint">▼ positions · lecture X · audit du filtre</div>
@@ -502,6 +505,8 @@ function drawAgents() {
       el("div", { class: "when" }, a.name === "ECHO" ? (a.last ? "dernière lecture " + a.last.slice(11) : "") : ago(a.t)));
     return card;
   }));
+  const garde = S.agents.find(a => a.name === "GARDE");
+  $("sources").textContent = garde ? "SOURCES DE GARDE · " + garde.detail : "";
 }
 
 // ---------- tables & panels ----------
