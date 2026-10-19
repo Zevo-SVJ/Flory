@@ -1,7 +1,7 @@
 # dashboard.py
 # Claude Bot's private dashboard. it reads the desk's files and never writes, trades or calls an API:
 # live prices come from VIGIE (data/marks.json), so opening the page costs nothing.
-# start it:  python3 dashboard.py      then open http://localhost:8765 (only reachable from this Mac)
+# start it:  python3 dashboard.py      then open http://localhost:8765 (only this Mac, unless DASH_HOST is set)
 import csv, json, os, re, time
 from collections import Counter
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -323,4 +323,7 @@ class Handler(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     print(f"dashboard: http://localhost:{PORT}   (Ctrl+C to stop)")
-    ThreadingHTTPServer(("127.0.0.1", PORT), Handler).serve_forever()
+    # only this Mac by default. DASH_HOST=0.0.0.0 in .env opens it to your other devices: use it behind
+    # Tailscale (a private network between your own devices), never with a port opened on the internet
+    import env
+    ThreadingHTTPServer((env.get("DASH_HOST") or "127.0.0.1", PORT), Handler).serve_forever()
