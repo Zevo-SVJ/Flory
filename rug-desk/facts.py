@@ -35,7 +35,7 @@ def _b58(b: bytes) -> str:
 RPC_URL = env.get("SOLANA_RPC") or SOLANA_RPC   # a private RPC URL in .env (Helius, QuickNode...) wins
 
 
-def _rpc(method: str, params: list):
+def _rpc(method: str, params: list | dict):
     """One RPC call. A 429 (rate limit) is retried twice with a pause: the public endpoint throttles
     hard, and a skipped check costs a token we could have traded."""
     for attempt in range(3):
@@ -60,6 +60,37 @@ def _goplus(mint: str) -> dict:
     if d.get("code") != 1 or not res:
         raise RuntimeError(f"goplus: {d.get('code')} {d.get('message')}")
     return res
+
+
+def _holders_chain(mint: str) -> list[dict]:
+    """GoPlus sometimes returns no holder list for a young token. The same top 10, read from the chain:
+    the 10 biggest token accounts, each one's owner, and its share of the supply (GoPlus format)."""
+    largest = _rpc("getTokenLargestAccounts", [mint])["value"][:10]
+    supply = int(_rpc("getTokenSupply", [mint])["value"]["amount"])
+    if not largest or not supply:
+        return []
+    accts = _rpc("getMultipleAccounts", [[a["address"] for a in largest], {"encoding": "jsonParsed"}])["value"]
+    out = []
+    for a, acc in zip(largest, accts):
+        owner = (((acc or {}).get("data") or {}).get("parsed") or {}).get("info", {}).get("owner")
+        if owner and int(a["amount"]):
+            out.append({"account": owner, "percent": str(int(a["amount"]) / supply)})
+    return out
+
+
+def _holder_count(mint: str, cap_pages: int = 3) -> int | None:
+    """Holder count when GoPlus has none. Helius only (DAS getTokenAccounts, 1000 per page): 3 pages
+    reach 3000, where the score's holder points are already full."""
+    if "helius" not in RPC_URL:
+        return None
+    n = 0
+    for page in range(1, cap_pages + 1):
+        res = _rpc("getTokenAccounts", {"mint": mint, "limit": 1000, "page": page})
+        accs = res.get("token_accounts") or []
+        n += sum(1 for a in accs if int(a.get("amount") or 0) > 0)
+        if len(accs) < 1000:
+            break
+    return n
 
 
 def pool_chain(mint: str, pair: str, dex: str) -> dict:
@@ -125,6 +156,18 @@ def report(mint: str, pool: dict) -> dict:
     status = lambda k: str((g.get(k) or {}).get("status", "")) if isinstance(g.get(k), dict) else ""
 
     holders = g.get("holders") or []
+    source = "goplus"
+    if not holders:                    # GoPlus blind on this token: read the holders from the chain
+        try:
+            holders, source = _holders_chain(mint), "chain"
+        except Exception:
+            holders = []
+    count = g.get("holder_count")
+    if not count and source == "chain":
+        try:
+            count = _holder_count(mint)
+        except Exception:
+            count = None
     owners = [h["account"] for h in holders]
     kinds = _rpc("getMultipleAccounts", [owners, {"encoding": "base64",
                  "dataSlice": {"offset": 0, "length": 0}}])["value"] if owners else []
@@ -163,7 +206,8 @@ def report(mint: str, pool: dict) -> dict:
         "max_wallet_pct": round(pcts[0], 2) if pcts else None,
         "same_sol_wallets": _same_sol([w["lamports"] for w in wallets]),
         "ladder_wallets": _ladder(pcts),
-        "holders": g.get("holder_count"),
+        "holders": count,
+        "holders_source": source if holders else None,
         "wallets": [w["address"] for w in wallets],      # top holder wallets, for the smart-wallet memory
         "not_checked": ["risk_score", "insider_graph"],
     }

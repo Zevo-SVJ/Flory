@@ -47,8 +47,9 @@ def pool_account(lp_minted=1000, base_mint=MINT):
 
 class Chain:
     """Fake Solana RPC. Every holder is a funded wallet except the pool, which a program owns."""
-    def __init__(self, mint_auth=None, freeze_auth=None, lp_live=0, lamports=None, dev_amount=0):
+    def __init__(self, mint_auth=None, freeze_auth=None, lp_live=0, lamports=None, dev_amount=0, largest=None):
         self.mint_auth, self.freeze_auth, self.lp_live = mint_auth, freeze_auth, lp_live
+        self.largest = largest or []          # [(owner, amount)] the chain's biggest token accounts
         self.dev_amount = dev_amount
         self.lamports = lamports or {}
 
@@ -63,6 +64,10 @@ class Chain:
             res = {"value": {"amount": "1000000" if p[0] == MINT else str(self.lp_live)}}
         elif m == "getTokenAccountsByOwner":
             res = {"value": [{"account": {"data": {"parsed": {"info": {"tokenAmount": {"amount": str(self.dev_amount)}}}}}}]}
+        elif m == "getTokenLargestAccounts":
+            res = {"value": [{"address": f"TA{i}", "amount": str(a)} for i, (_, a) in enumerate(self.largest)]}
+        elif m == "getMultipleAccounts" and p[1].get("encoding") == "jsonParsed":
+            res = {"value": [{"data": {"parsed": {"info": {"owner": self.largest[int(a[2:])][0]}}}} for a in p[0]]}
         elif m == "getMultipleAccounts":
             res = {"value": [{"owner": facts.PUMPSWAP, "lamports": 1} if a == VAULT_OWNER else
                              {"owner": facts.SYSTEM_PROGRAM, "lamports": self.lamports.get(a, 10**9 + i * 12345)}
@@ -152,6 +157,14 @@ class Filter(Base):
             with self.subTest(reason):
                 v = self.verdict(**kw)
                 self.assertEqual((v["stage"], v["reason"]), ("facts", reason))
+
+    def test_holders_from_chain_when_goplus_has_none(self):
+        largest = [(VAULT_OWNER, 600000)] + [(f"W{i}", 20000 - i * 1500) for i in range(9)]
+        with net(gp=goplus(holders=[], holder_count=None), chain=Chain(largest=largest)):
+            t = facts.report(MINT, {"pair": PAIR, "dex": "pumpswap"})
+        self.assertEqual(t["holders_source"], "chain")
+        self.assertEqual(t["max_wallet_pct"], 2.0)          # the pool vault is not counted as a whale
+        self.assertIsNone(facts.fact_kill(t))
 
     def test_goplus_also_says_mintable(self):
         v = self.verdict(gp=goplus(mintable={"status": "1"}))

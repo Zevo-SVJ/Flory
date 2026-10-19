@@ -98,6 +98,14 @@ def echo_status(waiting: dict, xreads: list[dict], now: float) -> dict:
                 "last": last}
     if waiting:
         return {"status": "work", "msg": f"{len(waiting)} PASS à lire", "last": last}
+    # with nothing to read, the narrative scan (every 2 h) is ECHO's only sign of life
+    try:
+        quiet_h = (now - os.path.getmtime(os.path.join(DATA, "narratives.txt"))) / 3600
+    except OSError:
+        quiet_h = None
+    if quiet_h is not None and quiet_h > 3:
+        return {"status": "error", "msg": f"aucun scan X depuis {quiet_h:.0f} h : la boucle ECHO tourne-t-elle ?",
+                "last": last}
     return {"status": "idle", "msg": f"{len(xreads)} lecture(s) X faite(s)" if xreads else "attend un PASS",
             "last": last}
 
