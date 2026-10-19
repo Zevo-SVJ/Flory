@@ -25,7 +25,7 @@ only posts an approval line telling you to read X yourself before you buy.
     pip install -r requirements.txt
     python -m unittest discover -s tests      # 17 offline tests, should print OK
     python check.py <any Solana mint>         # one verdict, as JSON
-    python run.py                             # the desk: watch 10m, scan 30m, report 21:30
+    python run.py                             # the desk: 6 agents, paper bankroll $1000
     python dashboard.py                       # private dashboard on http://localhost:8765
 
 Optional `.env` (copy `.env.example`, never commit it):
@@ -45,7 +45,9 @@ Optional `.env` (copy `.env.example`, never commit it):
 | watch.py | exits: liquidity pull, stop, ladder, trail, time stop |
 | scan.py | leads: fresh Solana tokens with a paid DexScreener profile |
 | report.py | evening report from the CSVs |
-| run.py | scheduler (replaces Grok Bot routines) |
+| run.py, agents.py | the desk as 6 agents: VIGIE (exits, 20 s), SCOUT (leads, 10 min), GARDE (13 checks), AUDIT (was the filter right, 30 min), PLUME (21:30 report); ECHO is the Claude-in-Chrome X reader |
+| audit.py | re-prices every verdict 6 h later: killed tokens that crashed vs passed ones |
+| events.py | the event log and agent status the dashboard reads |
 | dashboard.py + .html | private dashboard: `python3 dashboard.py`, then http://localhost:8765 |
 | data/ | checks.csv, trades.csv, positions.json, desk.log |
 

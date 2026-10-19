@@ -3,7 +3,7 @@
 import csv, os, time
 from collections import Counter
 from config import LOG, PAPER, JUDGE
-import book
+import book, audit
 
 
 def report() -> str:
@@ -33,6 +33,11 @@ def report() -> str:
                      f"worst: {worst['symbol']} ${float(worst['pnl']):+.2f}")
     for reason, n in reasons.most_common(3):
         lines.append(f"kill reason: {reason} ({n}x)")
+    a = audit.summary()
+    k, p = a["killed"], a["passed"]
+    if k["n"] or p["n"]:
+        lines.append(f"audit: {k['crashed']}/{k['n']} killed tokens crashed later, "
+                     f"{p['crashed']}/{p['n']} passed tokens crashed later")
     return "\n".join(lines)
 
 

@@ -1,16 +1,29 @@
 # dashboard.py
-# a private page that reads the desk's files. it never writes anything and never trades.
-# start it:  python3 dashboard.py      then open http://localhost:8765
-# it only listens on your own machine (127.0.0.1), nobody else can open it.
+# Claude Bot's private dashboard. it reads the desk's files and never writes, trades or calls an API:
+# live prices come from VIGIE (data/marks.json), so opening the page costs nothing.
+# start it:  python3 dashboard.py      then open http://localhost:8765 (only reachable from this Mac)
 import csv, json, os, time
 from collections import Counter
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from config import DATA, LOG, TRADES, PAPER, JUDGE, TICKET_USD, EXIT, HERE
-import book, market
+from urllib.parse import urlparse, parse_qs
+from config import (DATA, LOG, PAPER, JUDGE, TICKET_USD, HERE, EQUITY, PAPER_BANKROLL_USD,
+                    DAILY_LOSS_HALT_USD, MEGA_PROFIT_PCT, SCHEDULE)
+import book, events, audit
 
 PORT = 8765
 X_READS = os.path.join(DATA, "x_reads.csv")
 HEARTBEAT = os.path.join(DATA, "heartbeat.json")
+MARKS = os.path.join(DATA, "marks.json")
+RANGES = {"1h": 3600, "24h": 86400, "7j": 7 * 86400, "tout": None}
+
+AGENTS = [   # fixed order = fixed color slot on the page
+    ("VIGIE", "surveille les positions", "prix toutes les 20 s, stops, prises de profit"),
+    ("SCOUT", "trouve les tokens", "nouveaux tokens DexScreener toutes les 10 min"),
+    ("GARDE", "tue les rugs", "13 checks : pool, autorités, LP, holders, bundles"),
+    ("ECHO", "lit X", "Claude dans Chrome, verdict BUY/SKIP par PASS"),
+    ("AUDIT", "vérifie le filtre", "re-prix des verdicts 6 h après"),
+    ("PLUME", "écrit le rapport", "bilan du soir à 21:30"),
+]
 
 
 def _csv(path: str) -> list[dict]:
@@ -20,118 +33,125 @@ def _csv(path: str) -> list[dict]:
         return list(csv.DictReader(f))
 
 
-def _stage(r: dict) -> str:
-    reason = r.get("reason") or ""
-    if " failed" in reason:
-        return "source_down"
-    return r.get("stage") or "?"
+def _json(path: str, default):
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return default
 
 
-def state() -> dict:
+def curve(range_s: int | None, now: float) -> list[list[float]]:
+    """Balance points [t, balance], thinned to ~400 so a week of 20-second ticks stays light."""
+    pts = []
+    if os.path.exists(EQUITY):
+        with open(EQUITY) as f:
+            next(f, None)
+            for line in f:
+                t, bal = line.split(",")[:2]
+                t = float(t)
+                if range_s is None or t >= now - range_s:
+                    pts.append([t, float(bal)])
+    if len(pts) > 400:
+        step = len(pts) / 399
+        pts = [pts[int(i * step)] for i in range(399)] + [pts[-1]]
+    return pts
+
+
+def echo_status(passes: list[dict], xreads: list[dict], now: float) -> dict:
+    """ECHO runs in its own Claude session. It is late if a PASS waits more than 45 min unread."""
+    read = {r["mint"] for r in xreads}
+    waiting = [p for p in passes if p["mint"] not in read]
+    last = max((r["time"] for r in xreads), default=None)
+    oldest = min((p["time"] for p in waiting), default=None)
+    late = oldest and (now - time.mktime(time.strptime(oldest, "%Y-%m-%d %H:%M"))) > 45 * 60
+    if late:
+        return {"status": "error", "msg": f"{len(waiting)} PASS non lu(s) : la session Claude est-elle ouverte ?",
+                "last": last}
+    if waiting:
+        return {"status": "work", "msg": f"{len(waiting)} PASS à lire", "last": last}
+    return {"status": "idle", "msg": f"{len(xreads)} lecture(s) X faite(s)" if xreads else "attend un PASS",
+            "last": last}
+
+
+def state(range_key: str = "24h") -> dict:
     now = time.time()
     checks, trades, xreads = _csv(LOG), book.trades(), _csv(X_READS)
     positions = book.load()
-
-    # live prices for open positions, one call. a failure leaves them unpriced, never guessed
-    live, price_error = {}, None
-    if positions:
-        try:
-            live = market.pools(list(positions))
-        except Exception as e:
-            price_error = str(e)
+    marks = _json(MARKS, {"t": 0, "marks": {}})
+    live = marks.get("marks", {})
 
     open_rows, unrealized = [], 0.0
     for mint, p in positions.items():
-        m = live.get(mint)
-        price = m["price"] if m and m["price"] > 0 else None
-        pnl = p["qty"] * (price - p["entry"]) if price else None
-        unrealized += pnl or 0
+        price = live.get(mint)
+        pnl = p["qty"] * (price - p["entry"]) if price else 0.0
+        unrealized += pnl
         open_rows.append({
             "mint": mint, "symbol": p["symbol"], "entry": p["entry"], "price": price,
             "pct": (price / p["entry"] - 1) * 100 if price else None,
-            "peak_pct": (p["peak"] / p["entry"] - 1) * 100,
-            "pnl": pnl, "left_pct": p["qty"] / p["qty0"] * 100,
-            "hours": (now - p["opened"]) / 3600, "steps": p["steps"],
-            "liq": m["liq_usd"] if m else None, "liq0": p["liq0"],
-            "url": m["url"] if m else f"https://dexscreener.com/solana/{mint}",
+            "peak_pct": (p["peak"] / p["entry"] - 1) * 100, "pnl": pnl if price else None,
+            "left_pct": p["qty"] / p["qty0"] * 100, "hours": (now - p["opened"]) / 3600,
         })
 
-    # realized pnl over time: every partial and close is one step of the curve
+    realized = book.realized()
     exits = [t for t in trades if t["action"] != "open"]
-    curve, total = [], 0.0
-    for t in exits:
-        total += float(t["pnl"])
-        curve.append({"time": t["time"], "pnl": round(total, 2), "symbol": t["symbol"],
-                      "step": float(t["pnl"]), "reason": t["reason"]})
-    day = time.strftime("%Y-%m-%d")
-    closes = [t for t in trades if t["action"] == "close"]
-
-    # pnl per token, realized + still open, so a verdict can be judged against what happened
     per_mint = Counter()
     for t in exits:
         per_mint[t["mint"]] += float(t["pnl"])
+    closed = {t["mint"] for t in trades if t["action"] == "close"}
+    wins = sum(1 for m in closed if per_mint[m] > 0)
     for r in open_rows:
         per_mint[r["mint"]] += r["pnl"] or 0
-    wins = [m for m in {t["mint"] for t in closes} if per_mint[m] > 0]
 
-    # the funnel uses the latest verdict per token: a retried token counts once
     latest = {}
     for r in checks:
         latest[r["mint"]] = r
     rows = list(latest.values())
-    stages = Counter(_stage(r) if r["verdict"] == "SKIP" else "pass" for r in rows)
-    n = len(rows)
-    after_pool = n - stages["limits"] - stages["pool"] - stages["source_down"]
-    funnel = [
-        {"label": "Tokens analysés", "n": n},
-        {"label": "Pool OK (liquidité, âge, ventes)", "n": after_pool},
-        {"label": "Contrat OK (autorités, LP, holders)", "n": after_pool - stages["facts"]},
-        {"label": "PASS du desk", "n": stages["pass"]},
-    ]
-    kills = Counter("source en panne" if _stage(r) == "source_down" else r["reason"]
+    kills = Counter("source en panne" if " failed" in (r["reason"] or "") else r["reason"]
                     for r in rows if r["verdict"] == "SKIP")
-
-    # the experiment: every PASS, what X said, what the paper trade did
-    xr = {r["mint"]: r for r in xreads}
     passes = [r for r in rows if r["verdict"] in ("PASS", "BUY")]
-    experiment = []
-    for r in sorted(passes, key=lambda r: r["time"], reverse=True):
-        x = xr.get(r["mint"])
-        experiment.append({
-            "time": r["time"], "mint": r["mint"], "symbol": r["symbol"],
-            "x_verdict": x["verdict"] if x else None, "x_reason": x["raison"] if x else None,
-            "pnl": round(per_mint[r["mint"]], 2), "open": r["mint"] in positions,
-        })
+
+    xr = {r["mint"]: r for r in xreads}
+    experiment = [{"time": r["time"], "mint": r["mint"], "symbol": r["symbol"],
+                   "x": xr[r["mint"]]["verdict"] if r["mint"] in xr else None,
+                   "why": xr[r["mint"]]["raison"] if r["mint"] in xr else None,
+                   "pnl": round(per_mint[r["mint"]], 2), "open": r["mint"] in positions}
+                  for r in sorted(passes, key=lambda r: r["time"], reverse=True)]
     groups = {}
     for g in ("BUY", "SKIP", None):
-        sel = [e for e in experiment if e["x_verdict"] == g]
+        sel = [e for e in experiment if e["x"] == g]
         groups[g or "non lu"] = {"n": len(sel), "pnl": round(sum(e["pnl"] for e in sel), 2)}
 
-    hb = None
-    if os.path.exists(HEARTBEAT):
-        with open(HEARTBEAT) as f:
-            hb = json.load(f)
+    st = events.agents()
+    st["ECHO"] = echo_status(passes, xreads, now)
+    agents = [{"name": n, "role": role, "detail": detail, **st.get(n, {"status": "idle", "msg": "pas encore lancé"})}
+              for n, role, detail in AGENTS]
 
+    hb = _json(HEARTBEAT, None)
+    balance = PAPER_BANKROLL_USD + realized + unrealized
     return {
-        "now": now, "paper": PAPER, "judge": JUDGE, "ticket": TICKET_USD, "exit": EXIT,
-        "heartbeat_age_s": now - hb["time"] if hb else None,
-        "realized": round(total, 2), "realized_today": round(book.today_pnl(), 2),
-        "unrealized": round(unrealized, 2), "price_error": price_error,
-        "closed": len(closes), "won": len(wins),
-        "open": sorted(open_rows, key=lambda r: r["hours"]),
-        "curve": curve, "funnel": funnel,
+        "now": now, "paper": PAPER, "judge": JUDGE, "ticket": TICKET_USD,
+        "alive": bool(hb and now - hb["time"] < 120),
+        "bankroll": PAPER_BANKROLL_USD, "balance": balance, "realized": realized, "unrealized": unrealized,
+        "pnl": balance - PAPER_BANKROLL_USD, "today": book.today_pnl(), "loss_limit": DAILY_LOSS_HALT_USD,
+        "cash": book.cash(positions), "marks_age": now - marks.get("t", 0),
+        "wins": wins, "losses": len(closed) - wins, "mega_pct": MEGA_PROFIT_PCT,
+        "curve": curve(RANGES.get(range_key, 86400), now), "range": range_key,
+        "events": events.recent(40), "tasks": events.count(),
+        "agents": agents, "open": sorted(open_rows, key=lambda r: -(r["pct"] or -1e9)),
+        "experiment": experiment[:30], "groups": groups,
         "kills": [{"label": k, "n": v} for k, v in kills.most_common(8)],
-        "experiment": experiment, "groups": groups,
-        "trades": [t for t in reversed(exits)][:30],
-        "checked_today": sum(1 for r in checks if r["time"].startswith(day)),
+        "audit": audit.summary(), "vigie_every": SCHEDULE["vigie_every_s"],
     }
 
 
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
-        if self.path == "/api/state":
-            body, kind = json.dumps(state()).encode(), "application/json"
-        elif self.path in ("/", "/index.html"):
+        url = urlparse(self.path)
+        if url.path == "/api/state":
+            rng = parse_qs(url.query).get("range", ["24h"])[0]
+            body, kind = json.dumps(state(rng)).encode(), "application/json"
+        elif url.path in ("/", "/index.html"):
             with open(os.path.join(HERE, "dashboard.html"), "rb") as f:
                 body, kind = f.read(), "text/html; charset=utf-8"
         else:

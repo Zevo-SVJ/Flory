@@ -17,11 +17,15 @@ MIN_CONFIDENCE = 0.7        # Grok says BUY below this -> treated as SKIP
 # in paper mode, True paper-buys every PASS so a week of trades.csv measures the filter alone.
 PAPER_BUY_ON_PASS = True
 
+# training mode: paper money, so the desk takes every token the filter lets through, bounded by
+# cash. more trades = more data about the filter. the live numbers go back down before real money.
+PAPER_BANKROLL_USD = 1000   # fake starting balance. a new entry needs TICKET_USD of free cash
 TICKET_USD = 25             # flat. never sized off the last win
-MAX_OPEN = 4                # 4 x $25 = $100 in the market, max
-MAX_ENTRIES_PER_DAY = 6
-DAILY_LOSS_HALT_USD = 50    # realized loss today hits this -> no new entries until tomorrow
+MAX_OPEN = 40               # safety net only: cash runs out first (1000 / 25 = 40)
+MAX_ENTRIES_PER_DAY = 40
+DAILY_LOSS_HALT_USD = 250   # realized loss today hits this -> no new entries until tomorrow
 COOLDOWN_HOURS = 24         # no re-entry into a token you just left
+MEGA_PROFIT_PCT = 50        # a sale this far in profit fires the dashboard's MEGA PROFIT card
 
 SOLANA_RPC = "https://api.mainnet-beta.solana.com"   # free public RPC. a free Helius/QuickNode URL also works
 
@@ -48,14 +52,20 @@ EXIT = {
     "liq_drop_pct": 40,                     # pool liquidity down 40% from entry -> out now
 }
 
-SCHEDULE = {                # used by run.py, the free replacement for Grok Bot routines
-    "watch_every_min": 10,
-    "scan_every_min": 30,
-    "scan_per_run": 5,          # so one busy hour can't drain the API budget
-    "report_at": "21:30",       # local time
+SCHEDULE = {                # used by agents.py: one entry per agent
+    "vigie_every_s": 20,        # VIGIE: prices every open position, applies exits, logs the balance
+    "scout_every_min": 10,      # SCOUT: pulls fresh leads, GARDE checks each one
+    "scan_per_run": 10,         # leads per SCOUT run that reach GARDE (thin pools never count)
+    "audit_every_min": 30,      # AUDIT: re-prices old verdicts to see if the filter was right
+    "audit_after_hours": 6,
+    "report_at": "21:30",       # PLUME: evening report, local time
 }
 
 DATA = os.environ.get("RUG_DESK_DATA") or os.path.join(HERE, "data")
 LOG = os.path.join(DATA, "checks.csv")
 POSITIONS = os.path.join(DATA, "positions.json")
 TRADES = os.path.join(DATA, "trades.csv")
+EVENTS = os.path.join(DATA, "events.jsonl")
+AGENTS = os.path.join(DATA, "agents.json")
+EQUITY = os.path.join(DATA, "equity.csv")
+AUDIT = os.path.join(DATA, "audit.csv")

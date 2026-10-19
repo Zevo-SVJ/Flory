@@ -2,7 +2,7 @@
 # positions, trades, limits. the desk's memory lives in two files you can open yourself.
 import csv, json, os, sys, time
 from config import (DATA, POSITIONS, TRADES, TICKET_USD, MAX_OPEN, MAX_ENTRIES_PER_DAY,
-                    DAILY_LOSS_HALT_USD, COOLDOWN_HOURS)
+                    DAILY_LOSS_HALT_USD, COOLDOWN_HOURS, PAPER_BANKROLL_USD)
 
 FIELDS = ["time", "mint", "symbol", "action", "usd", "pnl", "reason"]
 
@@ -45,6 +45,17 @@ def today_pnl() -> float:
     return sum(float(t["pnl"]) for t in trades() if t["time"].startswith(day))
 
 
+def realized() -> float:
+    return sum(float(t["pnl"]) for t in trades())
+
+
+def cash(book: dict | None = None) -> float:
+    """Paper cash: starting bankroll + realized pnl - what is still tied up in open positions."""
+    book = load() if book is None else book
+    tied = sum(p["qty"] * p["entry"] for p in book.values())
+    return PAPER_BANKROLL_USD + realized() - tied
+
+
 def guard(mint: str) -> str | None:
     """Limits run before any network call. A blocked entry costs nothing."""
     day = time.strftime("%Y-%m-%d")
@@ -52,6 +63,7 @@ def guard(mint: str) -> str | None:
     if today_pnl() <= -DAILY_LOSS_HALT_USD:                      return "halted_daily_loss"
     if mint in book:                                             return "already_open"
     if len(book) >= MAX_OPEN:                                    return "max_open"
+    if cash(book) < TICKET_USD:                                  return "no_cash"
     opens = [t for t in trades() if t["action"] == "open" and t["time"].startswith(day)]
     if len(opens) >= MAX_ENTRIES_PER_DAY:                        return "max_entries_today"
     cutoff = time.strftime("%Y-%m-%d %H:%M", time.localtime(time.time() - COOLDOWN_HOURS * 3600))

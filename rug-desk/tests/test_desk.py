@@ -186,6 +186,11 @@ class Book(Base):
         book.record(MINT, "T", "close", 10, 1, "stop")
         self.assertEqual(book.guard(MINT), "cooldown")
 
+    def test_no_cash(self):
+        with open(config.TRADES, "w") as f:
+            f.write("time,mint,symbol,action,usd,pnl,reason\n2020-01-01 00:00,A,A,close,0,-990,stop\n")
+        self.assertEqual(book.guard(MINT), "no_cash")
+
     def test_max_open(self):
         for i in range(config.MAX_OPEN):
             book.open_position(f"M{i}", "M", 1.0, 100000)
@@ -195,7 +200,7 @@ class Book(Base):
 class Exits(Base):
     def tick(self, price, liq=80000):
         with mock.patch("requests.get", fake_get(ds=ds_pairs(price=price, liq=liq))):
-            return watch.watch()
+            return [e["text"] for e in watch.watch()[0]]
 
     def setUp(self):
         super().setUp()
@@ -229,7 +234,7 @@ class Exits(Base):
 
     def test_pool_gone(self):
         with mock.patch("requests.get", fake_get(ds=[])):
-            e = watch.watch()
+            e = [x["text"] for x in watch.watch()[0]]
         self.assertIn("pool gone", e[0])
         self.assertAlmostEqual(book.today_pnl(), -25)
 
@@ -252,3 +257,47 @@ class Scan(Base):
         check.log({"time": time.strftime("%Y-%m-%d %H:%M"), "mint": "NEW", "stage": "pool",
                    "verdict": "SKIP", "reason": "too_fresh"})
         self.assertEqual(scan._done(), {"RUG", "NEW"})
+
+
+class Agents(Base):
+    def setUp(self):
+        super().setUp()
+        for f in (config.EVENTS, config.AGENTS, config.EQUITY, config.AUDIT):
+            if os.path.exists(f):
+                os.remove(f)
+
+    def test_vigie_logs_balance_and_sells(self):
+        import agents, events
+        book.open_position(MINT, "TEST", 1.0, 80000)
+        with mock.patch("requests.get", fake_get(ds=ds_pairs(price=2.0))):
+            agents.vigie()
+        with open(config.EQUITY) as f:
+            last = f.read().strip().splitlines()[-1].split(",")
+        # half sold at +100% (+12.5 realized), the other half still open at +100% (+12.5 latent)
+        self.assertAlmostEqual(float(last[1]), config.PAPER_BANKROLL_USD + 25, places=2)
+        sells = [e for e in events.recent() if e["kind"] == "sell"]
+        self.assertEqual(sells[0]["reason"], "take_profit_100")
+
+    def test_scout_hands_leads_to_garde(self):
+        import agents, events
+        prof = [{"chainId": "solana", "tokenAddress": MINT}]
+        def get(url, timeout=None, params=None):
+            if "token-profiles" in url or "token-boosts" in url:
+                return Resp(prof)
+            return fake_get()(url, timeout, params)
+        with mock.patch("requests.get", get), mock.patch("requests.post", Chain()):
+            agents.scout()
+        kinds = [e["kind"] for e in events.recent()]
+        self.assertIn("pass", kinds)
+        self.assertIn("buy", kinds)
+        self.assertIn(MINT, book.load())
+
+    def test_audit_scores_old_kills(self):
+        import audit
+        old = time.strftime("%Y-%m-%d %H:%M", time.localtime(time.time() - 8 * 3600))
+        check.log({"time": old, "mint": MINT, "symbol": "TEST", "stage": "facts", "verdict": "SKIP",
+                   "reason": "whale", "price": 1.0, "liq_usd": 50000})
+        with mock.patch("requests.get", fake_get(ds=ds_pairs(price=0.2))):
+            rows = audit.audit()
+        self.assertEqual(rows[0]["change_pct"], -80.0)
+        self.assertEqual(audit.summary()["killed"], {"n": 1, "crashed": 1})

@@ -7,12 +7,29 @@ from facts import report, fact_kill
 from market import pool, market_kill
 import book
 
-FIELDS = ["time", "mint", "symbol", "stage", "verdict", "confidence", "reason"]
+# price and liq_usd at verdict time let AUDIT check later whether a kill or a pass was right
+FIELDS = ["time", "mint", "symbol", "stage", "verdict", "confidence", "reason", "price", "liq_usd"]
+
+
+def _migrate():
+    """An older checks.csv has fewer columns: rewrite it once with the new header."""
+    with open(LOG, newline="") as f:
+        r = csv.DictReader(f)
+        if r.fieldnames == FIELDS:
+            return
+        rows = list(r)
+    with open(LOG, "w", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=FIELDS)
+        w.writeheader()
+        for row in rows:
+            w.writerow({k: row.get(k) for k in FIELDS})
 
 
 def log(row: dict):
     os.makedirs(DATA, exist_ok=True)
     new = not os.path.exists(LOG)
+    if not new:
+        _migrate()
     with open(LOG, "a", newline="") as f:
         w = csv.DictWriter(f, fieldnames=FIELDS)
         if new:
@@ -48,16 +65,18 @@ def check(mint: str) -> dict:
         m = pool(mint)                                           # pool, free
     except Exception as e:
         return {"stage": "pool", "verdict": "SKIP", "reason": f"dexscreener failed: {e}"}
+    seen = {"price": (m or {}).get("price"), "liq_usd": (m or {}).get("liq_usd")}
     if (k := market_kill(m)):
-        return {"stage": "pool", "verdict": "SKIP", "reason": k, "symbol": (m or {}).get("symbol")}
+        return {"stage": "pool", "verdict": "SKIP", "reason": k, "symbol": (m or {}).get("symbol"), **seen}
 
     try:
         token = report(mint, m)                                  # rug filter, free
     except Exception as e:
         return {"stage": "facts", "verdict": "SKIP", "reason": f"facts failed: {e}",
-                "symbol": m["symbol"]}
+                "symbol": m["symbol"], **seen}
     if (k := fact_kill(token)):
-        return {"stage": "facts", "verdict": "SKIP", "reason": k, "symbol": m["symbol"] or token["symbol"]}
+        return {"stage": "facts", "verdict": "SKIP", "reason": k,
+                "symbol": m["symbol"] or token["symbol"], **seen}
 
     v = judge(token, m)
     sym = m["symbol"] or token["symbol"]
