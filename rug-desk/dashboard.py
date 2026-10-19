@@ -2,7 +2,7 @@
 # Claude Bot's private dashboard. it reads the desk's files and never writes, trades or calls an API:
 # live prices come from VIGIE (data/marks.json), so opening the page costs nothing.
 # start it:  python3 dashboard.py      then open http://localhost:8765 (only reachable from this Mac)
-import csv, json, os, time
+import csv, json, os, re, time
 from collections import Counter
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
@@ -14,6 +14,8 @@ PORT = 8765
 X_READS = os.path.join(DATA, "x_reads.csv")
 HEARTBEAT = os.path.join(DATA, "heartbeat.json")
 MARKS = os.path.join(DATA, "marks.json")
+INBOX = os.path.join(DATA, "inbox.txt")
+SOLANA_ADDRESS = re.compile(r"^[1-9A-HJ-NP-Za-km-z]{32,44}$")
 RANGES = {"1h": 3600, "24h": 86400, "7j": 7 * 86400, "tout": None}
 
 AGENTS = [   # fixed order = fixed color slot on the page
@@ -195,6 +197,27 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", kind)
         self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(body)
+
+    def do_POST(self):
+        """Paste a CA in the page: it is queued for GARDE. The page itself never runs a check."""
+        if urlparse(self.path).path != "/api/check":
+            self.send_error(404)
+            return
+        try:
+            n = min(int(self.headers.get("Content-Length") or 0), 2000)
+            mint = str(json.loads(self.rfile.read(n) or b"{}").get("mint", "")).strip()
+        except ValueError:
+            mint = ""
+        ok = bool(SOLANA_ADDRESS.match(mint))
+        if ok:
+            os.makedirs(DATA, exist_ok=True)
+            with open(INBOX, "a") as f:
+                f.write(mint + "\n")
+        body = json.dumps({"ok": ok, "error": None if ok else "adresse Solana invalide"}).encode()
+        self.send_response(200 if ok else 400)
+        self.send_header("Content-Type", "application/json")
         self.end_headers()
         self.wfile.write(body)
 

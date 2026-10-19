@@ -106,6 +106,14 @@ header { display: flex; align-items: center; gap: 14px; }
 .ev.fresh { animation: fresh 1.6s ease-out; }
 @keyframes fresh { from { background: rgba(255,255,255,.07); } to { background: transparent; } }
 
+.checkform { display: flex; gap: 6px; margin: 0 0 8px; }
+.checkform input { flex: 1; min-width: 0; font-family: var(--mono); font-size: 11px; color: var(--ink); background: rgba(255,255,255,.04);
+                   border: 1px solid var(--ring); border-radius: 8px; padding: 6px 9px; outline: none; }
+.checkform input:focus { border-color: rgba(111,214,176,.5); }
+.checkform input.bad { border-color: rgba(239,111,111,.6); }
+.checkform button { font-family: var(--mono); font-size: 11px; letter-spacing: .06em; color: #0f1d18; background: #6fd6b0;
+                    border: 0; border-radius: 8px; padding: 6px 12px; cursor: pointer; font-weight: 600; }
+
 /* daily bar */
 .daily { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 14px; align-items: center; margin: 2px 4px; }
 .track { height: 10px; border-radius: 99px; background: rgba(255,255,255,.07); overflow: hidden; }
@@ -248,6 +256,10 @@ a { color: #8fb8f0; text-decoration: none; } a:hover { text-decoration: underlin
     </div>
     <div class="card">
       <div class="cardhead"><span class="label">Activity log</span><span class="clock" id="logCount"></span></div>
+      <form id="checkForm" class="checkform" autocomplete="off">
+        <input id="checkInput" type="text" spellcheck="false" placeholder="coller un CA Solana : GARDE le vérifie" aria-label="Adresse de contrat à vérifier">
+        <button type="submit">Check</button>
+      </form>
       <div id="log"></div>
     </div>
   </section>
@@ -480,7 +492,7 @@ const link = (href, text) => el("a", { href, target: "_blank", rel: "noopener no
 const KILLS = { thin_pool: "Pool trop petit", too_fresh: "Trop récent", too_old: "Trop vieux", no_pool: "Pas de pool",
   nobody_can_sell: "Honeypot (aucune vente)", mint_open: "Mint authority ouverte", freeze_open: "Freeze authority ouverte",
   lp_unverified: "LP non vérifiable", lp_unlocked: "LP non brûlé", no_holders: "Holders indisponibles",
-  top10_heavy: "Top 10 > 30 %", whale: "Un wallet > 5 %", bundle_same_sol: "Bundle : même solde SOL",
+  dev_holds: "Le dev garde > 5 %", dev_unknown: "Dev introuvable", top10_heavy: "Top 10 > 30 %", whale: "Un wallet > 5 %", bundle_same_sol: "Bundle : même solde SOL",
   bundle_ladder: "Bundle : sacs identiques", "source en panne": "Source en panne" };
 const killLabel = (k) => KILLS[k] || (k && k.startsWith("danger:") ? "Piège Token-2022 : " + k.slice(7) : k);
 
@@ -582,6 +594,18 @@ function mega(e) {
   setTimeout(() => $("mega").classList.remove("show"), 4200);
 }
 $("mega").addEventListener("click", () => $("mega").classList.remove("show"));
+
+// paste a CA: the page only queues it, the desk's GARDE runs the checks and the log shows the verdict
+$("checkForm").addEventListener("submit", async (evt) => {
+  evt.preventDefault();
+  const input = $("checkInput"), mint = input.value.trim();
+  const r = await fetch("/api/check", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mint }) }).catch(() => null);
+  const ok = r && r.ok;
+  input.classList.toggle("bad", !ok);
+  input.value = ""; input.placeholder = ok ? "envoyé à GARDE : verdict dans le log d'ici quelques secondes" : "adresse Solana invalide";
+  setTimeout(() => { input.placeholder = "coller un CA Solana : GARDE le vérifie"; input.classList.remove("bad"); }, 5000);
+  if (ok) setTimeout(load, 1500);
+});
 
 // ---------- loop ----------
 function render() {

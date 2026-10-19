@@ -51,22 +51,36 @@ def _goplus(mint: str) -> dict:
     return res
 
 
-def lp_burned_pct(mint: str, pair: str, dex: str) -> float | None:
-    """Read the pool account on chain. PumpSwap only for now: anything else stays None (unverified)."""
+def pool_chain(mint: str, pair: str, dex: str) -> dict:
+    """Read the pool account on chain: how much LP is burned, and who created the token.
+    PumpSwap only for now: anything else stays None (unverified)."""
+    out = {"lp_burned_pct": None, "dev": None}
     if dex != "pumpswap":
-        return None
+        return out
     a = _rpc("getAccountInfo", [pair, {"encoding": "base64"}])["value"]
     if not a or a["owner"] != PUMPSWAP:
-        return None
+        return out
     d = base64.b64decode(a["data"][0])
     if _b58(d[43:75]) != mint:                            # not this token's pool
-        return None
+        return out
+    if len(d) >= 243:
+        out["dev"] = _b58(d[211:243])                     # coin_creator: the wallet that launched the token
     lp_mint = _b58(d[107:139])
     minted = struct.unpack("<Q", d[203:211])[0]           # LP ever minted, recorded by the pool
-    if not minted:
+    if minted:
+        live = int(_rpc("getTokenSupply", [lp_mint])["value"]["amount"])  # LP still in existence
+        out["lp_burned_pct"] = round((1 - live / minted) * 100, 2)
+    return out
+
+
+def dev_pct(mint: str, dev: str | None) -> float | None:
+    """Check 8: how much of the supply the creator wallet still holds."""
+    if not dev:
         return None
-    live = int(_rpc("getTokenSupply", [lp_mint])["value"]["amount"])  # LP still in existence
-    return round((1 - live / minted) * 100, 2)
+    accounts = _rpc("getTokenAccountsByOwner", [dev, {"mint": mint}, {"encoding": "jsonParsed"}])["value"]
+    held = sum(int(a["account"]["data"]["parsed"]["info"]["tokenAmount"]["amount"]) for a in accounts)
+    supply = int(_rpc("getTokenSupply", [mint])["value"]["amount"])
+    return round(held / supply * 100, 3) if supply else None
 
 
 def _ladder(pcts: list[float]) -> int:
@@ -122,6 +136,7 @@ def report(mint: str, pool: dict) -> dict:
     if str(g.get("default_account_state")) not in ("1", "None"):
         traps.append("frozen_by_default")
 
+    chain = pool_chain(mint, pool.get("pair"), pool.get("dex"))
     return {
         "mint": mint,
         "symbol": ((g.get("metadata") or {}).get("symbol")) or pool.get("symbol"),
@@ -129,13 +144,15 @@ def report(mint: str, pool: dict) -> dict:
         "freeze_authority": info.get("freezeAuthority") or (status("freezable") == "1" or None),
         "danger": traps,
         "dex": pool.get("dex"),
-        "lp_burned_pct": lp_burned_pct(mint, pool.get("pair"), pool.get("dex")),
+        "lp_burned_pct": chain["lp_burned_pct"],
+        "dev": chain["dev"],
+        "dev_pct": dev_pct(mint, chain["dev"]) if chain["dev"] else None,
         "top10_pct": round(top10, 2) if top10 is not None else None,
         "max_wallet_pct": round(pcts[0], 2) if pcts else None,
         "same_sol_wallets": _same_sol([w["lamports"] for w in wallets]),
         "ladder_wallets": _ladder(pcts),
         "holders": g.get("holder_count"),
-        "not_checked": ["risk_score", "insider_graph", "dev_wallet_by_name"],
+        "not_checked": ["risk_score", "insider_graph"],
     }
 
 
@@ -146,6 +163,8 @@ def fact_kill(t: dict) -> str | None:
     if t["danger"]:                                              return "danger:" + t["danger"][0]
     if t["lp_burned_pct"] is None:                               return "lp_unverified"
     if t["lp_burned_pct"] < FACTS["min_lp_locked_pct"]:          return "lp_unlocked"
+    if t["dev_pct"] is None:                                     return "dev_unknown"
+    if t["dev_pct"] > FACTS["max_dev_pct"]:                      return "dev_holds"
     if t["top10_pct"] is None:                                   return "no_holders"
     if t["top10_pct"] > FACTS["max_top10_pct"]:                  return "top10_heavy"
     if t["max_wallet_pct"] > FACTS["max_wallet_pct"]:            return "whale"

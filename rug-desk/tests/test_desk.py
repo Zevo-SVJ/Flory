@@ -40,13 +40,15 @@ def pool_account(lp_minted=1000, base_mint=MINT):
     d[43:75] = n.to_bytes(32, "big")
     d[107:139] = bytes(range(1, 33))
     d[203:211] = struct.pack("<Q", lp_minted)
+    d[211:243] = bytes(range(40, 72))          # coin_creator, the dev wallet
     return {"owner": facts.PUMPSWAP, "data": [base64.b64encode(bytes(d)).decode(), "base64"]}
 
 
 class Chain:
     """Fake Solana RPC. Every holder is a funded wallet except the pool, which a program owns."""
-    def __init__(self, mint_auth=None, freeze_auth=None, lp_live=0, lamports=None):
+    def __init__(self, mint_auth=None, freeze_auth=None, lp_live=0, lamports=None, dev_amount=0):
         self.mint_auth, self.freeze_auth, self.lp_live = mint_auth, freeze_auth, lp_live
+        self.dev_amount = dev_amount
         self.lamports = lamports or {}
 
     def __call__(self, url, timeout=None, json=None):
@@ -57,7 +59,9 @@ class Chain:
         elif m == "getAccountInfo":
             res = {"value": pool_account()}
         elif m == "getTokenSupply":
-            res = {"value": {"amount": str(self.lp_live)}}
+            res = {"value": {"amount": "1000000" if p[0] == MINT else str(self.lp_live)}}
+        elif m == "getTokenAccountsByOwner":
+            res = {"value": [{"account": {"data": {"parsed": {"info": {"tokenAmount": {"amount": str(self.dev_amount)}}}}}}]}
         elif m == "getMultipleAccounts":
             res = {"value": [{"owner": facts.PUMPSWAP, "lamports": 1} if a == VAULT_OWNER else
                              {"owner": facts.SYSTEM_PROGRAM, "lamports": self.lamports.get(a, 10**9 + i * 12345)}
@@ -134,6 +138,7 @@ class Filter(Base):
             "danger:balance_editable": {"gp": goplus(balance_mutable_authority={"status": "1"})},
             "danger:transfer_hook": {"gp": goplus(transfer_hook=["HookProgram"])},
             "lp_unlocked": {"chain": Chain(lp_live=500)},
+            "dev_holds": {"chain": Chain(dev_amount=60000)},
             "lp_unverified": {"ds": ds_pairs(dex="raydium")},
             "no_holders": {"gp": goplus(holders=[])},
             "top10_heavy": {"gp": goplus(holders=wallets(10, 0.07))},
@@ -301,3 +306,28 @@ class Agents(Base):
             rows = audit.audit()
         self.assertEqual(rows[0]["change_pct"], -80.0)
         self.assertEqual(audit.summary()["killed"], {"n": 1, "crashed": 1})
+
+
+class Inbox(Base):
+    def test_pasted_ca_goes_through_garde(self):
+        import agents, events
+        for f in (config.EVENTS, config.AGENTS):
+            if os.path.exists(f):
+                os.remove(f)
+        with open(agents.INBOX, "w") as f:
+            f.write(MINT + "\n" + MINT + "\n")
+        with net():
+            agents.inbox()
+        self.assertFalse(os.path.exists(agents.INBOX))
+        kinds = [e["kind"] for e in events.recent()]
+        self.assertEqual(kinds.count("buy"), 1)            # same CA twice is checked once
+        self.assertIn(MINT, book.load())
+
+    def test_report_names_a_number_to_question(self):
+        import audit
+        with open(config.AUDIT, "w") as f:
+            f.write(",".join(audit.FIELDS) + "\n")
+            for i, ch in enumerate([150, 220, -10, 300]):
+                f.write(f"2026-01-01 00:00,M{i},S{i},pool,SKIP,too_fresh,1,1,{ch},6\n")
+        out = report.report()
+        self.assertIn("question: min_age_min", out)

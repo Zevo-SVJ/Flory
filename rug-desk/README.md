@@ -72,7 +72,7 @@ the Solana chain itself and GoPlus, both free, no key.
 | 5 | risk score | - | **not checked** (Rugcheck-only) |
 | 6 | LP burned | chain, PumpSwap pools | yes for PumpSwap; other DEXes die as `lp_unverified` |
 | 7 | top 10 wallets > 30% | GoPlus holders, pools excluded on chain | yes |
-| 8 | dev wallet > 5% | any single wallet > 5% | stricter stand-in: the dev can't be named |
+| 8 | dev wallet > 5% | creator read from the PumpSwap pool on chain, its balance via RPC | yes for PumpSwap; plus no single wallet > 5% |
 | 9 | insiders / bundles | same SOL balance in 3+ top wallets; 5+ big wallets within 2% | heuristic, read the kills |
 | 10-13 | depth, ticket share, age, sells | DexScreener | yes |
 | 14 | X read | you (links in every PASS), or Grok if paid | manual by default |

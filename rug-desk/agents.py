@@ -11,6 +11,7 @@ import json, os, time, traceback
 from config import SCHEDULE, PAPER, JUDGE, DATA, EQUITY, PAPER_BANKROLL_USD, TICKET_USD
 
 MARKS = os.path.join(DATA, "marks.json")
+INBOX = os.path.join(DATA, "inbox.txt")      # CAs pasted in the dashboard, checked by GARDE
 from events import emit, set_agent, agents as agent_state
 from notify import post
 import book, watch, scan, check, audit, report
@@ -70,29 +71,50 @@ def scout():
         raise
     emit("SCOUT", "scan", f"{len(leads)} token(s) with a real pool handed to GARDE")
     for mint in leads:
-        set_agent("GARDE", status="work", msg=f"vérifie {mint[:6]}…")
-        v = check.run(mint)
-        sym, reason = v.get("symbol") or mint[:6], v.get("reason") or ""
-        src = next((s for s in ("facts", "dexscreener", "grok") if reason.startswith(f"{s} failed")), None)
-        if src:
-            if src not in down:
-                emit("GARDE", "error", f"{src} down, its tokens are skipped: {reason[:160]}")
-                down.add(src)
-        elif v["verdict"] == "SKIP":
-            down.discard("facts"); down.discard("dexscreener")
-            emit("GARDE", "kill", f"${sym} killed: {reason}", symbol=sym, mint=mint, reason=reason,
-                 stage=v["stage"])
-        else:
-            emit("GARDE", "pass", f"${sym} passed every code check", symbol=sym, mint=mint,
-                 url=v.get("url"), x_ca=v.get("x_ca"))
-            if v.get("action", "").startswith("PAPER BUY"):
-                emit("GARDE", "buy", f"BUY ${TICKET_USD} ${sym} @ {v['price']:.8g}", symbol=sym, mint=mint,
-                     price=v["price"])
-            post(f"{v['verdict']} {sym} {v.get('url', '')}\nX by CA: {v.get('x_ca')}\n"
-                 f"X by ticker: {v.get('x_ticker')}\n{v.get('action', '')}")
-        set_agent("GARDE", status="idle", msg=f"${sym}: {v['verdict']} {reason[:60]}",
-                  runs=(load_runs("GARDE") + 1))
+        garde(mint)
     return f"{len(leads)} lead(s) envoyé(s) à GARDE"
+
+
+def garde(mint: str):
+    """The 13 checks on one token, whoever found it: SCOUT, or you through the dashboard."""
+    set_agent("GARDE", status="work", msg=f"vérifie {mint[:6]}…")
+    v = check.run(mint)
+    sym, reason = v.get("symbol") or mint[:6], v.get("reason") or ""
+    src = next((s for s in ("facts", "dexscreener", "grok") if reason.startswith(f"{s} failed")), None)
+    if src:
+        if src not in down:
+            emit("GARDE", "error", f"{src} down, its tokens are skipped: {reason[:160]}")
+            down.add(src)
+    elif v["verdict"] == "SKIP":
+        down.discard("facts"); down.discard("dexscreener")
+        verb = "skipped (limits)" if v["stage"] == "limits" else "killed"
+        emit("GARDE", "kill", f"${sym} {verb}: {reason}", symbol=sym, mint=mint, reason=reason,
+             stage=v["stage"])
+    else:
+        emit("GARDE", "pass", f"${sym} passed every code check", symbol=sym, mint=mint,
+             url=v.get("url"), x_ca=v.get("x_ca"))
+        if v.get("action", "").startswith("PAPER BUY"):
+            emit("GARDE", "buy", f"BUY ${TICKET_USD} ${sym} @ {v['price']:.8g}", symbol=sym, mint=mint,
+                 price=v["price"])
+        post(f"{v['verdict']} {sym} {v.get('url', '')}\nX by CA: {v.get('x_ca')}\n"
+             f"X by ticker: {v.get('x_ticker')}\n{v.get('action', '')}")
+    set_agent("GARDE", status="idle", msg=f"${sym}: {v['verdict']} {reason[:60]}",
+              runs=(load_runs("GARDE") + 1))
+    return v
+
+
+def inbox():
+    """CAs you pasted in the dashboard. Taken in one atomic move so none is checked twice."""
+    if not os.path.exists(INBOX) or os.path.getsize(INBOX) == 0:
+        return
+    work = INBOX + ".work"
+    os.replace(INBOX, work)
+    with open(work) as f:
+        mints = list(dict.fromkeys(line.strip() for line in f if line.strip()))
+    os.remove(work)
+    for mint in mints[:10]:
+        emit("GARDE", "scan", f"check requested from the dashboard: {mint[:6]}…{mint[-4:]}", mint=mint)
+        garde(mint)
 
 
 def load_runs(name: str) -> int:
@@ -153,6 +175,10 @@ def main():
                     emit(name, "error", traceback.format_exc(limit=2)[-300:])
             if every:
                 p[2] = time.time() + every
+        try:
+            inbox()
+        except Exception as e:
+            emit("GARDE", "error", f"dashboard check failed: {e}")
         beat()
         time.sleep(1)
 

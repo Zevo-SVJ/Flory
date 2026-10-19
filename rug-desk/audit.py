@@ -75,6 +75,29 @@ def summary() -> dict:
     return out
 
 
+# which number in config.py each kill reason comes from, so the report can say what to question
+KNOB = {"thin_pool": "min_liquidity_usd", "too_fresh": "min_age_min", "too_old": "max_age_hours",
+        "top10_heavy": "max_top10_pct", "whale": "max_wallet_pct", "dev_holds": "max_dev_pct",
+        "bundle_same_sol": "bundle_same_sol", "bundle_ladder": "bundle_ladder",
+        "lp_unlocked": "min_lp_locked_pct", "lp_unverified": "min_lp_locked_pct (PumpSwap only)",
+        "nobody_can_sell": "honeypot rule in market.py"}
+
+
+def by_reason(min_n: int = 3) -> list[dict]:
+    """Per kill reason, among audited tokens: how many crashed (good kill) and how many ran (missed)."""
+    if not os.path.exists(AUDIT):
+        return []
+    with open(AUDIT, newline="") as f:
+        rows = [r for r in csv.DictReader(f) if r["verdict"] == "SKIP" and " failed" not in (r["reason"] or "")]
+    out = {}
+    for r in rows:
+        o = out.setdefault(r["reason"], {"reason": r["reason"], "n": 0, "crashed": 0, "ran": 0})
+        o["n"] += 1
+        o["crashed"] += float(r["change_pct"]) <= CRASH_PCT
+        o["ran"] += float(r["change_pct"]) >= 100
+    return [o for o in out.values() if o["n"] >= min_n]
+
+
 if __name__ == "__main__":
     for r in audit():
         print(r["symbol"], r["verdict"], r["reason"], f"{r['change_pct']:+.0f}%")

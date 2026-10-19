@@ -33,6 +33,17 @@ def report() -> str:
                      f"worst: {worst['symbol']} ${float(worst['pnl']):+.2f}")
     for reason, n in reasons.most_common(3):
         lines.append(f"kill reason: {reason} ({n}x)")
+    # the article's two closing lines: one thing that worked, one number to question. from data, not taste
+    stats = audit.by_reason()
+    if stats:
+        best = max(stats, key=lambda o: o["crashed"] / o["n"])
+        lines.append(f"worked: '{best['reason']}' killed {best['n']} audited tokens, "
+                     f"{best['crashed']} of them crashed below {audit.CRASH_PCT}% within hours")
+        worst = max(stats, key=lambda o: o["ran"] / o["n"])
+        if worst["ran"] / worst["n"] >= 0.3:
+            lines.append(f"question: {audit.KNOB.get(worst['reason'], worst['reason'])} in config.py: "
+                         f"'{worst['reason']}' killed {worst['n']} tokens and {worst['ran']} still did +100%. "
+                         f"look at them before you move it, and write down why")
     a = audit.summary()
     k, p = a["killed"], a["passed"]
     if k["n"] or p["n"]:

@@ -33,7 +33,8 @@ FACTS = {                   # the rug filter. code only, no model
     "min_lp_locked_pct": 90,    # biggest pool: LP burned, read on chain. only PumpSwap pools can be
                                 # verified for now; any other DEX dies as lp_unverified
     "max_top10_pct": 30,        # top 10 holder wallets, pools and lockers excluded
-    "max_wallet_pct": 5,        # no single wallet over this. covers the dev wallet, which we can't name
+    "max_dev_pct": 5,           # supply still sitting in the creator wallet (read from the PumpSwap pool)
+    "max_wallet_pct": 5,        # no single wallet over this, whoever owns it
     "bundle_same_sol": 3,       # this many top wallets with the exact same SOL balance -> funded together
     "bundle_ladder": 5,         # this many big wallets with bags within 2% of each other -> one hand
     "ladder_min_pct": 0.5,      # a wallet counts in the ladder only above this % of supply
