@@ -8,7 +8,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 from config import (DATA, LOG, PAPER, JUDGE, TICKET_USD, HERE, EQUITY, PAPER_BANKROLL_USD,
                     DAILY_LOSS_HALT_USD, MEGA_PROFIT_PCT, SCHEDULE, MIN_SCORE)
-import book, events, audit, pending, market, ruggers
+import book, events, audit, pending, market, ruggers, edge, smart
 
 PORT = 8765
 X_READS = os.path.join(DATA, "x_reads.csv")
@@ -193,6 +193,7 @@ def state(range_key: str = "auto") -> dict:
         "audit": audit.summary(), "vigie_every": SCHEDULE["vigie_every_s"],
         "sol": market.sol_regime(),
         "breakdown": audit.breakdown(), "ruggers": len(ruggers.known()),
+        "edge": edge.stats(), "smart": smart.known(),
         "lab": _json(os.path.join(DATA, "exitlab.json"), {"trades": 0, "results": [], "active": "actif"}),
     }
 

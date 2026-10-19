@@ -119,3 +119,15 @@ while it runs. What can still stop the night, and what the desk does about it:
 | public RPC rate limits (429) | some tokens skipped | a free Helius RPC URL in SOLANA_RPC removes most of them |
 
 PLUME posts a morning brief at 08:00: what was bought, sold and killed overnight, and whether ECHO went silent.
+
+## Real money
+
+`edge.py` is the go-live gate, on the dashboard header and in every evening report. Real money only when:
+at least 50 closed paper trades (costs included), the 95% bootstrap interval of the average trade is entirely
+above zero, and the worst drawdown stayed under 30% of the bankroll. It then suggests a first ticket: a quarter
+of the Kelly fraction, capped at 5% of the bankroll (and the 1% pool rule still applies).
+
+Base rates, so the gate is not optional: ~74% of Solana memecoin buyers end with less SOL after fees, the
+consistently profitable window is the first seconds after launch, which belongs to snipers
+([Bitquery via Decrypt](https://decrypt.co/337157/solana-dex-traders-decline-meme-coin-scams)), and ~0.4% of
+pump.fun wallets had realized more than $10k ([Dune via Cointelegraph](https://cointelegraph.com/news/pump-fun-crypto-traders-majority-do-not-realize-profits-dune-data)).

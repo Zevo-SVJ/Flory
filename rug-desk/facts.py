@@ -3,10 +3,10 @@
 # two free sources, both read as facts, never as opinions:
 #   - the Solana chain itself (public RPC): authorities, pool LP burn, who owns each holder wallet
 #   - GoPlus token security (free, no key): Token-2022 traps and the top 10 holders
-import base64, struct
+import base64, struct, time
 import requests
 from config import FACTS, SOLANA_RPC
-import ruggers
+import ruggers, env
 
 GOPLUS = "https://api.gopluslabs.io/api/v1/solana/token_security"
 SYSTEM_PROGRAM = "11111111111111111111111111111111"
@@ -32,14 +32,24 @@ def _b58(b: bytes) -> str:
     return "1" * (len(b) - len(b.lstrip(b"\0"))) + s
 
 
+RPC_URL = env.get("SOLANA_RPC") or SOLANA_RPC   # a private RPC URL in .env (Helius, QuickNode...) wins
+
+
 def _rpc(method: str, params: list):
-    r = requests.post(SOLANA_RPC, timeout=20,
-                      json={"jsonrpc": "2.0", "id": 1, "method": method, "params": params})
-    r.raise_for_status()
-    d = r.json()
-    if "error" in d:
-        raise RuntimeError(f"solana rpc {method}: {d['error']}")
-    return d["result"]
+    """One RPC call. A 429 (rate limit) is retried twice with a pause: the public endpoint throttles
+    hard, and a skipped check costs a token we could have traded."""
+    for attempt in range(3):
+        r = requests.post(RPC_URL, timeout=20,
+                          json={"jsonrpc": "2.0", "id": 1, "method": method, "params": params})
+        throttled = r.status_code == 429 or ('"code":429' in (getattr(r, "text", "") or "").replace(" ", "")[:200])
+        if throttled and attempt < 2:
+            time.sleep(1.5 * (attempt + 1))
+            continue
+        r.raise_for_status()
+        d = r.json()
+        if "error" in d:
+            raise RuntimeError(f"solana rpc {method}: {d['error']}")
+        return d["result"]
 
 
 def _goplus(mint: str) -> dict:
@@ -121,7 +131,8 @@ def report(mint: str, pool: dict) -> dict:
     wallets = []        # pool vaults and lockers are program-owned accounts: they are not whales
     for h, k in zip(holders, kinds):
         if k is None or k["owner"] == SYSTEM_PROGRAM:
-            wallets.append({"pct": float(h["percent"]) * 100, "lamports": (k or {}).get("lamports", 0)})
+            wallets.append({"pct": float(h["percent"]) * 100, "lamports": (k or {}).get("lamports", 0),
+                            "address": h["account"]})
     pcts = sorted((w["pct"] for w in wallets), reverse=True)
     # GoPlus lists 10 holders. each slot taken by a pool is filled with the smallest wallet we saw,
     # so the top 10 is never under-counted
@@ -153,6 +164,7 @@ def report(mint: str, pool: dict) -> dict:
         "same_sol_wallets": _same_sol([w["lamports"] for w in wallets]),
         "ladder_wallets": _ladder(pcts),
         "holders": g.get("holder_count"),
+        "wallets": [w["address"] for w in wallets],      # top holder wallets, for the smart-wallet memory
         "not_checked": ["risk_score", "insider_graph"],
     }
 

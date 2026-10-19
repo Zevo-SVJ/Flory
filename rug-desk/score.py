@@ -4,6 +4,7 @@
 # every point lost comes with a flag, so a low score always says why. no model, plain arithmetic.
 import math
 from config import FACTS
+import smart
 
 FLAGS = {
     "few_holders": "peu de holders",
@@ -14,6 +15,8 @@ FLAGS = {
     "liq_edge": "liquidité juste au-dessus du minimum",
     "one_sided": "achats et ventes déséquilibrés",
     "concentrated": "top 10 un peu lourd",
+    "smart_money": "wallets gagnants déjà vus",
+    "no_socials": "ni X ni Telegram ni site",
 }
 
 
@@ -63,6 +66,15 @@ def score(m: dict, t: dict) -> dict:
     pts += 10 * min(1, max(0, margin - 1))
     if margin < 1.3:
         flags.append("liq_edge")
+    # the team's channels: a Telegram is one of the strongest launch-success predictors on record
+    socials = set(m.get("socials") or [])
+    pts += 3 * ("telegram" in socials) + 2 * ("twitter" in socials)
+    if not socials:
+        flags.append("no_socials"); pts -= 5
+    # wallets the desk has seen early in several tokens that ran: 5 points each, 10 at most
+    n_smart = smart.count(t.get("wallets"))
+    if n_smart:
+        flags.append("smart_money"); pts += min(10, 5 * n_smart)
     total = max(0, min(100, round(pts)))
     if "bot_volume" in flags:     # the one flag a nice distribution can't buy back
         total = min(total, 40)

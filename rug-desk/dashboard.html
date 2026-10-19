@@ -231,6 +231,7 @@ a { color: #8fb8f0; text-decoration: none; } a:hover { text-decoration: underlin
       <span class="label" id="modeLabel">TRADING MODE</span>
     </div>
     <span class="spacer"></span>
+    <span class="live" id="ready" title=""><i></i><span id="readyText">…</span></span>
     <span class="tasks" id="sol" title="Tendance de SOL : les memecoins Solana suivent SOL. AUDIT mesure si les PASS chutent plus quand SOL baisse."></span>
     <span class="tasks" id="tasks"></span>
     <span class="live" id="live"><i></i><span id="liveText">…</span></span>
@@ -280,6 +281,12 @@ a { color: #8fb8f0; text-decoration: none; } a:hover { text-decoration: underlin
   <div class="hint">▼ positions · lecture X · audit du filtre</div>
 
   <section class="card">
+    <h2 class="section">Prêt pour l'argent réel ?</h2>
+    <div class="stats3" id="edgeStats"></div>
+    <p class="note" id="edgeNote"></p>
+  </section>
+
+  <section class="card mt">
     <h2 class="section">Positions ouvertes</h2>
     <div class="scroll"><table id="open"></table></div>
   </section>
@@ -516,7 +523,7 @@ const KILLS = { thin_pool: "Pool trop petit", too_fresh: "Trop récent", too_old
   dev_holds: "Le dev garde > 5 %", dev_rugged_before: "Dev déjà sur la liste noire", copycat: "Copie d'un ticker plus gros", dev_unknown: "Dev introuvable", top10_heavy: "Top 10 > 30 %", whale: "Un wallet > 5 %", bundle_same_sol: "Bundle : même solde SOL",
   bundle_ladder: "Bundle : sacs identiques", "source en panne": "Source en panne", low_score: "Note trop basse" };
 const FLAG_LABELS = { few_holders: "peu de holders", bot_volume: "volume de bots ?", quiet: "peu d'activité",
-  very_young: "très jeune", late: "vieux (> 48 h)", liq_edge: "liquidité juste", one_sided: "achats/ventes déséquilibrés",
+  very_young: "très jeune", smart_money: "wallets gagnants déjà vus", no_socials: "ni X ni Telegram ni site", late: "vieux (> 48 h)", liq_edge: "liquidité juste", one_sided: "achats/ventes déséquilibrés",
   concentrated: "top 10 un peu lourd" };
 const flagText = (f) => (f || "").split(" ").filter(Boolean).map(x => FLAG_LABELS[x] || x).join(" · ");
 const killLabel = (k) => KILLS[k] || (k && k.startsWith("danger:") ? "Piège Token-2022 : " + k.slice(7) : k);
@@ -562,6 +569,16 @@ function drawPanels() {
   if (!S.kills.length) kb.append(el("div", { class: "empty" }, "Aucune élimination pour l'instant."));
   $("missed").textContent = a.missed.length ? "À regarder : " + a.missed.map(m => `$${m.symbol} ${pct(m.change_pct, 0)} (tué par ${killLabel(m.reason)})`).join(" · ")
     : "AUDIT re-prix chaque verdict 6 h après. Un bon filtre tue surtout des tokens qui chutent.";
+  const es = $("edgeStats"); es.replaceChildren();
+  const E = S.edge || {};
+  [["Trades clôturés", `${E.n || 0} / ${E.min_trades || 50}`, "il en faut 50 pour conclure"],
+   ["Gain moyen par trade", E.mean == null ? "–" : usd(E.mean), E.ci_low == null ? "" : `IC 95 % : ${usd(E.ci_low)} à ${usd(E.ci_high)}`],
+   ["Trades gagnants", E.win_rate == null ? "–" : Math.round(E.win_rate * 100) + "%", E.profit_factor ? `profit factor ${E.profit_factor}` : ""],
+   ["Pire drawdown", E.max_drawdown == null ? "–" : plain(E.max_drawdown), "limite : 30 % de la banque"]].forEach(([l, v, sub]) => {
+    const c = el("div", { class: "stat" }); c.append(el("div", { class: "label" }, l), el("div", { class: "v" }, v), el("div", { class: "sub" }, sub)); es.append(c);
+  });
+  $("edgeNote").textContent = (E.why || "") + (E.suggested_ticket ? ` Ticket suggéré pour commencer : ${plain(E.suggested_ticket)} (un quart du Kelly, plafonné à 5 % de la banque et à 1 % du pool).` : "")
+    + (S.smart ? ` · ${S.smart} wallet(s) « gagnants » appris.` : "");
   const bd = S.breakdown || { hour: [], age: [] };
   [["byHour", "Heure d'achat", bd.hour], ["byAge", "Âge du token", bd.age]].forEach(([id, head, rows]) =>
     table(id, [[head], ["Trades", 1], ["Gagnants", 1], ["PnL", 1]],
@@ -607,6 +624,12 @@ function drawTop() {
   $("liveText").textContent = S.alive ? "LIVE" : "DESK ARRÊTÉ";
   $("modeLabel").textContent = (S.paper ? "TRADING MODE · PAPIER" : "TRADING MODE · RÉEL") + (S.marks_age > 90 && S.open.length ? " · prix en retard" : "");
   $("tasks").textContent = `${S.tasks.toLocaleString("fr-FR")} TÂCHES`;
+  const e = S.edge || { verdict: "wait", n: 0, min_trades: 50 };
+  const ready = $("ready");
+  ready.className = "live " + (e.verdict === "yes" ? "on" : e.verdict === "no" ? "off" : "");
+  ready.style.borderColor = e.verdict === "wait" ? "" : (e.verdict === "yes" ? "rgba(63,211,155,.5)" : "rgba(239,111,111,.5)");
+  $("readyText").textContent = e.verdict === "yes" ? "PRÊT POUR LE RÉEL" : e.verdict === "no" ? "PAS D'AVANTAGE" : `RÉEL : ${e.n}/${e.min_trades} TRADES`;
+  ready.title = e.why + (e.suggested_ticket ? ` · ticket suggéré ${plain(e.suggested_ticket)}` : "");
   const sol = S.sol || {};
   $("sol").textContent = sol.sol_24h == null ? "" : `SOL 24H ${pct(sol.sol_24h)} · 1H ${pct(sol.sol_1h)}`;
   $("sol").className = "tasks " + sign(sol.sol_24h || 0);

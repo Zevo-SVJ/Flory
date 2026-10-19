@@ -41,11 +41,23 @@ def _done() -> set[str]:
     return done
 
 
+NARRATIVES = os.path.join(os.path.dirname(LOG), "narratives.txt")   # written by ECHO from X, 1 word a line
+
+
+def narratives() -> list[str]:
+    """ECHO's narrative scan: what X is about to turn into memecoins. Fresh words only (6 h)."""
+    if not os.path.exists(NARRATIVES) or time.time() - os.path.getmtime(NARRATIVES) > 6 * 3600:
+        return []
+    with open(NARRATIVES) as f:
+        return [w.strip().lstrip("$").lower() for w in f if w.strip() and not w.startswith("#")][:10]
+
+
 def searched(trending: list[str] = ()) -> list[str]:
     """PumpSwap pools from the DexScreener search: today's trending tickers (narratives breed
     look-alikes) plus a rotating set of generic WORDS, run after run."""
     global _turn
-    words = list(dict.fromkeys(w.lower() for w in trending if w and len(w) >= 3))[:WORDS_PER_RUN // 2]
+    words = list(dict.fromkeys([w for w in narratives() if len(w) >= 3]
+                               + [w.lower() for w in trending if w and len(w) >= 3]))[:WORDS_PER_RUN * 2 // 3]
     words += [WORDS[(_turn + i) % len(WORDS)] for i in range(WORDS_PER_RUN - len(words))]
     _turn = (_turn + WORDS_PER_RUN) % len(WORDS)
     now_ms, out = time.time() * 1000, []

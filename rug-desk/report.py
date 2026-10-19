@@ -3,7 +3,7 @@
 import csv, json, os, time
 from collections import Counter
 from config import LOG, PAPER, JUDGE
-import book, audit
+import book, audit, edge
 
 
 def report() -> str:
@@ -19,7 +19,9 @@ def report() -> str:
     wins = [t for t in done if float(t["pnl"]) > 0]
     reasons = Counter(r["reason"] for r in checks if r["stage"] in ("facts", "pool"))
 
+    e = edge.stats()
     lines = [f"EVENING REPORT {day} {'(PAPER)' if PAPER else '(LIVE)'} judge={JUDGE}",
+             f"READY FOR REAL MONEY: {dict(yes='YES', no='NO', wait='NOT YET')[e['verdict']]} - {e['why']}",
              f"checked: {len(checks)}",
              f"killed by rug filter: {by_stage['facts']} | by pool: {by_stage['pool']} | "
              f"by judge: {by_stage['judge']} | by limits: {by_stage['limits']}",

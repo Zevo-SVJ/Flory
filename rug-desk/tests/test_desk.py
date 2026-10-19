@@ -629,3 +629,73 @@ class EchoSilent(Base):
             check.run(MINT)
         p = self.p.load(); p[MINT]["since"] -= 50 * 60; p[MINT]["score"] = 90; self.p.save(p)
         self.assertEqual(self.p.decide(), [])
+
+
+class Smart(Base):
+    def setUp(self):
+        super().setUp()
+        import smart, shutil
+        shutil.rmtree(smart.HOLDERS, ignore_errors=True)
+        if os.path.exists(smart.MEMORY):
+            os.remove(smart.MEMORY)
+        self.s = smart
+
+    def test_wallets_early_in_two_runners_become_smart_and_lift_the_score(self):
+        from score import score
+        m = {"vol_1h": 25000, "buys_1h": 180, "sells_1h": 190, "age_min": 600, "liq_usd": 50000,
+             "socials": ["telegram", "twitter"]}
+        t = {"holders": 2500, "top10_pct": 14, "max_wallet_pct": 2, "dev_pct": 0, "wallets": ["A", "B", "C"]}
+        before = score(m, t)["score"]
+        for mint in ("R1", "R2"):
+            self.s.snapshot(mint, ["A", "B", "X"])
+            self.s.learn(mint, 150)
+        for mint in ("C1", "C2"):
+            self.s.snapshot(mint, ["X"]); self.s.learn(mint, -80)
+        self.assertEqual(self.s.count(["A", "B", "C", "X"]), 2)     # X: 2 runs, 2 crashes -> not smart
+        after = score(m, t)
+        self.assertEqual(after["score"], min(100, before + 10))
+        self.assertIn("smart_money", after["flags"])
+
+    def test_no_socials_costs_points(self):
+        from score import score
+        t = {"holders": 2500, "top10_pct": 14, "max_wallet_pct": 2, "dev_pct": 0}
+        base = {"vol_1h": 25000, "buys_1h": 180, "sells_1h": 190, "age_min": 600, "liq_usd": 50000}
+        self.assertEqual(score({**base, "socials": ["telegram", "twitter"]}, t)["score"] - score(base, t)["score"], 10)
+
+
+class Edge(unittest.TestCase):
+    def test_verdicts(self):
+        import edge, random
+        rng = random.Random(3)
+        self.assertEqual(edge.stats([1.0] * 10)["verdict"], "wait")
+        self.assertEqual(edge.stats([rng.gauss(0.1, 8) for _ in range(80)])["verdict"], "no")
+        good = edge.stats([rng.gauss(2.0, 5) for _ in range(80)])
+        self.assertEqual(good["verdict"], "yes")
+        self.assertLessEqual(good["suggested_ticket"], 0.05 * config.PAPER_BANKROLL_USD)
+
+
+class Momentum(Gate):
+    def test_a_token_that_fell_while_echo_read_is_not_bought(self):
+        with net():
+            check.run(MINT)                                # PASS at 0.001
+        self.x_read("BUY")
+        with net(ds=ds_pairs(price=0.0007)):              # -30% by the time ECHO said BUY
+            out = self.p.decide()
+        self.assertEqual(out[0]["reason"], "momentum_lost")
+        self.assertNotIn(MINT, book.load())
+
+
+class Narratives(Base):
+    def test_echo_words_are_searched_first(self):
+        import scan
+        with open(scan.NARRATIVES, "w") as f:
+            f.write("$Gork\nriot\n")
+        self.assertEqual(scan.narratives(), ["gork", "riot"])
+        seen = []
+        def get(url, timeout=None, params=None):
+            seen.append((params or {}).get("q"))
+            return Resp({"pairs": []})
+        with mock.patch("requests.get", get):
+            scan.searched(["TICK"])
+        self.assertEqual(seen[:3], ["gork", "riot", "tick"])
+        os.remove(scan.NARRATIVES)

@@ -29,6 +29,10 @@ def _best(pairs: list, mint: str) -> dict | None:
         "sells_5m": m5.get("sells", 0),
         "vol_5m": (p.get("volume") or {}).get("m5") or 0,
         "url": p.get("url"),
+        # what the team published: X, Telegram, website. a launch with a Telegram is among the strongest
+        # graduation predictors in a survival study of 832,941 pump.fun launches (arXiv 2607.02823)
+        "socials": sorted({(x.get("type") or "").lower() for x in ((p.get("info") or {}).get("socials") or [])}
+                          | ({"website"} if (p.get("info") or {}).get("websites") else set())),
     }
 
 

@@ -5,7 +5,7 @@ import csv, json, os, sys, time
 from config import (DATA, LOG, JUDGE, MIN_CONFIDENCE, PAPER, PAPER_BUY_ON_PASS, TICKET_USD,
                     ECHO_MODE, MIN_SCORE)
 from score import score
-import pending
+import pending, smart
 from facts import report, fact_kill
 from market import pool, market_kill
 import market
@@ -82,6 +82,7 @@ def check(mint: str) -> dict:
         return {"stage": "facts", "verdict": "SKIP", "reason": f"facts failed: {e}",
                 "symbol": m["symbol"], **seen}
     seen["dev"] = token.get("dev")
+    smart.snapshot(mint, token.get("wallets"))
     if (k := fact_kill(token)):
         return {"stage": "facts", "verdict": "SKIP", "reason": k,
                 "symbol": m["symbol"] or token["symbol"], **seen}

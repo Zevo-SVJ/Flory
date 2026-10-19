@@ -7,6 +7,8 @@ from config import DATA, ECHO_TIMEOUT_MIN, TICKET_USD, PAPER, ECHO_SILENT_MIN, E
 from market import pool, market_kill
 import book
 
+MOMENTUM_DROP_PCT = 25     # down this much between the PASS and ECHO's BUY -> not bought
+
 PENDING = os.path.join(DATA, "pending.json")
 X_QUEUE = os.path.join(DATA, "x_queue.csv")
 X_READS = os.path.join(DATA, "x_reads.csv")
@@ -95,6 +97,18 @@ def decide() -> list[dict]:
             m = pool(mint)                     # the price moved while ECHO read: buy at today's pool, not the PASS one
             if (k := market_kill(m)):
                 out.append({"kind": "kill", "text": f"${sym} X said BUY but the pool changed: {k}", "symbol": sym})
+                continue
+            # momentum check: the wait for ECHO can be long. a token that fell hard or turned to
+            # sellers in the meantime is no longer the token that passed
+            p0 = v.get("price") or 0
+            if p0 and m["price"] < p0 * (1 - MOMENTUM_DROP_PCT / 100):
+                out.append({"kind": "kill", "text": f"${sym} X said BUY but price fell "
+                                                    f"{(1 - m['price'] / p0) * 100:.0f}% since the PASS", "symbol": sym,
+                            "reason": "momentum_lost"})
+                continue
+            if (m.get("sells_5m") or 0) > 2 * max(1, m.get("buys_5m") or 0) and m["price"] < p0:
+                out.append({"kind": "kill", "text": f"${sym} X said BUY but sellers took over (5 min)",
+                            "symbol": sym, "reason": "momentum_lost"})
                 continue
             book.open_position(mint, sym, m["price"], m["liq_usd"])
             out.append({"kind": "buy", "text": f"BUY ${TICKET_USD} ${sym} @ {m['price']:.8g} "

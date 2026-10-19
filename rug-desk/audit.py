@@ -5,7 +5,7 @@
 import csv, os, time
 from config import LOG, AUDIT, SCHEDULE, DATA
 from market import pools
-import ruggers
+import ruggers, smart
 
 FIELDS = ["time", "mint", "symbol", "stage", "verdict", "reason", "price0", "price_after",
           "change_pct", "hours"]
@@ -56,6 +56,7 @@ def audit(limit: int = 60) -> list[dict]:
                    "price_after": p1, "change_pct": round((p1 / p0 - 1) * 100, 1), "hours": round(hours, 1)}
             w.writerow(row)
             out.append(row)
+            smart.learn(r["mint"], row["change_pct"])     # the early holders of a runner or a crasher
             if row["change_pct"] <= RUG_PCT:          # near-total collapse: the creator goes on the blacklist
                 ruggers.add(ruggers.dev_of(r["mint"]), r["mint"], r["symbol"],
                             f"{row['change_pct']:+.0f}% {row['hours']:.0f}h after the verdict")
