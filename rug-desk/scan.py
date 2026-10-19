@@ -7,7 +7,7 @@
 import csv, json, os, time
 import requests
 from config import LOG, SCHEDULE, FACTS
-import check, market, grads
+import check, market, grads, sources
 from market import market_kill
 
 SOURCES = ["token-profiles/latest/v1", "token-boosts/latest/v1", "token-boosts/top/v1",
@@ -100,8 +100,10 @@ def gt_trending() -> list[str]:
                 if bid.startswith("solana_") and bid[7:] not in NOT_MEMES and bid[7:] not in out:
                     out.append(bid[7:])
         gt_error = None
+        sources.record("geckoterminal", True, f"{len(out)} tokens en tendance")
     except Exception as e:
         gt_error = f"GeckoTerminal trending unreadable: {e}"[:200]
+        sources.record("geckoterminal", False, str(e))
     return out
 
 
@@ -134,6 +136,8 @@ def leads() -> list[str]:
     graduates = [a for a in grads.recent() if a not in done and a not in out]
     out += graduates
     out += [a for a in gt_trending() if a not in done and a not in out]
+    import jup                                 # the most organic trading of the hour, per Jupiter
+    out += [a for a in jup.top_organic("1h") if a not in done and a not in out and a not in NOT_MEMES]
     # one batched pool read for every lead: most are bonding-curve tokens with no real pool yet.
     # they are not logged, they just come back next run, so the slots go to tokens that can pass
     live.update(market.pools([m for m in out if m not in live]))

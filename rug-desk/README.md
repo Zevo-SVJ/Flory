@@ -128,6 +128,20 @@ VIGIE also reads each PumpSwap position's pool vaults on chain every 20 s, so a 
 on the next tick even when DexScreener lags or drops the pair. ECHO can answer SCAM (concrete evidence on
 X): the desk sells at once.
 
+## Two lanes
+
+| lane | what | sources | rules |
+|---|---|---|---|
+| early | launches, 15 min to 72 h, PumpSwap | pump.fun graduations on chain, DexScreener feeds | everything above, LP burn and creator verified on chain |
+| momentum | survivors older than 72 h, any DEX | GeckoTerminal trending (5 min, 1 h), Jupiter top organic score (1 h), DexScreener boosts | pool $100k+, $300k+ a day, +3% over 1 h and not falling over 5 min, hourly volume 1.3x its 6 h average, buyers ahead, not past +80% in 1 h |
+
+On Oct 19 afternoon BONK, POPCAT, Fartcoin, PNUT, GOAT, MOODENG, MEW, SPX and TROLL all sat within 1%
+over the hour: a quiet day for survivors is a day the momentum lane buys nothing, by design.
+
+Free sources: DexScreener, GeckoTerminal (~10 calls a minute, no key), GoPlus, pump.fun's migration
+account, Jupiter (free key on its Developer Platform, JUPITER_KEY in .env; without it the old keyless
+host), Helius (free RPC + DAS), Solana Tracker (free key, 2,500 a month, capped at 75 a day).
+
 ## The deep read (GARDE, last stage)
 
 Only for tokens that passed everything above and score high enough to be bought, cheapest first.

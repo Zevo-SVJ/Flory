@@ -122,7 +122,8 @@ def garde_detail() -> str:
             return f"{label} … (pas encore appelé)"
         return f"{label} {'✓' if s['ok'] else '✗'}" + ("" if s["ok"] and s["detail"] == "ok" else f" ({s['detail'][:40]})")
     return " · ".join([mark("helius_das", "Helius", "helius" in facts.RPC_URL, "RPC public: holders limités"),
-                       mark("jupiter", "Jupiter"),
+                       mark("jupiter", "Jupiter"), mark("geckoterminal", "GeckoTerminal"),
+                       mark("jupiter_top", "Jupiter top"),
                        mark("stracker", "Solana Tracker", bool(stracker.key()), "clé manquante")
                        + f" {sources.calls_today('stracker')}/{stracker.DAILY_CAP} auj."])
 

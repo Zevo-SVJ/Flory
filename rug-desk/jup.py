@@ -7,17 +7,39 @@
 #   - audit.devMints: how many tokens the creator wallet has launched (serial launchers)
 # every field is read defensively: an absent field is unknown, and unknown never kills a token.
 import requests
-import sources
+import env, sources
 
-URL = "https://lite-api.jup.ag/tokens/v2/search"
+# Jupiter moved its APIs to a keyed Developer Platform (free tier): with JUPITER_KEY in .env the desk
+# uses api.jup.ag, without it the old keyless lite-api host, which may stop answering
+LITE, KEYED = "https://lite-api.jup.ag", "https://api.jup.ag"
+
+
+def _get(path: str, params: dict | None = None):
+    k = env.get("JUPITER_KEY")
+    r = requests.get((KEYED if k else LITE) + path, params=params, timeout=10,
+                     headers={"x-api-key": k} if k else None)
+    r.raise_for_status()
+    return r.json()
+
+
+def top_organic(interval: str = "1h", limit: int = 50) -> list[str]:
+    """Jupiter's ranking of the tokens with the most organic (non-bot) trading over the interval:
+    the momentum lane's second source. empty if the endpoint doesn't answer."""
+    try:
+        rows = _get(f"/tokens/v2/toporganicscore/{interval}", {"limit": limit})
+    except Exception as e:
+        sources.record("jupiter_top", False, str(e))
+        return []
+    rows = rows if isinstance(rows, list) else (rows.get("tokens") or [])
+    out = [x.get("id") for x in rows if isinstance(x, dict) and x.get("id")]
+    sources.record("jupiter_top", bool(out), f"{len(out)} tokens" if out else "réponse vide")
+    return out
 
 
 def fetch(mint: str) -> dict | None:
     """Jupiter's view of the token, normalized. None if Jupiter doesn't know it or is down."""
     try:
-        r = requests.get(URL, params={"query": mint}, timeout=10)
-        r.raise_for_status()
-        data = r.json()
+        data = _get("/tokens/v2/search", {"query": mint})
     except Exception as e:
         sources.record("jupiter", False, str(e))
         raise
