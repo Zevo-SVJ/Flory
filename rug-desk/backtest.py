@@ -172,7 +172,7 @@ def replay(g: dict, sol_usd: float) -> dict:
               + 2 * PAPER_COSTS["tx_usd"] / TICKET)
     peak = max(p["price"] for p in path) / entry["price"] - 1
     return {**g, "entered": True, "age_min": entry["age_min"], "liq": round(entry["liq"]),
-            "avg_trade": round(entry["avg_trade"], 1), "gross_pct": round(gross_r * 100, 1),
+            "entry_avg_trade": round(entry["avg_trade"], 1), "gross_pct": round(gross_r * 100, 1),
             "net_pct": round((gross_r - cost_r) * 100, 1), "peak_pct": round(peak * 100, 1),
             "hours": round((path[-1]["t"] - entry["t"]) / 3600, 1)}
 
@@ -199,7 +199,8 @@ if __name__ == "__main__":
     import market
     sol = market.pools([WSOL]).get(WSOL) or {}
     sol_usd = sol.get("price") or 190.0
-    gs = graduates(7.5, 14, n)
+    h_from, h_to = (float(x) for x in os.environ.get("BT_WINDOW", "7.5,14").split(","))
+    gs = graduates(h_from, h_to, n)
     rows = []
     from concurrent.futures import ThreadPoolExecutor
     import threading
@@ -224,13 +225,13 @@ if __name__ == "__main__":
 
 # ---------- offline variants: replay other entry and exit rules on the recorded paths ----------
 ENTRY_RULES = {
-    "desk (15 min, rules)": {},
+    "old desk (15 min, rules)": {"min_age": 15},
     "wait 30 min": {"min_age": 30},
     "wait 60 min": {"min_age": 60},
     "above graduation price": {"above_t0": 1.0},
     "rising 30 min (+10%)": {"rise_30m": 0.10},
     "pool $30k+": {"min_liq": 30000},
-    "wait 60 min + above graduation": {"min_age": 60, "above_t0": 1.0},
+    "desk now (60 min + above graduation)": {"min_age": 60, "above_t0": 1.0},
 }
 
 
@@ -239,7 +240,8 @@ def _entry(row: dict, rule: dict) -> int | None:
     if not path:
         return None
     p0 = path[0][1]
-    trade = {int(k): v for k, v in (row.get("avg_trade") or {}).items()}
+    at = row.get("avg_trade")
+    trade = {int(k): v for k, v in at.items()} if isinstance(at, dict) else {0: at}
     for k, (t, price, liq, n1h) in enumerate(path):
         age = t / 60
         if age < rule.get("min_age", FACTS["min_age_min"]) or age > 180:

@@ -652,6 +652,33 @@ class MomentumLane(Base):
         self.assertEqual(self.verdict(ds=ds_pairs(dex="raydium"))["reason"], "lp_unverified")
 
 
+class GraduationRule(Base):
+    def test_a_launch_under_its_graduation_price_waits(self):
+        import grads
+        if os.path.exists(grads.STATE):
+            os.remove(grads.STATE)
+        now = time.time()
+        def post(url, timeout=None, json=None):
+            m, p = json["method"], json["params"]
+            if m == "getSignaturesForAddress":
+                res = [{"signature": "S1", "blockTime": now - 7200, "err": None}]
+            else:
+                res = {"meta": {"logMessages": ["Program log: Instruction: Migrate"], "postTokenBalances": [
+                    {"mint": grads.WSOL, "owner": "POOL", "uiTokenAmount": {"uiAmount": 80.0}},
+                    {"mint": MINT, "owner": "POOL", "uiTokenAmount": {"uiAmount": 200_000_000.0}},
+                    {"mint": grads.WSOL, "owner": "BUYER", "uiTokenAmount": {"uiAmount": 2.0}},
+                    {"mint": MINT, "owner": "BUYER", "uiTokenAmount": {"uiAmount": 1_000_000.0}}]}}
+            return Resp({"jsonrpc": "2.0", "id": 1, "result": res})
+        with mock.patch("requests.post", post):
+            grads.fetch()
+        self.assertAlmostEqual(grads.birth_price(MINT), 80 / 200_000_000)       # the pool, not the buyer
+        ds = ds_pairs(); ds[0]["priceNative"] = str(0.5 * 80 / 200_000_000)      # half its graduation price
+        self.assertEqual(self.verdict(ds=ds)["reason"], "below_graduation")
+        ds[0]["priceNative"] = str(1.3 * 80 / 200_000_000)
+        self.assertNotEqual(self.verdict(ds=ds)["reason"], "below_graduation")
+        os.remove(grads.STATE)
+
+
 class Farms(Base):
     """The Oct 19 rugs: FOMO and Gemini, one factory, bot volume, hundreds of identical bags."""
     def test_micro_trades_kill(self):

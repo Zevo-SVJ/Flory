@@ -23,7 +23,7 @@ last_lanes = {"early": 0, "momentum": 0}
 last_funnel = {}
 # kills that can change with time: a pool grows up, a source comes back. retried after this long
 RETRY_AFTER_MIN = 30
-RETRYABLE = ("too_fresh", "thin_pool", "no_pool", "no_price", "no_holders")
+RETRYABLE = ("too_fresh", "thin_pool", "no_pool", "no_price", "no_holders", "below_graduation")
 
 
 def _done() -> set[str]:

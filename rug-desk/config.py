@@ -74,7 +74,12 @@ FACTS = {                   # the rug filter. code only, no model
     "farm_pct": 3,              # ...holding this % of supply together -> holder_farm (Helius only)
     "min_liquidity_usd": 15000, # the live graduates that ran on Oct 19 (KIBI, SPORE, Mimi) had $20-30k pools
     "max_ticket_share": 0.02,   # your ticket is never more than 2% of the pool (~2% price impact)
-    "min_age_min": 15,          # pump.fun's BOOST buys the coin for ~5 min after graduation: not demand
+    # backtest on 523 graduations (backtest.py, two separate windows on Oct 19): entering at 15 min with the
+    # pool rules lost -20.7% a trade (median -46%), on both windows. waiting 60 min and buying only above
+    # the graduation price was the one variant near break-even (+2.9%, n=18): the first hour is where
+    # snipers, devs and factories dump. it limits losses; it does not prove an edge
+    "min_age_min": 60,
+    "min_vs_graduation": 1.0,   # early lane: price must be at least this x the pool's price at graduation
     # fake caps: on Oct 19, 20 of 33 graduates with a "real" pool were clones ("US Oil Exchange",
     # "National Oil Dividend Fund", "Ripple USD") showing $10M-$600M caps on $0.2-2M pools that trade
     # ~1% of their pool an hour. the tokens that really ran sat at caps 3-9x their pool, turnover 0.5-15x

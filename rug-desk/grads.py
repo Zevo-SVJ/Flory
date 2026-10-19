@@ -48,6 +48,21 @@ def fetch() -> int:
         meta = (tx or {}).get("meta") or {}
         if not any("Instruction: Migrate" in l for l in meta.get("logMessages") or []):
             continue
+        # the new pool's price at birth: the account that holds both the token and its quote (SOL, or
+        # another token) is the pool; quote / tokens is the graduation price, in the pool's own quote
+        by_owner = {}
+        for b in meta.get("postTokenBalances") or []:
+            amt = float((b.get("uiTokenAmount") or {}).get("uiAmount") or 0)
+            if b.get("owner") and amt:
+                by_owner.setdefault(b["owner"], {})[b["mint"]] = amt
+        pairs = [bal for bal in by_owner.values() if len(bal) == 2]
+        if pairs:                         # the pool holds the most tokens; the buyer who triggered it far fewer
+            bal = max(pairs, key=lambda b: max(v for m, v in b.items() if m != WSOL) if any(m != WSOL for m in b) else 0)
+            toks = [m for m in bal if m != WSOL]
+            if toks:
+                token = max(toks, key=lambda m: bal[m])
+                quote = next(m for m in bal if m != token)
+                s.setdefault("p0", {})[token] = bal[quote] / bal[token]
         for b in meta.get("postTokenBalances") or []:
             m = b.get("mint")
             if m and m != WSOL and m not in s["mints"]:
@@ -55,8 +70,14 @@ def fetch() -> int:
                 new += 1
     cutoff = time.time() - FACTS["max_age_hours"] * 3600
     s["mints"] = {m: t for m, t in s["mints"].items() if t >= cutoff}
+    s["p0"] = {m: p for m, p in (s.get("p0") or {}).items() if m in s["mints"]}
     save(s)
     return new
+
+
+def birth_price(mint: str) -> float | None:
+    """The pool's price right after graduation, in its quote token (compare with priceNative)."""
+    return (load().get("p0") or {}).get(mint)
 
 
 def recent() -> list[str]:

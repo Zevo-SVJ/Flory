@@ -2,6 +2,7 @@
 # one contract address in, one verdict out. limits, pool, facts, judge, in that order.
 # the first one that says no ends it.
 import csv, json, os, sys, time
+from config import FACTS
 from config import (DATA, LOG, JUDGE, MIN_CONFIDENCE, PAPER, PAPER_BUY_ON_PASS, TICKET_USD,
                     ECHO_MODE, MIN_SCORE)
 from score import score
@@ -78,6 +79,11 @@ def check(mint: str) -> dict:
             "lane": market.lane(m) if m else None}
     if (k := market_kill(m)):
         return {"stage": "pool", "verdict": "SKIP", "reason": k, "symbol": (m or {}).get("symbol"), **seen}
+    if market.lane(m) == "early":                                # still under its graduation price: the
+        import grads                                             # first-hour dump has not been absorbed
+        p0 = grads.birth_price(mint)
+        if p0 and m.get("price_native") and m["price_native"] < FACTS["min_vs_graduation"] * p0:
+            return {"stage": "pool", "verdict": "SKIP", "reason": "below_graduation", "symbol": m.get("symbol"), **seen}
     if (k := market.copycat(m, mint)):                           # a rug factory's name, or a bigger owner
         return {"stage": "pool", "verdict": "SKIP", "reason": k, "symbol": m.get("symbol"), **seen}
 

@@ -181,6 +181,25 @@ crashers and which kills winners. A rug (VIGIE) marks every holder wallet at onc
 
 Not wired: Bubblemaps (API keys come with its paid Pro plan), GMGN (no public API), RugCheck (dead).
 
+## Backtest (Oct 19): what the history says
+
+`python3 backtest.py 300` replays pump.fun graduations from the chain (pool reserves every 6 min for 7 h),
+applies the pool rules and the active exit engine, with real costs (0.3% fee x2, 1% MEV x2, $0.50 tx x2:
+about 5% of a $50 ticket per round trip). `BT_WINDOW=14,22` picks graduations 14-22 h old.
+
+539 graduations, two windows, net return per trade, active exit:
+
+| entry rule | n | mean | 95% CI | half 1 / half 2 |
+|---|---|---|---|---|
+| old desk (15 min + rules) | 38 | -22.4% | [-43.9, +1.4] | -19.5 / -25.0 |
+| wait 30 min | 32 | -21.5% | [-44.9, +4.9] | -3.1 / -34.1 |
+| wait 60 min | 20 | -4.9% | [-29.5, +23.5] | -21.2 / +8.5 |
+| **desk now: 60 min + above graduation price** | 18 | +2.9% | [-21.0, +30.9] | -18.2 / +19.9 |
+
+The old entry lost on both halves: it was removed. The new one roughly breaks even and its interval
+holds zero: **no edge is proven.** With a ~72% standard deviation per trade, telling +5% from 0 takes
+about 800 trades. Run the backtest again on your Mac (Helius key) to add data; trust nothing below 200.
+
 ## Overnight
 
 `./start.sh` runs the desk and the dashboard, restarts either one 10 s after a crash, and keeps the Mac and
