@@ -7,8 +7,8 @@ from collections import Counter
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 from config import (DATA, LOG, PAPER, JUDGE, TICKET_USD, HERE, EQUITY, PAPER_BANKROLL_USD,
-                    DAILY_LOSS_HALT_USD, MEGA_PROFIT_PCT, SCHEDULE)
-import book, events, audit
+                    DAILY_LOSS_HALT_USD, MEGA_PROFIT_PCT, SCHEDULE, MIN_SCORE)
+import book, events, audit, pending
 
 PORT = 8765
 X_READS = os.path.join(DATA, "x_reads.csv")
@@ -89,15 +89,12 @@ def megas(since: float | None) -> list[dict]:
     return out
 
 
-def echo_status(passes: list[dict], xreads: list[dict], now: float) -> dict:
+def echo_status(waiting: dict, xreads: list[dict], now: float) -> dict:
     """ECHO runs in its own Claude session. It is late if a PASS waits more than 45 min unread."""
-    read = {r["mint"] for r in xreads}
-    waiting = [p for p in passes if p["mint"] not in read]
     last = max((r["time"] for r in xreads), default=None)
-    oldest = min((p["time"] for p in waiting), default=None)
-    late = oldest and (now - time.mktime(time.strptime(oldest, "%Y-%m-%d %H:%M"))) > 45 * 60
-    if late:
-        return {"status": "error", "msg": f"{len(waiting)} PASS non lu(s) : la session Claude est-elle ouverte ?",
+    oldest = min((v["since"] for v in waiting.values()), default=None)
+    if oldest and now - oldest > 45 * 60:
+        return {"status": "error", "msg": f"{len(waiting)} PASS non lu(s) : la session ECHO est-elle ouverte ?",
                 "last": last}
     if waiting:
         return {"status": "work", "msg": f"{len(waiting)} PASS à lire", "last": last}
@@ -148,10 +145,25 @@ def state(range_key: str = "auto") -> dict:
     passes = [r for r in rows if r["verdict"] in ("PASS", "BUY")]
 
     xr = {r["mint"]: r for r in xreads}
+    waiting = pending.load()
+    bought = {t["mint"] for t in trades if t["action"] == "open"}
+
+    def status(r):
+        if r["mint"] in positions:
+            return "en position"
+        if r["mint"] in waiting:
+            return "attend X"
+        if r["mint"] in bought:
+            return "vendu"
+        if r.get("score") and int(r["score"]) < MIN_SCORE:
+            return "note trop basse"
+        return "écarté par X" if r["mint"] in xr else "non acheté"
+
     experiment = [{"time": r["time"], "mint": r["mint"], "symbol": r["symbol"],
                    "x": xr[r["mint"]]["verdict"] if r["mint"] in xr else None,
                    "why": xr[r["mint"]]["raison"] if r["mint"] in xr else None,
-                   "pnl": round(per_mint[r["mint"]], 2), "open": r["mint"] in positions}
+                   "score": int(r["score"]) if r.get("score") else None, "flags": r.get("flags") or "",
+                   "status": status(r), "pnl": round(per_mint[r["mint"]], 2), "open": r["mint"] in positions}
                   for r in sorted(passes, key=lambda r: r["time"], reverse=True)]
     groups = {}
     for g in ("BUY", "SKIP", None):
@@ -159,7 +171,7 @@ def state(range_key: str = "auto") -> dict:
         groups[g or "non lu"] = {"n": len(sel), "pnl": round(sum(e["pnl"] for e in sel), 2)}
 
     st = events.agents()
-    st["ECHO"] = echo_status(passes, xreads, now)
+    st["ECHO"] = echo_status(waiting, xreads, now)
     agents = [{"name": n, "role": role, "detail": detail, **st.get(n, {"status": "idle", "msg": "pas encore lancé"})}
               for n, role, detail in AGENTS]
 

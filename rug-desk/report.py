@@ -45,6 +45,10 @@ def report() -> str:
                          f"'{worst['reason']}' killed {worst['n']} tokens and {worst['ran']} still did +100%. "
                          f"look at them before you move it, and write down why")
     a = audit.summary()
+    xb, xs = a["x"]["BUY"], a["x"]["SKIP"]
+    if xb["n"] or xs["n"]:
+        lines.append(f"ECHO: {xs['crashed']}/{xs['n']} tokens it skipped crashed later, "
+                     f"{xb['crashed']}/{xb['n']} it approved crashed later")
     k, p = a["killed"], a["passed"]
     if k["n"] or p["n"]:
         lines.append(f"audit: {k['crashed']}/{k['n']} killed tokens crashed later, "

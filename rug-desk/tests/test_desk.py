@@ -177,6 +177,8 @@ class Filter(Base):
 
 class Book(Base):
     def test_paper_buy_and_limits(self):
+        check.ECHO_MODE = "observe"
+        self.addCleanup(setattr, check, "ECHO_MODE", "gate")
         with net():
             v = check.run(MINT)
         self.assertIn("PAPER BUY", v["action"])
@@ -285,6 +287,8 @@ class Agents(Base):
 
     def test_scout_hands_leads_to_garde(self):
         import agents, events
+        check.ECHO_MODE = "observe"
+        self.addCleanup(setattr, check, "ECHO_MODE", "gate")
         prof = [{"chainId": "solana", "tokenAddress": MINT}]
         def get(url, timeout=None, params=None):
             if "token-profiles" in url or "token-boosts" in url:
@@ -311,6 +315,8 @@ class Agents(Base):
 class Inbox(Base):
     def test_pasted_ca_goes_through_garde(self):
         import agents, events
+        check.ECHO_MODE = "observe"
+        self.addCleanup(setattr, check, "ECHO_MODE", "gate")
         for f in (config.EVENTS, config.AGENTS):
             if os.path.exists(f):
                 os.remove(f)
@@ -331,3 +337,73 @@ class Inbox(Base):
                 f.write(f"2026-01-01 00:00,M{i},S{i},pool,SKIP,too_fresh,1,1,{ch},6\n")
         out = report.report()
         self.assertIn("question: min_age_min", out)
+
+
+class Gate(Base):
+    """ECHO_MODE = gate: a PASS waits for ECHO's X read, and only an X BUY opens a position."""
+    def setUp(self):
+        super().setUp()
+        import pending
+        self.p = pending
+        for f in (pending.PENDING, pending.X_READS, pending.X_QUEUE):
+            if os.path.exists(f):
+                os.remove(f)
+
+    def x_read(self, verdict):
+        with open(self.p.X_READS, "w") as f:
+            f.write(f"time,mint,symbol,verdict,raison\n2026-10-19 10:00,{MINT},TEST,{verdict},lecture test\n")
+
+    def test_pass_waits_and_is_queued_for_echo(self):
+        with net():
+            v = check.run(MINT)
+        self.assertIn("waiting for ECHO", v["action"])
+        self.assertNotIn(MINT, book.load())
+        self.p.decide()
+        with open(self.p.X_QUEUE) as f:
+            self.assertIn(MINT, f.read())
+
+    def test_x_buy_opens_at_the_current_price(self):
+        with net():
+            check.run(MINT)
+        self.x_read("BUY")
+        with net(ds=ds_pairs(price=0.0012)):
+            out = self.p.decide()
+        self.assertEqual(out[0]["kind"], "buy")
+        self.assertAlmostEqual(book.load()[MINT]["entry"], 0.0012)
+        self.assertEqual(self.p.load(), {})
+
+    def test_x_skip_drops_it(self):
+        with net():
+            check.run(MINT)
+        self.x_read("SKIP")
+        out = self.p.decide()
+        self.assertEqual(out[0]["reason"], "x_skip")
+        self.assertNotIn(MINT, book.load())
+
+    def test_no_read_in_time_drops_it(self):
+        with net():
+            check.run(MINT)
+        p = self.p.load(); p[MINT]["since"] -= 2 * 3600; self.p.save(p)
+        out = self.p.decide()
+        self.assertEqual(out[0]["reason"], "x_timeout")
+
+    def test_low_score_is_not_bought(self):
+        # bots: 300 holders trading $200k an hour
+        with net(gp=goplus(holder_count="300"), ds=ds_pairs()):
+            with mock.patch("score.score", return_value={"score": 30, "flags": ["bot_volume"]}), \
+                 mock.patch("check.score", return_value={"score": 30, "flags": ["bot_volume"]}):
+                v = check.run(MINT)
+        self.assertIn("not bought: score 30", v["action"])
+        self.assertEqual(self.p.load(), {})
+
+
+class Score(unittest.TestCase):
+    def test_ranks_like_a_human(self):
+        from score import score
+        organic = score({"vol_1h": 25368, "buys_1h": 181, "sells_1h": 192, "age_min": 1470, "liq_usd": 49499},
+                        {"holders": 2980, "top10_pct": 13.3, "max_wallet_pct": 2.1, "dev_pct": 0.19})
+        bots = score({"vol_1h": 271889, "buys_1h": 1496, "sells_1h": 1451, "age_min": 588, "liq_usd": 113364},
+                     {"holders": 399, "top10_pct": 23.7, "max_wallet_pct": 3.9, "dev_pct": 0})
+        self.assertGreater(organic["score"], 80)
+        self.assertLessEqual(bots["score"], 40)
+        self.assertIn("bot_volume", bots["flags"])

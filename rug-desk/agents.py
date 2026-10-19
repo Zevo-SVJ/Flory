@@ -14,7 +14,7 @@ MARKS = os.path.join(DATA, "marks.json")
 INBOX = os.path.join(DATA, "inbox.txt")      # CAs pasted in the dashboard, checked by GARDE
 from events import emit, set_agent, agents as agent_state
 from notify import post
-import book, watch, scan, check, audit, report
+import book, watch, scan, check, audit, report, pending
 
 
 def beat():
@@ -91,11 +91,17 @@ def garde(mint: str):
         emit("GARDE", "kill", f"${sym} {verb}: {reason}", symbol=sym, mint=mint, reason=reason,
              stage=v["stage"])
     else:
-        emit("GARDE", "pass", f"${sym} passed every code check", symbol=sym, mint=mint,
-             url=v.get("url"), x_ca=v.get("x_ca"))
-        if v.get("action", "").startswith("PAPER BUY"):
+        flags = v.get("flags") or ""
+        emit("GARDE", "pass", f"${sym} passed every check, score {v.get('score')}" + (f" ({flags})" if flags else ""),
+             symbol=sym, mint=mint, url=v.get("url"), x_ca=v.get("x_ca"), score=v.get("score"))
+        action = v.get("action", "")
+        if action.startswith("PAPER BUY"):
             emit("GARDE", "buy", f"BUY ${TICKET_USD} ${sym} @ {v['price']:.8g}", symbol=sym, mint=mint,
                  price=v["price"])
+        elif action.startswith("waiting"):
+            emit("ECHO", "x", f"${sym} queued for the X read (score {v.get('score')})", symbol=sym, mint=mint)
+        elif action.startswith("not bought"):
+            emit("GARDE", "kill", f"${sym} {action}", symbol=sym, mint=mint, reason="low_score")
         post(f"{v['verdict']} {sym} {v.get('url', '')}\nX by CA: {v.get('x_ca')}\n"
              f"X by ticker: {v.get('x_ticker')}\n{v.get('action', '')}")
     set_agent("GARDE", status="idle", msg=f"${sym}: {v['verdict']} {reason[:60]}",
@@ -119,6 +125,18 @@ def inbox():
 
 def load_runs(name: str) -> int:
     return agent_state().get(name, {}).get("runs", 0)
+
+
+def gate():
+    """GARDE's second job: settle the PASSes waiting for ECHO. Buys only after an X BUY."""
+    events = pending.decide()
+    for e in events:
+        agent = "GARDE" if e["kind"] == "buy" else "ECHO"
+        emit(agent, e["kind"], e["text"], **{k: v for k, v in e.items() if k not in ("kind", "text")})
+        if e["kind"] == "buy":
+            post(e["text"])
+    n = len(pending.load())
+    return f"{n} PASS en attente de X" if n else "attend les leads de SCOUT"
 
 
 def auditor():
@@ -146,6 +164,7 @@ def main():
         "VIGIE": [vigie, SCHEDULE["vigie_every_s"], now],
         "SCOUT": [scout, SCHEDULE["scout_every_min"] * 60, now + 5],
         "AUDIT": [auditor, SCHEDULE["audit_every_min"] * 60, now + 60],
+        "GARDE": [gate, 30, now + 10],
     }
     reported_on = time.strftime("%Y-%m-%d") if time.strftime("%H:%M") >= SCHEDULE["report_at"] else None
     set_agent("GARDE", status="idle", msg="attend les leads de SCOUT")

@@ -43,10 +43,13 @@ Optional `.env` (copy `.env.example`, never commit it):
 | grok.py, prompts.py | check 14, only loaded when `JUDGE = "grok"` |
 | check.py | one mint in, one verdict out |
 | watch.py | exits: liquidity pull, stop, ladder, trail, time stop |
-| scan.py | leads: fresh Solana tokens with a paid DexScreener profile |
+| scan.py | leads: six DexScreener feeds plus the DexScreener search (trending tickers + rotating words), PumpSwap pools in the age window |
 | report.py | evening report from the CSVs |
 | run.py, agents.py | the desk as 6 agents: VIGIE (exits, 20 s), SCOUT (leads, 10 min), GARDE (13 checks), AUDIT (was the filter right, 30 min), PLUME (21:30 report); ECHO is the Claude-in-Chrome X reader |
-| audit.py | re-prices every verdict 6 h later: killed tokens that crashed vs passed ones |
+| audit.py | re-prices every verdict 6 h later: killed tokens that crashed vs passed ones, and ECHO's BUY vs SKIP |
+| score.py | ranks every PASS 0-100 like a careful human: holders, distribution, dev, two-way trading, activity, bot volume, age, liquidity margin. below MIN_SCORE it is not bought |
+| pending.py | ECHO_MODE = "gate": a PASS waits for ECHO's X read, BUY -> bought at the price of that moment, SKIP or no read in 60 min -> dropped |
+| ECHO.md | the X reader's instructions. run it from a local Claude session with Claude in Chrome: `/loop 10m Lis et applique ~/Documents/rug-desk-run/rug-desk/ECHO.md` |
 | events.py | the event log and agent status the dashboard reads |
 | dashboard.py + .html | private dashboard: `python3 dashboard.py`, then http://localhost:8765 |
 | data/ | checks.csv, trades.csv, positions.json, desk.log |

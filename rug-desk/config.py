@@ -17,6 +17,16 @@ MIN_CONFIDENCE = 0.7        # Grok says BUY below this -> treated as SKIP
 # in paper mode, True paper-buys every PASS so a week of trades.csv measures the filter alone.
 PAPER_BUY_ON_PASS = True
 
+# ECHO, the X reader (Claude in Chrome, its own session, instructions in ECHO.md).
+#   "gate":    a PASS waits in data/pending.json until ECHO reads X. BUY -> the desk buys, SKIP -> dropped.
+#              AUDIT still re-prices the skipped ones, so you learn what the X read was worth.
+#   "observe": every PASS is bought at once, ECHO's verdict is only recorded next to it.
+ECHO_MODE = "gate"
+ECHO_TIMEOUT_MIN = 60       # no X read after this long -> the PASS is dropped, never bought blind
+
+# SCORE: how organic a PASS looks (0-100), the way a human would rank survivors. see score.py
+MIN_SCORE = 55              # below this a PASS is not bought (still audited)
+
 # training mode: paper money, so the desk takes every token the filter lets through, bounded by
 # cash. more trades = more data about the filter. the live numbers go back down before real money.
 PAPER_BANKROLL_USD = 1000   # fake starting balance. a new entry needs TICKET_USD of free cash
@@ -56,7 +66,7 @@ EXIT = {
 SCHEDULE = {                # used by agents.py: one entry per agent
     "vigie_every_s": 20,        # VIGIE: prices every open position, applies exits, logs the balance
     "scout_every_min": 10,      # SCOUT: pulls fresh leads, GARDE checks each one
-    "scan_per_run": 10,         # leads per SCOUT run that reach GARDE (thin pools never count)
+    "scan_per_run": 15,         # leads per SCOUT run that reach GARDE (thin pools never count)
     "audit_every_min": 30,      # AUDIT: re-prices old verdicts to see if the filter was right
     "audit_after_hours": 6,
     "report_at": "21:30",       # PLUME: evening report, local time

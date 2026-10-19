@@ -2,13 +2,17 @@
 # one contract address in, one verdict out. limits, pool, facts, judge, in that order.
 # the first one that says no ends it.
 import csv, json, os, sys, time
-from config import (DATA, LOG, JUDGE, MIN_CONFIDENCE, PAPER, PAPER_BUY_ON_PASS, TICKET_USD)
+from config import (DATA, LOG, JUDGE, MIN_CONFIDENCE, PAPER, PAPER_BUY_ON_PASS, TICKET_USD,
+                    ECHO_MODE, MIN_SCORE)
+from score import score
+import pending
 from facts import report, fact_kill
 from market import pool, market_kill
 import book
 
 # price and liq_usd at verdict time let AUDIT check later whether a kill or a pass was right
-FIELDS = ["time", "mint", "symbol", "stage", "verdict", "confidence", "reason", "price", "liq_usd"]
+FIELDS = ["time", "mint", "symbol", "stage", "verdict", "confidence", "reason", "price", "liq_usd",
+          "score", "flags"]
 
 
 def _migrate():
@@ -80,7 +84,9 @@ def check(mint: str) -> dict:
 
     v = judge(token, m)
     sym = m["symbol"] or token["symbol"]
+    sc = score(m, token)
     return {**v, "symbol": sym, "price": m["price"], "liq_usd": m["liq_usd"], "url": m["url"],
+            "score": sc["score"], "flags": " ".join(sc["flags"]),
             # the free check 14: two links you open yourself. latest posts, not "top"
             "x_ca": f"https://x.com/search?q={mint}&f=live",
             "x_ticker": f"https://x.com/search?q=%24{sym}&f=live"}
@@ -90,6 +96,13 @@ def run(mint: str) -> dict:
     v = check(mint)
     log({"time": time.strftime("%Y-%m-%d %H:%M"), "mint": mint, **v})
     enter = v["verdict"] == "BUY" or (v["verdict"] == "PASS" and PAPER and PAPER_BUY_ON_PASS)
+    if enter and (v.get("score") or 0) < MIN_SCORE:
+        v["action"] = f"not bought: score {v['score']} < {MIN_SCORE} ({v.get('flags') or 'no flag'})"
+        return v
+    if enter and PAPER and v["verdict"] == "PASS" and ECHO_MODE == "gate":
+        pending.add(mint, {**v, "flags": (v.get("flags") or "").split()})
+        v["action"] = f"waiting for ECHO's X read (score {v['score']})"
+        return v
     if enter and PAPER:
         book.open_position(mint, v["symbol"], v["price"], v["liq_usd"])
         v["action"] = f"PAPER BUY ${TICKET_USD} at {v['price']}"

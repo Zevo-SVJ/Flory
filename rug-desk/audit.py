@@ -3,7 +3,7 @@
 # a killed token that crashed = a good kill. a killed token that ran = a trade the filter cost you.
 # this is the number that tells you whether to loosen or tighten a check.
 import csv, os, time
-from config import LOG, AUDIT, SCHEDULE
+from config import LOG, AUDIT, SCHEDULE, DATA
 from market import pools
 
 FIELDS = ["time", "mint", "symbol", "stage", "verdict", "reason", "price0", "price_after",
@@ -60,7 +60,9 @@ def audit(limit: int = 60) -> list[dict]:
 def summary() -> dict:
     """Share of killed vs passed tokens that crashed. A useful filter kills more crashers than it passes."""
     if not os.path.exists(AUDIT):
-        return {"killed": {"n": 0, "crashed": 0}, "passed": {"n": 0, "crashed": 0}, "missed": []}
+        empty = {"n": 0, "crashed": 0, "ran": 0}
+        return {"killed": {"n": 0, "crashed": 0}, "passed": {"n": 0, "crashed": 0}, "missed": [],
+                "x": {"BUY": dict(empty), "SKIP": dict(empty)}}
     with open(AUDIT, newline="") as f:
         rows = list(csv.DictReader(f))
     groups = {"killed": [r for r in rows if r["verdict"] == "SKIP" and " failed" not in (r["reason"] or "")],
@@ -72,6 +74,17 @@ def summary() -> dict:
                     key=lambda r: -float(r["change_pct"]))[:5]
     out["missed"] = [{"symbol": r["symbol"], "reason": r["reason"], "change_pct": float(r["change_pct"])}
                      for r in missed]
+
+    # was ECHO right? every PASS it read, bought or not, scored the same way
+    xr = {}
+    path = os.path.join(DATA, "x_reads.csv")
+    if os.path.exists(path):
+        with open(path, newline="") as f:
+            xr = {r["mint"]: r["verdict"].upper() for r in csv.DictReader(f) if r.get("mint")}
+    def tally(sel):
+        return {"n": len(sel), "crashed": sum(1 for r in sel if float(r["change_pct"]) <= CRASH_PCT),
+                "ran": sum(1 for r in sel if float(r["change_pct"]) >= 100)}
+    out["x"] = {v: tally([r for r in groups["passed"] if xr.get(r["mint"]) == v]) for v in ("BUY", "SKIP")}
     return out
 
 

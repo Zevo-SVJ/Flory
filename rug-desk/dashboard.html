@@ -160,7 +160,7 @@ td.num, th.num { text-align: right; white-space: nowrap; }
 tr:last-child td { border-bottom: 0; }
 .scroll { overflow-x: auto; }
 a { color: #8fb8f0; text-decoration: none; } a:hover { text-decoration: underline; }
-.pill { display: inline-block; padding: 1px 8px; border-radius: 6px; font-size: 11px; border: 1px solid var(--ring-strong); color: var(--ink-2); }
+.pill { white-space: nowrap; display: inline-block; padding: 1px 8px; border-radius: 6px; font-size: 11px; border: 1px solid var(--ring-strong); color: var(--ink-2); }
 .why { color: var(--ink-2); font-family: var(--sans); font-size: 12px; max-width: 380px; }
 .empty { color: var(--muted); padding: 18px 0; text-align: center; font-family: var(--mono); font-size: 12px; }
 .stats3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 12px; }
@@ -285,7 +285,7 @@ a { color: #8fb8f0; text-decoration: none; } a:hover { text-decoration: underlin
       <h2 class="section">ECHO : la lecture X aide-t-elle ?</h2>
       <div class="stats3" id="groups"></div>
       <div class="scroll"><table id="experiment"></table></div>
-      <p class="note">Chaque PASS est acheté sur papier, que X dise BUY ou SKIP. Si les SKIP perdent nettement plus que les BUY, la lecture X a de la valeur.</p>
+      <p class="note">Chaque PASS reçoit une note de GARDE, puis attend la lecture X d'ECHO : le desk n'achète qu'après un BUY. AUDIT re-prix aussi ceux qu'ECHO a écartés, pour mesurer si sa lecture avait raison.</p>
     </section>
     <section class="card">
       <h2 class="section">AUDIT : le filtre avait-il raison ?</h2>
@@ -493,7 +493,11 @@ const KILLS = { thin_pool: "Pool trop petit", too_fresh: "Trop récent", too_old
   nobody_can_sell: "Honeypot (aucune vente)", mint_open: "Mint authority ouverte", freeze_open: "Freeze authority ouverte",
   lp_unverified: "LP non vérifiable", lp_unlocked: "LP non brûlé", no_holders: "Holders indisponibles",
   dev_holds: "Le dev garde > 5 %", dev_unknown: "Dev introuvable", top10_heavy: "Top 10 > 30 %", whale: "Un wallet > 5 %", bundle_same_sol: "Bundle : même solde SOL",
-  bundle_ladder: "Bundle : sacs identiques", "source en panne": "Source en panne" };
+  bundle_ladder: "Bundle : sacs identiques", "source en panne": "Source en panne", low_score: "Note trop basse" };
+const FLAG_LABELS = { few_holders: "peu de holders", bot_volume: "volume de bots ?", quiet: "peu d'activité",
+  very_young: "très jeune", late: "vieux (> 48 h)", liq_edge: "liquidité juste", one_sided: "achats/ventes déséquilibrés",
+  concentrated: "top 10 un peu lourd" };
+const flagText = (f) => (f || "").split(" ").filter(Boolean).map(x => FLAG_LABELS[x] || x).join(" · ");
 const killLabel = (k) => KILLS[k] || (k && k.startsWith("danger:") ? "Piège Token-2022 : " + k.slice(7) : k);
 
 function drawPanels() {
@@ -509,9 +513,11 @@ function drawPanels() {
     const v = S.groups[k], c = el("div", { class: "stat" });
     c.append(el("div", { class: "label" }, `${l} · ${v.n}`), el("div", { class: "v " + sign(v.pnl) }, usd(v.pnl))); g.append(c);
   });
-  table("experiment", [["Token"], ["X"], ["Pourquoi"], ["PnL", 1]],
+  table("experiment", [["Token"], ["Note", 1], ["X"], ["Pourquoi"], ["Statut"], ["PnL", 1]],
     S.experiment.map(e => [link(`https://dexscreener.com/solana/${e.mint}`, "$" + (e.symbol || e.mint.slice(0, 6))),
-      el("span", { class: "pill" }, e.x || "non lu"), el("div", { class: "why" }, e.why || ""),
+      el("span", { title: flagText(e.flags) || "aucun signal" }, e.score == null ? "–" : String(e.score)),
+      el("span", { class: "pill" }, e.x || "non lu"), el("div", { class: "why" }, e.why || flagText(e.flags)),
+      el("span", { class: "pill" }, e.status),
       (() => { const w = el("span"); w.append(span(sign(e.pnl), usd(e.pnl)), el("span", { style: "color: var(--muted)" }, e.open ? " ouvert" : "")); return w; })()]),
     "Aucun PASS pour l'instant.");
 
@@ -535,6 +541,8 @@ function drawPanels() {
   if (!S.kills.length) kb.append(el("div", { class: "empty" }, "Aucune élimination pour l'instant."));
   $("missed").textContent = a.missed.length ? "À regarder : " + a.missed.map(m => `$${m.symbol} ${pct(m.change_pct, 0)} (tué par ${killLabel(m.reason)})`).join(" · ")
     : "AUDIT re-prix chaque verdict 6 h après. Un bon filtre tue surtout des tokens qui chutent.";
+  const xb = a.x.BUY, xs = a.x.SKIP;
+  if (xb.n || xs.n) $("missed").textContent += ` · ECHO : ${xs.crashed}/${xs.n} écartés ont chuté, ${xb.crashed}/${xb.n} approuvés ont chuté.`;
 }
 
 function drawTop() {

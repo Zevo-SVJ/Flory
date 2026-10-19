@@ -1,0 +1,90 @@
+# pending.py
+# the waiting room between GARDE and the book. in ECHO_MODE = "gate", a PASS waits here until ECHO
+# has read X: BUY -> the desk re-checks the pool and buys, SKIP -> dropped, no read in time -> dropped.
+# data/x_queue.csv is the list ECHO works from; data/x_reads.csv is what ECHO writes back.
+import csv, json, os, time
+from config import DATA, ECHO_TIMEOUT_MIN, TICKET_USD
+from market import pool, market_kill
+import book
+
+PENDING = os.path.join(DATA, "pending.json")
+X_QUEUE = os.path.join(DATA, "x_queue.csv")
+X_READS = os.path.join(DATA, "x_reads.csv")
+
+
+def load() -> dict:
+    if not os.path.exists(PENDING):
+        return {}
+    with open(PENDING) as f:
+        return json.load(f)
+
+
+def save(p: dict):
+    os.makedirs(DATA, exist_ok=True)
+    tmp = PENDING + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(p, f, indent=2)
+    os.replace(tmp, PENDING)
+
+
+def add(mint: str, v: dict):
+    p = load()
+    p[mint] = {"symbol": v.get("symbol"), "since": time.time(), "score": v.get("score"),
+               "flags": v.get("flags") or [], "price": v.get("price"), "url": v.get("url")}
+    save(p)
+
+
+def reads() -> dict:
+    """ECHO's latest verdict per mint."""
+    if not os.path.exists(X_READS):
+        return {}
+    with open(X_READS, newline="") as f:
+        return {r["mint"]: r for r in csv.DictReader(f) if r.get("mint")}
+
+
+def write_queue(p: dict, done: dict):
+    """What ECHO still has to read, best score first."""
+    rows = sorted(((m, v) for m, v in p.items() if m not in done), key=lambda kv: -(kv[1].get("score") or 0))
+    os.makedirs(DATA, exist_ok=True)
+    tmp = X_QUEUE + ".tmp"
+    with open(tmp, "w", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(["mint", "symbol", "score", "flags", "waiting_min", "x_by_ca", "x_by_ticker"])
+        for m, v in rows:
+            w.writerow([m, v["symbol"], v.get("score"), " ".join(v.get("flags") or []),
+                        round((time.time() - v["since"]) / 60), f"https://x.com/search?q={m}&f=live",
+                        f"https://x.com/search?q=%24{v['symbol']}&f=live"])
+    os.replace(tmp, X_QUEUE)
+
+
+def decide() -> list[dict]:
+    """Settle every pending PASS that ECHO has read, or that waited too long. Returns events."""
+    p, done, out = load(), reads(), []
+    for mint, v in list(p.items()):
+        x = done.get(mint)
+        sym = v["symbol"]
+        if x and x["verdict"].upper() == "BUY":
+            del p[mint]
+            if (g := book.guard(mint)):
+                out.append({"kind": "kill", "text": f"${sym} X said BUY but skipped (limits): {g}", "symbol": sym})
+                continue
+            m = pool(mint)                     # the price moved while ECHO read: buy at today's pool, not the PASS one
+            if (k := market_kill(m)):
+                out.append({"kind": "kill", "text": f"${sym} X said BUY but the pool changed: {k}", "symbol": sym})
+                continue
+            book.open_position(mint, sym, m["price"], m["liq_usd"])
+            out.append({"kind": "buy", "text": f"BUY ${TICKET_USD} ${sym} @ {m['price']:.8g} "
+                                               f"(score {v.get('score')}, X: {x.get('raison', '')[:60]})",
+                        "symbol": sym, "mint": mint, "price": m["price"]})
+        elif x:
+            del p[mint]
+            out.append({"kind": "kill", "text": f"${sym} dropped, X read: {x.get('raison', 'SKIP')[:90]}",
+                        "symbol": sym, "mint": mint, "reason": "x_skip"})
+        elif time.time() - v["since"] > ECHO_TIMEOUT_MIN * 60:
+            del p[mint]
+            out.append({"kind": "kill", "text": f"${sym} dropped: no X read within {ECHO_TIMEOUT_MIN} min "
+                                                "(is the ECHO session open?)", "symbol": sym, "mint": mint,
+                        "reason": "x_timeout"})
+    save(p)
+    write_queue(p, done)
+    return out
