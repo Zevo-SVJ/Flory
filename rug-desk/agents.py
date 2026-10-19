@@ -236,7 +236,7 @@ def auditor():
             f"profil « {lab['active']} »" + (f" · {bt}" if bt else ""))
 
 
-_bt = {"proc": None, "announced": 0.0}
+_bt = {"proc": None}
 
 
 def backtest_kick() -> str | None:
@@ -249,8 +249,13 @@ def backtest_kick() -> str | None:
             st = json.load(f)
     except (OSError, ValueError):
         pass
-    if st.get("finished", 0) > _bt["announced"] and _bt["proc"] is not None:
-        _bt["announced"] = st["finished"]
+    # said once per finished run, even one started before a restart (the mark is kept in the state file)
+    if st.get("finished", 0) > st.get("announced", 0):
+        st["announced"] = st["finished"]
+        tmp = atomic.tmp(backtest.STATE)
+        with open(tmp, "w") as f:
+            json.dump(st, f)
+        os.replace(tmp, backtest.STATE)
         rules = (st.get("card") or {}).get("rules") or {}
         parts = [f"{k} n={v['n']} {v['mean']:+.1f} % [{v['ci95'][0]:+.0f}, {v['ci95'][1]:+.0f}]" for k, v in rules.items()]
         emit("AUDIT", "info", f"backtest : +{st.get('early_added', 0)} graduation(s), +{st.get('momentum_added', 0)} "
