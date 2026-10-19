@@ -4,10 +4,19 @@
 #   scan   every 30 min: posts only PASS/BUY verdicts; a source that's down is said once
 #   report daily at 21:30
 # start it:  python run.py          stop it: Ctrl+C. state lives in data/, so restarting is safe.
-import time, traceback
-from config import SCHEDULE, PAPER, JUDGE
+import json, os, time, traceback
+from config import SCHEDULE, PAPER, JUDGE, DATA
 from notify import post
 import watch, scan, report
+
+
+def beat():
+    """dashboard.py reads this to show whether the desk is alive."""
+    os.makedirs(DATA, exist_ok=True)
+    tmp = os.path.join(DATA, "heartbeat.json.tmp")
+    with open(tmp, "w") as f:
+        json.dump({"time": time.time(), "paper": PAPER, "judge": JUDGE}, f)
+    os.replace(tmp, os.path.join(DATA, "heartbeat.json"))
 
 
 def main():
@@ -61,6 +70,7 @@ def main():
                 post(report.report())
         except Exception:
             post("desk error, will retry next tick:\n" + traceback.format_exc(limit=3))
+        beat()
         time.sleep(30)
 
 

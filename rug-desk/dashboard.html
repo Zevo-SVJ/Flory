@@ -1,0 +1,363 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rug Desk</title>
+<style>
+:root {
+  color-scheme: light;
+  --page: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781;
+  --grid: #e1e0d9; --axis: #c3c2b7; --ring: rgba(11,11,11,0.10);
+  --series: #2a78d6; --series-soft: rgba(42,120,214,0.12);
+  --up: #006300; --down: #d03b3b; --good: #0ca30c; --warn: #fab219;
+  --funnel-1: #86b6ef; --funnel-2: #5598e7; --funnel-3: #2a78d6; --funnel-4: #1c5cab;
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --ring: rgba(255,255,255,0.10);
+    --series: #3987e5; --series-soft: rgba(57,135,229,0.16);
+    --up: #0ca30c; --down: #e66767;
+    --funnel-1: #184f95; --funnel-2: #256abf; --funnel-3: #3987e5; --funnel-4: #6da7ec;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
+  --grid: #2c2c2a; --axis: #383835; --ring: rgba(255,255,255,0.10);
+  --series: #3987e5; --series-soft: rgba(57,135,229,0.16);
+  --up: #0ca30c; --down: #e66767;
+  --funnel-1: #184f95; --funnel-2: #256abf; --funnel-3: #3987e5; --funnel-4: #6da7ec;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--page); color: var(--ink);
+       font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 1180px; margin: 0 auto; padding: 24px 16px 64px; }
+header { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 20px; }
+h1 { font-size: 20px; margin: 0; letter-spacing: -0.01em; }
+h2 { font-size: 13px; font-weight: 600; color: var(--ink-2); margin: 0 0 12px;
+     text-transform: uppercase; letter-spacing: 0.04em; }
+.pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px;
+        border: 1px solid var(--ring); color: var(--ink-2); font-size: 12px; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.spacer { flex: 1; }
+.updated { color: var(--muted); font-size: 12px; }
+button { font: inherit; font-size: 12px; color: var(--ink-2); background: var(--surface);
+         border: 1px solid var(--ring); border-radius: 8px; padding: 4px 10px; cursor: pointer; }
+.card { background: var(--surface); border: 1px solid var(--ring); border-radius: 12px; padding: 16px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 12px; }
+.tile .label { color: var(--ink-2); font-size: 12px; }
+.tile .value { font-size: 26px; font-weight: 600; letter-spacing: -0.02em; margin-top: 4px; }
+.tile .sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 12px; margin-top: 12px; }
+.mt { margin-top: 12px; }
+.up { color: var(--up); } .down { color: var(--down); }
+svg { display: block; width: 100%; overflow: visible; }
+svg text { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.empty { color: var(--muted); padding: 24px 0; text-align: center; }
+.note { color: var(--muted); font-size: 12px; margin-top: 10px; }
+table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+th { text-align: left; font-weight: 500; color: var(--muted); font-size: 12px; padding: 6px 8px;
+     border-bottom: 1px solid var(--grid); white-space: nowrap; }
+td { padding: 8px; border-bottom: 1px solid var(--grid); vertical-align: top; }
+td.num, th.num { text-align: right; white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+td:first-child { white-space: nowrap; }
+.scroll { overflow-x: auto; }
+a { color: var(--series); text-decoration: none; } a:hover { text-decoration: underline; }
+.tag { display: inline-block; padding: 1px 8px; border-radius: 6px; font-size: 12px; border: 1px solid var(--ring); }
+.reason { color: var(--ink-2); font-size: 12px; max-width: 420px; }
+.groups { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 12px; }
+.groups .value { font-size: 20px; font-weight: 600; }
+#tip { position: fixed; pointer-events: none; background: var(--surface); border: 1px solid var(--ring);
+       border-radius: 8px; padding: 8px 10px; font-size: 12px; box-shadow: 0 4px 16px rgba(0,0,0,.18);
+       display: none; z-index: 10; min-width: 140px; }
+#tip strong { display: block; font-size: 14px; color: var(--ink); }
+#tip span { color: var(--ink-2); }
+.stale { opacity: .55; transition: opacity .2s; }
+@media (max-width: 560px) { .groups { grid-template-columns: 1fr; } .tile .value { font-size: 22px; } }
+</style>
+</head>
+<body>
+<main id="app">
+  <header>
+    <h1>Rug Desk</h1>
+    <span class="pill" id="status"><span class="dot" id="statusDot"></span><span id="statusText">…</span></span>
+    <span class="pill" id="mode">…</span>
+    <span class="spacer"></span>
+    <span class="updated" id="updated"></span>
+    <button id="refresh" type="button">Actualiser</button>
+  </header>
+
+  <section class="tiles" aria-label="Chiffres clés">
+    <div class="card tile"><div class="label">PnL réalisé (total)</div><div class="value" id="tRealized">–</div><div class="sub" id="tRealizedSub"></div></div>
+    <div class="card tile"><div class="label">PnL réalisé aujourd'hui</div><div class="value" id="tToday">–</div><div class="sub">limite : −50 $ / jour</div></div>
+    <div class="card tile"><div class="label">PnL latent (positions ouvertes)</div><div class="value" id="tUnreal">–</div><div class="sub" id="tUnrealSub"></div></div>
+    <div class="card tile"><div class="label">Positions ouvertes</div><div class="value" id="tOpen">–</div><div class="sub" id="tOpenSub"></div></div>
+    <div class="card tile"><div class="label">Trades gagnants</div><div class="value" id="tWin">–</div><div class="sub" id="tWinSub"></div></div>
+  </section>
+
+  <section class="card">
+    <h2>PnL réalisé cumulé</h2>
+    <div id="curve"></div>
+  </section>
+
+  <section class="card mt">
+    <h2>L'expérience : la lecture X aide-t-elle ?</h2>
+    <div class="groups" id="groups"></div>
+    <div class="scroll"><table id="experiment"></table></div>
+    <p class="note">Chaque PASS est acheté sur papier, que X dise BUY ou SKIP. En fin de semaine : si les SKIP perdent nettement plus que les BUY, la lecture X vaut quelque chose.</p>
+  </section>
+
+  <section class="card mt">
+    <h2>Positions ouvertes</h2>
+    <div class="scroll"><table id="open"></table></div>
+  </section>
+
+  <div class="grid2">
+    <section class="card"><h2>Entonnoir</h2><div id="funnel"></div></section>
+    <section class="card"><h2>Pourquoi les tokens meurent</h2><div id="kills"></div></section>
+  </div>
+
+  <section class="card mt">
+    <h2>Dernières sorties</h2>
+    <div class="scroll"><table id="trades"></table></div>
+  </section>
+</main>
+<div id="tip" role="status"></div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const tip = $("tip");
+let data = null;
+
+const usd = (v) => v == null ? "–" : (v > 0 ? "+" : v < 0 ? "−" : "") + "$" + Math.abs(v).toFixed(2);
+const pct = (v) => v == null ? "–" : (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(v).toFixed(0) + " %";
+const signClass = (v) => v > 0 ? "up" : v < 0 ? "down" : "";
+const NS = "http://www.w3.org/2000/svg";
+const KILL_LABELS = {
+  thin_pool: "Pool trop petit", too_fresh: "Trop récent (< 30 min)", too_old: "Trop vieux (> 72 h)",
+  no_pool: "Pas de pool", no_price: "Pas de prix", ticket_too_big: "Ticket trop gros pour le pool",
+  nobody_can_sell: "Personne ne vend (honeypot)", mint_open: "Mint authority ouverte",
+  freeze_open: "Freeze authority ouverte", lp_unverified: "LP non vérifiable (pas PumpSwap)",
+  lp_unlocked: "LP non brûlé", no_holders: "Holders indisponibles (GoPlus)",
+  top10_heavy: "Top 10 wallets > 30 %", whale: "Un wallet > 5 %",
+  bundle_same_sol: "Bundle : même solde SOL", bundle_ladder: "Bundle : sacs identiques",
+  "source en panne": "Source en panne",
+};
+const EXIT_LABELS = {
+  stop: "stop −35 %", trailing_stop: "trailing stop", time_stop: "stop de temps (6 h)",
+  liquidity_pulled: "liquidité retirée", pool_gone: "pool disparu", take_profit_100: "prise de profit +100 %",
+  take_profit_200: "prise de profit +200 %", manual: "manuel",
+};
+const killLabel = (k) => KILL_LABELS[k] || (k.startsWith("danger:") ? "Piège Token-2022 : " + k.slice(7) : k);
+
+function el(tag, attrs = {}, text) {
+  const e = tag.startsWith("svg:") ? document.createElementNS(NS, tag.slice(4)) : document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+  if (text != null) e.textContent = text;      // all data goes in as text, never as HTML
+  return e;
+}
+
+function showTip(evt, value, label) {
+  tip.replaceChildren(el("strong", {}, value), el("span", {}, label));
+  tip.style.display = "block";
+  const x = Math.min(evt.clientX + 14, window.innerWidth - tip.offsetWidth - 8);
+  tip.style.left = x + "px";
+  tip.style.top = (evt.clientY + 14) + "px";
+}
+const hideTip = () => { tip.style.display = "none"; };
+
+function setValue(id, v, fmt = usd) {
+  const e = $(id);
+  e.textContent = fmt(v);
+  e.className = "value " + signClass(v);
+}
+
+// ---------- equity curve: one series, crosshair + tooltip ----------
+function drawCurve(points) {
+  const box = $("curve");
+  box.replaceChildren();
+  if (!points.length) { box.append(el("div", { class: "empty" }, "Aucune sortie pour l'instant. La courbe démarre à la première vente.")); return; }
+  const W = box.clientWidth || 600, H = 220, L = 52, R = 12, T = 10, B = 26;
+  const pts = [{ time: "départ", pnl: 0, symbol: "", step: 0, reason: "" }, ...points];
+  const ys = pts.map(p => p.pnl);
+  let lo = Math.min(0, ...ys), hi = Math.max(0, ...ys);
+  if (hi === lo) { hi += 1; lo -= 1; }
+  const pad = (hi - lo) * 0.1; lo -= pad; hi += pad;
+  const x = (i) => L + (W - L - R) * (pts.length === 1 ? 0 : i / (pts.length - 1));
+  const y = (v) => T + (H - T - B) * (1 - (v - lo) / (hi - lo));
+  const svg = el("svg:svg", { viewBox: `0 0 ${W} ${H}`, height: H, role: "img",
+    "aria-label": "PnL réalisé cumulé, " + usd(ys[ys.length - 1]) + " au total" });
+
+  for (let i = 0; i <= 4; i++) {
+    const v = lo + (hi - lo) * i / 4;
+    svg.append(el("svg:line", { x1: L, x2: W - R, y1: y(v), y2: y(v), stroke: "var(--grid)", "stroke-width": 1 }));
+    svg.append(el("svg:text", { x: L - 8, y: y(v) + 4, "text-anchor": "end" }, usd(v)));
+  }
+  svg.append(el("svg:line", { x1: L, x2: W - R, y1: y(0), y2: y(0), stroke: "var(--axis)", "stroke-width": 1 }));
+  const first = pts[1]?.time?.slice(5) ?? "", last = pts[pts.length - 1].time.slice(5);
+  svg.append(el("svg:text", { x: L, y: H - 6 }, first));
+  svg.append(el("svg:text", { x: W - R, y: H - 6, "text-anchor": "end" }, last));
+
+  const d = pts.map((p, i) => (i ? "L" : "M") + x(i).toFixed(1) + " " + y(p.pnl).toFixed(1)).join(" ");
+  svg.append(el("svg:path", { d: d + ` L ${x(pts.length - 1)} ${y(0)} L ${x(0)} ${y(0)} Z`, fill: "var(--series-soft)" }));
+  svg.append(el("svg:path", { d, fill: "none", stroke: "var(--series)", "stroke-width": 2, "stroke-linejoin": "round" }));
+  const endX = x(pts.length - 1), endY = y(ys[ys.length - 1]);
+  svg.append(el("svg:circle", { cx: endX, cy: endY, r: 4, fill: "var(--series)", stroke: "var(--surface)", "stroke-width": 2 }));
+
+  const cross = el("svg:line", { y1: T, y2: H - B, stroke: "var(--axis)", "stroke-width": 1, visibility: "hidden" });
+  const dot = el("svg:circle", { r: 4, fill: "var(--series)", stroke: "var(--surface)", "stroke-width": 2, visibility: "hidden" });
+  svg.append(cross, dot);
+  const hit = el("svg:rect", { x: L, y: T, width: W - L - R, height: H - T - B, fill: "transparent" });
+  hit.addEventListener("pointermove", (evt) => {
+    const r = svg.getBoundingClientRect();
+    const px = (evt.clientX - r.left) * (W / r.width);
+    const i = Math.max(0, Math.min(pts.length - 1, Math.round((px - L) / ((W - L - R) / Math.max(1, pts.length - 1)))));
+    const p = pts[i];
+    cross.setAttribute("x1", x(i)); cross.setAttribute("x2", x(i)); cross.setAttribute("visibility", "visible");
+    dot.setAttribute("cx", x(i)); dot.setAttribute("cy", y(p.pnl)); dot.setAttribute("visibility", "visible");
+    showTip(evt, usd(p.pnl), i === 0 ? "départ" : `${p.time} · ${p.symbol} ${usd(p.step)} (${p.reason})`);
+  });
+  hit.addEventListener("pointerleave", () => { hideTip(); cross.setAttribute("visibility", "hidden"); dot.setAttribute("visibility", "hidden"); });
+  svg.append(hit);
+  box.append(svg);
+}
+
+// ---------- horizontal bars (funnel, kill reasons) ----------
+function drawBars(boxId, rows, colors, emptyText) {
+  const box = $(boxId);
+  box.replaceChildren();
+  if (!rows.length || !rows[0].n) { box.append(el("div", { class: "empty" }, emptyText)); return; }
+  const W = box.clientWidth || 400, rowH = 44, H = rows.length * rowH;
+  const max = Math.max(...rows.map(r => r.n), 1);
+  const svg = el("svg:svg", { viewBox: `0 0 ${W} ${H}`, height: H, role: "img" });
+  rows.forEach((r, i) => {
+    const y0 = i * rowH, w = Math.max(4, (W - 48) * r.n / max);
+    svg.append(el("svg:text", { x: 0, y: y0 + 13, style: "fill: var(--ink-2); font-size: 12px" }, r.label));
+    const bar = el("svg:rect", { x: 0, y: y0 + 20, width: w, height: 14, rx: 4,
+      fill: Array.isArray(colors) ? colors[i % colors.length] : colors });
+    svg.append(bar);
+    svg.append(el("svg:text", { x: w + 6, y: y0 + 31, style: "fill: var(--ink); font-size: 12px" }, String(r.n)));
+    const hit = el("svg:rect", { x: 0, y: y0, width: W, height: rowH, fill: "transparent", tabindex: 0 });
+    const share = rows[0].n ? Math.round(r.n / (boxId === "funnel" ? rows[0].n : rows.reduce((a, b) => a + b.n, 0)) * 100) : 0;
+    hit.addEventListener("pointermove", (evt) => { bar.setAttribute("opacity", ".75"); showTip(evt, `${r.n} tokens · ${share} %`, r.label); });
+    hit.addEventListener("pointerleave", () => { bar.removeAttribute("opacity"); hideTip(); });
+    svg.append(hit);
+  });
+  box.append(svg);
+}
+
+// ---------- tables ----------
+function table(id, head, rows, emptyText) {
+  const t = $(id);
+  t.replaceChildren();
+  const tr = el("tr");
+  head.forEach(([label, num]) => tr.append(el("th", num ? { class: "num" } : {}, label)));
+  const thead = el("thead");
+  thead.append(tr);
+  t.append(thead);
+  const body = el("tbody");
+  if (!rows.length) {
+    const r = el("tr"), c = el("td", { colspan: head.length, class: "empty" }, emptyText);
+    r.append(c); body.append(r);
+  }
+  rows.forEach(cells => {
+    const r = el("tr");
+    cells.forEach((c, i) => {
+      const td = el("td", head[i][1] ? { class: "num" } : {});
+      if (c instanceof Node) td.append(c); else td.textContent = c ?? "–";
+      r.append(td);
+    });
+    body.append(r);
+  });
+  t.append(body);
+}
+const money = (v) => el("span", { class: signClass(v) }, usd(v));
+const percent = (v) => el("span", { class: signClass(v) }, pct(v));
+const link = (href, text) => el("a", { href, target: "_blank", rel: "noopener noreferrer" }, text);
+
+function render(s) {
+  data = s;
+  const age = s.heartbeat_age_s;
+  const alive = age != null && age < 180;
+  $("statusDot").style.background = alive ? "var(--good)" : age == null ? "var(--muted)" : "var(--down)";
+  $("statusText").textContent = alive ? "desk actif" : age == null ? "desk jamais démarré" : `desk arrêté depuis ${Math.round(age / 60)} min`;
+  $("mode").textContent = (s.paper ? "PAPIER" : "RÉEL") + " · lecture X : " + (s.judge === "none" ? "manuelle / Claude" : s.judge);
+  $("updated").textContent = "mis à jour " + new Date(s.now * 1000).toLocaleTimeString("fr-FR");
+
+  setValue("tRealized", s.realized);
+  $("tRealizedSub").textContent = `${s.closed} trade(s) clôturé(s), ticket ${s.ticket} $`;
+  setValue("tToday", s.realized_today);
+  setValue("tUnreal", s.unrealized);
+  $("tUnrealSub").textContent = s.price_error ? "prix indisponibles : DexScreener ne répond pas" : "aux prix DexScreener actuels";
+  $("tOpen").textContent = `${s.open.length} / 4`;
+  $("tOpen").className = "value";
+  $("tOpenSub").textContent = `${s.open.length * s.ticket} $ engagés sur papier`;
+  $("tWin").textContent = s.closed ? `${Math.round(s.won / s.closed * 100)} %` : "–";
+  $("tWin").className = "value";
+  $("tWinSub").textContent = s.closed ? `${s.won} sur ${s.closed} tokens clôturés` : "aucun trade clôturé";
+
+  drawCurve(s.curve);
+
+  const g = $("groups");
+  g.replaceChildren();
+  [["BUY", "X dit BUY"], ["SKIP", "X dit SKIP"], ["non lu", "Pas encore lu"]].forEach(([k, label]) => {
+    const v = s.groups[k];
+    const c = el("div", { class: "card" });
+    c.append(el("div", { class: "label", style: "color: var(--ink-2); font-size: 12px" }, `${label} · ${v.n} token(s)`));
+    const val = el("div", { class: "value " + signClass(v.pnl) }, usd(v.pnl));
+    c.append(val);
+    g.append(c);
+  });
+  table("experiment", [["Heure"], ["Token"], ["Lecture X"], ["Pourquoi (X)"], ["PnL papier", true]],
+    s.experiment.map(e => [
+      e.time.slice(5),
+      link(`https://dexscreener.com/solana/${e.mint}`, e.symbol || e.mint.slice(0, 6)),
+      el("span", { class: "tag" }, e.x_verdict || "non lu"),
+      el("div", { class: "reason" }, e.x_reason || ""),
+      (() => { const w = el("span"); w.append(money(e.pnl), el("span", { style: "color: var(--muted)" }, e.open ? " (ouvert)" : "")); return w; })(),
+    ]),
+    "Aucun PASS pour l'instant.");
+
+  table("open", [["Token"], ["Entrée", true], ["Maintenant", true], ["Variation", true], ["Plus haut", true], ["Reste", true], ["Depuis", true], ["PnL latent", true]],
+    s.open.map(p => [
+      link(p.url, p.symbol || p.mint.slice(0, 6)),
+      p.entry.toPrecision(3), p.price ? p.price.toPrecision(3) : "–",
+      percent(p.pct), percent(p.peak_pct),
+      Math.round(p.left_pct) + " %",
+      p.hours < 1 ? Math.round(p.hours * 60) + " min" : p.hours.toFixed(1) + " h",
+      money(p.pnl),
+    ]),
+    "Aucune position ouverte.");
+
+  drawBars("funnel", s.funnel, ["var(--funnel-1)", "var(--funnel-2)", "var(--funnel-3)", "var(--funnel-4)"], "Aucun token analysé pour l'instant.");
+  drawBars("kills", s.kills.map(k => ({ label: killLabel(k.label), n: k.n })), "var(--series)", "Aucune élimination pour l'instant.");
+
+  table("trades", [["Heure"], ["Token"], ["Type"], ["Raison"], ["Montant", true], ["PnL", true]],
+    s.trades.map(t => [t.time.slice(5), t.symbol, t.action === "close" ? "sortie" : "partielle", EXIT_LABELS[t.reason] || t.reason, "$" + Number(t.usd).toFixed(2), money(Number(t.pnl))]),
+    "Aucune sortie pour l'instant.");
+}
+
+async function load() {
+  $("app").classList.add("stale");
+  try {
+    const r = await fetch("/api/state", { cache: "no-store" });
+    render(await r.json());
+  } catch (e) {
+    $("statusText").textContent = "dashboard.py ne répond pas";
+    $("statusDot").style.background = "var(--down)";
+  } finally {
+    $("app").classList.remove("stale");
+  }
+}
+$("refresh").addEventListener("click", load);
+let rt;
+window.addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(() => data && render(data), 150); });
+load();
+setInterval(load, 30000);
+</script>
+</body>
+</html>
