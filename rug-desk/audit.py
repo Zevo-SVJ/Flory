@@ -137,15 +137,17 @@ def breakdown() -> dict:
     at entry. The bot has no 2 AM tilt, but markets have quiet hours and late entries."""
     from config import TRADES
     if not os.path.exists(TRADES):
-        return {"hour": [], "age": []}
+        return {"hour": [], "age": [], "tier": []}
     with open(TRADES, newline="") as f:
         trades = list(csv.DictReader(f))
-    ages = {}
+    ages, tiers = {}, {}
     if os.path.exists(LOG):
         with open(LOG, newline="") as f:
             for r in csv.DictReader(f):
                 if r.get("age_min") not in (None, ""):
                     ages[r["mint"]] = float(r["age_min"])
+                if r.get("tier"):
+                    tiers[r["mint"]] = r["tier"]
     opened, pnl, closed = {}, {}, set()
     for t in trades:
         if t["action"] == "open":
@@ -164,5 +166,9 @@ def breakdown() -> dict:
             out.append({"bucket": name, "n": len(sel), "pnl": round(sum(pnl[m] for m in sel), 2),
                         "win": sum(1 for m in sel if pnl[m] > 0)})
         return out
+    # does a bigger ticket go with better trades? the tier size.py gave at entry, as 0/1/2
+    rank = {"base": 0, "strong": 1, "max": 2}
+    tier_b = [("base", 0, 1), ("strong", 1, 2), ("max", 2, 3)]
     return {"hour": group(hours, lambda m: int(opened[m][11:13])),
-            "age": group(age_b, lambda m: ages.get(m))}
+            "age": group(age_b, lambda m: ages.get(m)),
+            "tier": group(tier_b, lambda m: rank.get(tiers.get(m)))}

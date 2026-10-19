@@ -38,7 +38,12 @@ MIN_SCORE = 55              # below this a PASS is not bought (still audited)
 # training mode: paper money, so the desk takes every token the filter lets through, bounded by
 # cash. more trades = more data about the filter. the live numbers go back down before real money.
 PAPER_BANKROLL_USD = 1000   # fake starting balance. a new entry needs TICKET_USD of free cash
-TICKET_USD = 25             # flat. never sized off the last win
+TICKET_USD = 25             # the smallest ticket. the real size comes from SIZING below
+# paper sizing, as % of the balance (bankroll + realized). size.py picks the tier from 6 measured signals.
+# aggressive on purpose: paper money, more signal per trade. a 10-loss streak at ~7% x -35% is ~ -25%.
+SIZING = {"base": 4, "strong": 8, "max": 14,
+          "score_strong": 75, "score_max": 85,  # score thresholds that count as a signal
+          "turnover_hot": 1.0}                  # 1 h volume >= the pool's liquidity
 MAX_OPEN = 40               # safety net only: cash runs out first (1000 / 25 = 40)
 MAX_ENTRIES_PER_DAY = 40
 DAILY_LOSS_HALT_USD = 250   # realized loss today hits this -> no new entries until tomorrow
@@ -60,9 +65,14 @@ FACTS = {                   # the rug filter. code only, no model
     "bundle_same_sol": 3,       # this many top wallets with the exact same SOL balance -> funded together
     "bundle_ladder": 5,         # this many big wallets with bags within 2% of each other -> one hand
     "ladder_min_pct": 0.5,      # a wallet counts in the ladder only above this % of supply
-    "min_liquidity_usd": 30000,
-    "max_ticket_share": 0.01,   # your ticket is never more than 1% of the pool
-    "min_age_min": 30,          # younger than this, every report is still guessing
+    "min_liquidity_usd": 15000, # the live graduates that ran on Oct 19 (KIBI, SPORE, Mimi) had $20-30k pools
+    "max_ticket_share": 0.02,   # your ticket is never more than 2% of the pool (~2% price impact)
+    "min_age_min": 15,          # pump.fun's BOOST buys the coin for ~5 min after graduation: not demand
+    # fake caps: on Oct 19, 20 of 33 graduates with a "real" pool were clones ("US Oil Exchange",
+    # "National Oil Dividend Fund", "Ripple USD") showing $10M-$600M caps on $0.2-2M pools that trade
+    # ~1% of their pool an hour. the tokens that really ran sat at caps 3-9x their pool, turnover 0.5-15x
+    "max_mcap_liq": 12,         # market cap / pool liquidity above this -> fake_cap
+    "min_turnover_1h": 0.05,    # a pool that trades under 5% of its size an hour -> dead_volume (the clones: ~1%)
     "max_age_hours": 72,
 }
 
@@ -92,7 +102,7 @@ EXIT_AUTOTUNE = True        # the lab may switch profiles by itself, only past t
 
 SCHEDULE = {                # used by agents.py: one entry per agent
     "vigie_every_s": 20,        # VIGIE: prices every open position, applies exits, logs the balance
-    "scout_every_min": 10,      # SCOUT: pulls fresh leads, GARDE checks each one
+    "scout_every_min": 3,       # SCOUT: pulls fresh leads (pump.fun graduations first), GARDE checks each one
     "scan_per_run": 15,         # leads per SCOUT run that reach GARDE (thin pools never count)
     "audit_every_min": 30,      # AUDIT: re-prices old verdicts to see if the filter was right
     "audit_after_hours": 6,

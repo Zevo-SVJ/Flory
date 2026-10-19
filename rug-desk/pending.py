@@ -118,8 +118,10 @@ def decide() -> list[dict]:
                 out.append({"kind": "kill", "text": f"${sym} X said BUY but sellers took over (5 min)",
                             "symbol": sym, "reason": "momentum_lost"})
                 continue
-            book.open_position(mint, sym, m["price"], m["liq_usd"])
-            out.append({"kind": "buy", "text": f"BUY ${TICKET_USD} ${sym} @ {m['price']:.8g} "
+            import size
+            usd, tier, _ = size.ticket(v, m)
+            book.open_position(mint, sym, m["price"], m["liq_usd"], usd=usd)
+            out.append({"kind": "buy", "text": f"BUY ${usd:.0f} ({tier}) ${sym} @ {m['price']:.8g} "
                                                f"(score {v.get('score')}, X: {x.get('raison', '')[:60]})",
                         "symbol": sym, "mint": mint, "price": m["price"]})
         elif x:

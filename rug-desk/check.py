@@ -5,7 +5,7 @@ import csv, json, os, sys, time
 from config import (DATA, LOG, JUDGE, MIN_CONFIDENCE, PAPER, PAPER_BUY_ON_PASS, TICKET_USD,
                     ECHO_MODE, MIN_SCORE)
 from score import score
-import pending, smart
+import pending, smart, size
 from facts import report, fact_kill
 from market import pool, market_kill
 import market
@@ -13,7 +13,7 @@ import book
 
 # price and liq_usd at verdict time let AUDIT check later whether a kill or a pass was right
 FIELDS = ["time", "mint", "symbol", "stage", "verdict", "confidence", "reason", "price", "liq_usd",
-          "score", "flags", "sol_1h", "sol_24h", "age_min", "dev"]
+          "score", "flags", "sol_1h", "sol_24h", "age_min", "dev", "ticket", "tier"]
 
 
 def _migrate():
@@ -90,7 +90,8 @@ def check(mint: str) -> dict:
     v = judge(token, m)
     sym = m["symbol"] or token["symbol"]
     sc = score(m, token)
-    return {**v, **seen, "symbol": sym, "price": m["price"], "liq_usd": m["liq_usd"], "url": m["url"],
+    usd, tier, sig = size.ticket({"score": sc["score"]}, m, token)
+    return {**v, **seen, "ticket": usd, "tier": tier, "signals": sig, "symbol": sym, "price": m["price"], "liq_usd": m["liq_usd"], "url": m["url"],
             "score": sc["score"], "flags": " ".join(sc["flags"]),
             # the free check 14: two links you open yourself. latest posts, not "top"
             "x_ca": f"https://x.com/search?q={mint}&f=live",
@@ -110,8 +111,9 @@ def run(mint: str) -> dict:
         v["action"] = f"waiting for ECHO's X read (score {v['score']})"
         return v
     if enter and PAPER:
-        book.open_position(mint, v["symbol"], v["price"], v["liq_usd"])
-        v["action"] = f"PAPER BUY ${TICKET_USD} at {v['price']}"
+        book.open_position(mint, v["symbol"], v["price"], v["liq_usd"], usd=v.get("ticket") or TICKET_USD)
+        v["action"] = (f"PAPER BUY ${v.get('ticket') or TICKET_USD:.0f} ({v.get('tier', 'base')}"
+                       + (f": {', '.join(v['signals'])}" if v.get("signals") else "") + f") at {v['price']}")
         if v["verdict"] == "PASS" and ECHO_MODE == "observe":   # ECHO still reads it, after the buy
             pending.add(mint, {**v, "flags": (v.get("flags") or "").split(), "shadow": True})
     elif v["verdict"] in ("BUY", "PASS") and not PAPER:

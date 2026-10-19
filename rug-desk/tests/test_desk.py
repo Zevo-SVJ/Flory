@@ -75,10 +75,11 @@ class Chain:
         return Resp({"jsonrpc": "2.0", "id": 1, "result": res})
 
 
-def ds_pairs(price=0.001, liq=80000, age_min=120, buys=50, sells=30, dex="pumpswap"):
+def ds_pairs(price=0.001, liq=80000, age_min=120, buys=50, sells=30, dex="pumpswap", vol=20000, mcap=None):
     return [{"baseToken": {"address": MINT, "symbol": "TEST"}, "priceUsd": str(price),
              "liquidity": {"usd": liq}, "pairCreatedAt": (time.time() - age_min * 60) * 1000,
-             "txns": {"h1": {"buys": buys, "sells": sells}}, "volume": {"h1": 1000},
+             "txns": {"h1": {"buys": buys, "sells": sells}}, "volume": {"h1": vol},
+             "marketCap": mcap if mcap is not None else liq * 4,
              "dexId": dex, "pairAddress": PAIR, "url": "https://dexscreener.com/solana/x"}]
 
 
@@ -187,6 +188,12 @@ class Filter(Base):
         self.assertEqual(grads.recent(), ["GradS1pump"])     # a non-migration tx adds nothing
         self.assertEqual(grads.load()["last_sig"], "S1")
 
+    def test_fake_cap_and_dead_volume(self):
+        # the Oct 19 clones: a $300M "cap" on a $1.5M pool trading $10k an hour
+        self.assertEqual(self.verdict(ds=ds_pairs(liq=1500000, mcap=300e6, vol=10000))["reason"], "fake_cap")
+        self.assertEqual(self.verdict(ds=ds_pairs(liq=200000, mcap=1e6, vol=2000))["reason"], "dead_volume")
+        self.assertEqual(self.verdict(ds=ds_pairs(liq=20000, mcap=150000, vol=40000))["verdict"], "PASS")
+
     def test_goplus_also_says_mintable(self):
         v = self.verdict(gp=goplus(mintable={"status": "1"}))
         self.assertEqual(v["reason"], "mint_open")
@@ -208,6 +215,20 @@ class Filter(Base):
         v = self.verdict(gp_code=500)
         self.assertEqual(v["verdict"], "SKIP")
         self.assertTrue(v["reason"].startswith("facts failed"))
+
+
+class Sizing(Base):
+    def test_more_signals_bigger_ticket_capped_by_the_pool(self):
+        import size
+        calm = {"symbol": "A", "liq_usd": 80000, "vol_1h": 5000, "buys_5m": 2, "sells_5m": 2}
+        hot = {"symbol": "B", "liq_usd": 80000, "vol_1h": 120000, "buys_5m": 40, "sells_5m": 10}
+        usd0, tier0, _ = size.ticket({"score": 60}, calm)
+        usd1, tier1, sig = size.ticket({"score": 90}, hot)
+        self.assertEqual((tier0, tier1), ("base", "max"), sig)
+        self.assertEqual(usd0, config.PAPER_BANKROLL_USD * config.SIZING["base"] / 100)
+        self.assertGreater(usd1, usd0)
+        thin = dict(hot, liq_usd=5000)
+        self.assertEqual(size.ticket({"score": 90}, thin)[0], 5000 * config.FACTS["max_ticket_share"])
 
 
 class Book(Base):

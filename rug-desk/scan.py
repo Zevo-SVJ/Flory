@@ -16,7 +16,7 @@ SEARCH = "https://api.dexscreener.com/latest/dex/search"
 WORDS = ["pump", "sol", "cat", "dog", "ai", "meme", "pepe", "inu", "moon", "coin", "frog", "baby",
          "gm", "based", "wif", "bonk", "agent", "cto", "degen", "sigma", "trump", "elon", "chill",
          "king", "god", "super", "core", "luke", "gato", "gold", "the", "one", "x", "bull", "bear"]
-WORDS_PER_RUN = 12          # DexScreener allows 300 searches a minute; this is 12 every 10 minutes
+WORDS_PER_RUN = 4           # every 3 minutes. the search mostly returns old pools: the graduations feed matters more
 _turn = 0
 grad_error = None           # the on-chain graduation feed's last failure, shown by SCOUT
 # kills that can change with time: a pool grows up, a source comes back. retried after this long
@@ -58,8 +58,8 @@ def searched(trending: list[str] = ()) -> list[str]:
     look-alikes) plus a rotating set of generic WORDS, run after run."""
     global _turn
     words = list(dict.fromkeys([w for w in narratives() if len(w) >= 3]
-                               + [w.lower() for w in trending if w and len(w) >= 3]))[:WORDS_PER_RUN * 2 // 3]
-    words += [WORDS[(_turn + i) % len(WORDS)] for i in range(WORDS_PER_RUN - len(words))]
+                               + [w.lower() for w in trending if w and len(w) >= 3]))[:max(3, WORDS_PER_RUN * 2 // 3)]
+    words += [WORDS[(_turn + i) % len(WORDS)] for i in range(max(0, WORDS_PER_RUN - len(words)))]
     _turn = (_turn + WORDS_PER_RUN) % len(WORDS)
     now_ms, out = time.time() * 1000, []
     for w in words:

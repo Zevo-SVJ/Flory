@@ -112,7 +112,9 @@ def garde(mint: str):
              symbol=sym, mint=mint, url=v.get("url"), x_ca=v.get("x_ca"), score=v.get("score"))
         action = v.get("action", "")
         if action.startswith("PAPER BUY"):
-            emit("GARDE", "buy", f"BUY ${TICKET_USD} ${sym} @ {v['price']:.8g}", symbol=sym, mint=mint,
+            usd = v.get("ticket") or TICKET_USD
+            emit("GARDE", "buy", f"BUY ${usd:.0f} ({v.get('tier', 'base')}) ${sym} @ {v['price']:.8g}"
+                                 + (f" — {', '.join(v['signals'])}" if v.get("signals") else ""), symbol=sym, mint=mint,
                  price=v["price"])
         elif action.startswith("waiting"):
             emit("ECHO", "x", f"${sym} queued for the X read (score {v.get('score')})", symbol=sym, mint=mint)

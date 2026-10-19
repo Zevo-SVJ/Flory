@@ -50,6 +50,7 @@ Optional `.env` (copy `.env.example`, never commit it):
 | score.py | ranks every PASS 0-100 like a careful human: holders, distribution, dev, two-way trading, activity, bot volume, age, liquidity margin. below MIN_SCORE it is not bought |
 | pending.py | ECHO_MODE = "observe" (paper default): every PASS is bought at once and queued for ECHO, whose verdict is recorded next to the trade. "gate": a PASS waits for ECHO's BUY |
 | grads.py | SCOUT's main source: every pump.fun graduation to PumpSwap, read from pump.fun's migration account on chain (~40 an hour) |
+| size.py | paper ticket per PASS, % of the balance: base 4%, strong 8% (2-3 signals), max 14% (4+). signals: score 75+, score 85+, 1 h volume >= pool, buyers leading 5 min, smart wallets, ECHO's X narrative. P&L by tier in the evening report |
 | health.py | did the desk run all night: pauses (Mac asleep, desk stopped) in data/pauses.csv plus macOS's own sleep log. `python3 health.py` |
 | ECHO.md | the X reader's instructions. run it from a local Claude session with Claude in Chrome: `/loop 10m Lis et applique ~/Documents/rug-desk-run/rug-desk/ECHO.md` |
 | events.py | the event log and agent status the dashboard reads |

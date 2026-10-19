@@ -60,7 +60,7 @@ def report() -> str:
             lines.append("speed test (active profile): " + ", ".join(
                 f"every {r['every_s']}s {r['pnl']:+.2f}$" for r in lab["speed"]))
     bd = audit.breakdown()
-    for kind, label in (("hour", "entry hour"), ("age", "token age at entry")):
+    for kind, label in (("hour", "entry hour"), ("age", "token age at entry"), ("tier", "ticket tier")):
         rows = [b for b in bd[kind] if b["n"]]
         if rows:
             worst = min(rows, key=lambda b: b["pnl"])

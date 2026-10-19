@@ -21,6 +21,7 @@ def _best(pairs: list, mint: str) -> dict | None:
         "pair": p.get("pairAddress"),
         "price": float(p.get("priceUsd") or 0),
         "liq_usd": (p.get("liquidity") or {}).get("usd") or 0,
+        "mcap": p.get("marketCap") or p.get("fdv") or 0,
         "age_min": round((time.time() * 1000 - born) / 60000) if born else None,
         "buys_1h": h1.get("buys", 0),
         "sells_1h": h1.get("sells", 0),
@@ -58,6 +59,9 @@ def market_kill(m: dict | None) -> str | None:
     if m["price"] <= 0:                                          return "no_price"
     if m["liq_usd"] < FACTS["min_liquidity_usd"]:                return "thin_pool"
     if TICKET_USD / m["liq_usd"] > FACTS["max_ticket_share"]:    return "ticket_too_big"
+    if (m.get("mcap") or 0) > FACTS["max_mcap_liq"] * m["liq_usd"]: return "fake_cap"
+    if (m.get("vol_1h") or 0) < FACTS["min_turnover_1h"] * m["liq_usd"]:
+        return "dead_volume"
     if m["age_min"] is None or m["age_min"] < FACTS["min_age_min"]:
         return "too_fresh"
     if m["age_min"] > FACTS["max_age_hours"] * 60:               return "too_old"
