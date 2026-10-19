@@ -229,9 +229,11 @@ class Sizing(Base):
         hot = {"symbol": "B", "liq_usd": 80000, "vol_1h": 120000, "buys_5m": 40, "sells_5m": 10, "avg_trade_1h": 60}
         usd0, tier0, _ = size.ticket({"score": 60}, calm)
         usd1, tier1, sig = size.ticket({"score": 90}, hot)
-        self.assertEqual((tier0, tier1), ("base", "max"), sig)
+        self.assertEqual((tier0, tier1), ("base", "max"), sig)       # tiers still recorded for AUDIT
         self.assertEqual(usd0, config.PAPER_BANKROLL_USD * config.SIZING["base"] / 100)
-        self.assertGreater(usd1, usd0)
+        self.assertEqual(usd1, usd0)                                  # flat tickets since Oct 19
+        with mock.patch.dict(config.SIZING, {"strong": 8, "max": 14}):
+            self.assertGreater(size.ticket({"score": 90}, hot)[0], usd0)   # the mechanism, once signals earn it
         thin = dict(hot, liq_usd=5000)
         self.assertEqual(size.ticket({"score": 90}, thin)[0], 5000 * config.FACTS["max_ticket_share"])
         # the same activity made of $5 swaps (a bot farm) earns no signal

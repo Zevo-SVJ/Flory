@@ -41,7 +41,11 @@ PAPER_BANKROLL_USD = 1000   # fake starting balance. a new entry needs TICKET_US
 TICKET_USD = 25             # the smallest ticket. the real size comes from SIZING below
 # paper sizing, as % of the balance (bankroll + realized). size.py picks the tier from 6 measured signals.
 # aggressive on purpose: paper money, more signal per trade. a 10-loss streak at ~7% x -35% is ~ -25%.
-SIZING = {"base": 4, "strong": 8, "max": 14,
+# flat since Oct 19 23:45: the "strong" tickets (8%) lost $109 over 8 trades (-20% each, Gemini's rug at
+# $77 among them) while "base" (4%) made +$15 over 7; scores 80+ predicted nothing (FOMO, RAETO, hi).
+# bigger tickets on signals nobody has validated only enlarge the losses. raise strong/max again once
+# AUDIT's tier breakdown shows the signals earn more, on enough trades
+SIZING = {"base": 4, "strong": 4, "max": 4,
           "score_strong": 75, "score_max": 85,  # score thresholds that count as a signal
           "turnover_hot": 1.0,                  # 1 h volume >= the pool's liquidity
           "organic_avg_trade": 30,              # activity counts only if the average swap is $30+
@@ -174,7 +178,7 @@ SCHEDULE = {                # used by agents.py: one entry per agent
 # the rules the real-money decision judges: every trade opened before this ran under rules that no longer
 # exist (15 min entry, Solana only, the copycat bug, no explore tier). they stay in the files and in the
 # all-time lines of the reports; the go-live gate, the projection and the review count only these
-RULES_SINCE = "2026-10-20 00:00"     # Oct 19 23:30: no sale on an ECHO SKIP, explore tier off
+RULES_SINCE = "2026-10-20 00:00"     # Oct 19 23:45: no sale on an ECHO SKIP, explore tier off, flat tickets
 
 DATA = os.environ.get("RUG_DESK_DATA") or os.path.join(HERE, "data")
 LOG = os.path.join(DATA, "checks.csv")
