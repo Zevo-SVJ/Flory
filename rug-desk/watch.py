@@ -52,40 +52,48 @@ def watch() -> tuple[list[dict], dict]:
 
     profile = exits.active()
     onchain = chain_marks(positions, live)
-    for mint, p in positions.items():
-        m = live.get(mint)
-        s = sample(now, m)
-        if mint in onchain:                   # the pool itself beats any indexer
-            s["price"], s["liq"] = onchain[mint]
-        paths.append(mint, s)
-        if s["price"] > 0:
-            marks[mint] = s["price"]
-            b = book.load(); pos = b[mint]
-            if s["price"] > pos["peak"]:
-                pos["peak"], pos["peak_t"] = s["price"], now
+    # prices were fetched above without the lock; decisions and sales hold it, so a buy or an ECHO sale
+    # from the main thread can't be overwritten by this tick
+    with book.LOCK:
+        for mint, p in positions.items():
+            m = live.get(mint)
+            s = sample(now, m)
+            if mint in onchain:                   # the pool itself beats any indexer
+                s["price"], s["liq"] = onchain[mint]
+            paths.append(mint, s)
+            if s["price"] > 0:
+                marks[mint] = s["price"]
+                b = book.load()
+                if mint not in b:             # GARDE's thread (an ECHO SKIP) closed it meanwhile
+                    continue
+                pos = b[mint]
+                if s["price"] > pos["peak"]:
+                    pos["peak"], pos["peak_t"] = s["price"], now
+                    book.save(b)
+            else:
+                pos = p
+            hist = paths.load(mint, since=max(pos["opened"], now - 3600))
+            d = exits.decide(pos, exits.features(hist)[-1] if hist else s, profile)
+            if not d:
+                continue
+            frac, why = d
+            pct = (s["price"] / pos["entry"] - 1) * 100 if s["price"] > 0 else -100
+            pnl = book.sell(mint, frac, s["price"], why, s.get("liq"))
+            closed = mint not in book.load()
+            if closed:
+                marks.pop(mint, None)
+                paths.haunt(mint)
+            elif why.startswith("take_profit"):
+                b = book.load()
+                b[mint]["steps"] += 1
                 book.save(b)
-        else:
-            pos = p
-        hist = paths.load(mint, since=max(pos["opened"], now - 3600))
-        d = exits.decide(pos, exits.features(hist)[-1] if hist else s, profile)
-        if not d:
-            continue
-        frac, why = d
-        pct = (s["price"] / pos["entry"] - 1) * 100 if s["price"] > 0 else -100
-        pnl = book.sell(mint, frac, s["price"], why, s.get("liq"))
-        closed = mint not in book.load()
-        if closed:
-            marks.pop(mint, None)
-            paths.haunt(mint)
-        elif why.startswith("take_profit"):
-            b = book.load()
-            b[mint]["steps"] += 1
-            book.save(b)
-        verb = "sold" if PAPER else "SELL NOW in your wallet"
-        size = "the rest" if closed else f"{int(frac * 100)}% of the original size"
-        out.append({"kind": "sell", "symbol": pos["symbol"], "mint": mint, "pnl": pnl, "pct": pct,
-                    "reason": why, "closed": closed,
-                    "text": f"{pos['symbol']}: {verb} {size} at {pct:+.0f}% ({why}), pnl ${pnl:+.2f}"})
+            import dossier
+            dossier.add(mint, "VIGIE", "vente", reason=why, pct=round(pct, 1), pnl=round(pnl, 2), closed=closed)
+            verb = "sold" if PAPER else "SELL NOW in your wallet"
+            size = "the rest" if closed else f"{int(frac * 100)}% of the original size"
+            out.append({"kind": "sell", "symbol": pos["symbol"], "mint": mint, "pnl": pnl, "pct": pct,
+                        "reason": why, "closed": closed,
+                        "text": f"{pos['symbol']}: {verb} {size} at {pct:+.0f}% ({why}), pnl ${pnl:+.2f}"})
     return out, marks
 
 

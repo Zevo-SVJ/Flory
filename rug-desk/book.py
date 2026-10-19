@@ -1,10 +1,13 @@
 # book.py
 # positions, trades, limits. the desk's memory lives in two files you can open yourself.
-import csv, json, os, sys, time
+import csv, json, os, sys, threading, time
 from config import (DATA, POSITIONS, TRADES, TICKET_USD, MAX_OPEN, MAX_ENTRIES_PER_DAY,
                     DAILY_LOSS_HALT_USD, COOLDOWN_HOURS, PAPER_BANKROLL_USD, PAPER_COSTS, PAPER)
 
 COSTS = PAPER        # paper fills pay fees and price impact; live fills are booked at the price you paid
+# VIGIE runs in its own thread and GARDE buys from the main one: every read-change-write of the book
+# holds this lock, so a sale and a buy can never overwrite each other (one writer at a time)
+LOCK = threading.RLock()
 
 
 def _cost_pct(usd: float, liq: float | None) -> float:
@@ -81,36 +84,40 @@ def guard(mint: str) -> str | None:
 
 
 def open_position(mint, symbol, price, liq_usd, usd=TICKET_USD, vaults=None, sol0=None):
-    book = load()
-    if COSTS:   # the entry is what the tokens really cost: fee and impact on top, the tx fee off the ticket
-        price = price * (1 + _cost_pct(usd, liq_usd) / 100)
-        qty = (usd - PAPER_COSTS["tx_usd"]) / price
-    else:
-        qty = usd / price
-    book[mint] = {"symbol": symbol, "entry": price, "qty0": qty, "qty": qty,
-                  "peak": price, "peak_t": time.time(), "liq0": liq_usd, "opened": time.time(), "steps": 0,
-                  "vaults": vaults, "sol0": sol0}     # PumpSwap only: VIGIE reads the pool on chain every tick
-    save(book)
-    record(mint, symbol, "open", usd, 0, "entry")
+    with LOCK:
+        book = load()
+        if COSTS:   # the entry is what the tokens really cost: fee and impact on top, the tx fee off the ticket
+            price = price * (1 + _cost_pct(usd, liq_usd) / 100)
+            qty = (usd - PAPER_COSTS["tx_usd"]) / price
+        else:
+            qty = usd / price
+        book[mint] = {"symbol": symbol, "entry": price, "qty0": qty, "qty": qty,
+                      "peak": price, "peak_t": time.time(), "liq0": liq_usd, "opened": time.time(), "steps": 0,
+                      "vaults": vaults, "sol0": sol0}     # PumpSwap only: VIGIE reads the pool on chain every tick
+        save(book)
+        record(mint, symbol, "open", usd, 0, "entry")
 
 
 def sell(mint, frac_of_original, price, reason, liq_usd=None) -> float:
     """Sells a fraction of the ORIGINAL size (1.0 = everything left). Returns realized pnl."""
-    book = load()
-    p = book[mint]
-    q = min(p["qty"], p["qty0"] * frac_of_original)
-    if COSTS and price > 0:
-        price = price * (1 - _cost_pct(q * price, liq_usd or p["liq0"]) / 100)
-        pnl = q * (price - p["entry"]) - PAPER_COSTS["tx_usd"]
-    else:
-        pnl = q * (price - p["entry"])
-    p["qty"] -= q
-    action = "close" if p["qty"] <= p["qty0"] * 1e-6 else "partial"
-    record(mint, p["symbol"], action, q * price, pnl, reason)
-    if action == "close":
-        del book[mint]
-    save(book)
-    return pnl
+    with LOCK:
+        book = load()
+        if mint not in book:              # already closed by the other thread a moment ago
+            return 0.0
+        p = book[mint]
+        q = min(p["qty"], p["qty0"] * frac_of_original)
+        if COSTS and price > 0:
+            price = price * (1 - _cost_pct(q * price, liq_usd or p["liq0"]) / 100)
+            pnl = q * (price - p["entry"]) - PAPER_COSTS["tx_usd"]
+        else:
+            pnl = q * (price - p["entry"])
+        p["qty"] -= q
+        action = "close" if p["qty"] <= p["qty0"] * 1e-6 else "partial"
+        record(mint, p["symbol"], action, q * price, pnl, reason)
+        if action == "close":
+            del book[mint]
+        save(book)
+        return pnl
 
 
 if __name__ == "__main__":

@@ -137,11 +137,14 @@ def leads() -> list[str]:
     graduates = [a for a in grads.recent() if a not in done and a not in out]
     out += graduates
     n_feeds_search_grads = len(out)
+    src = {m: "graduation pump.fun" for m in graduates}
     trend = [a for a in gt_trending() if a not in done and a not in out]
     out += trend
     import jup                                 # the most organic trading of the hour, per Jupiter
     top = [a for a in jup.top_organic("1h") if a not in done and a not in out and a not in NOT_MEMES]
     out += top
+    src.update({m: "tendance GeckoTerminal" for m in trend})
+    src.update({m: "top organique Jupiter" for m in top})
     # one batched pool read for every lead: most are bonding-curve tokens with no real pool yet.
     # they are not logged, they just come back next run, so the slots go to tokens that can pass
     live.update(market.pools([m for m in out if m not in live]))
@@ -167,7 +170,13 @@ def leads() -> list[str]:
     mixed = [m for pair in zip(early, mom) for m in pair] + early[len(mom):] + mom[len(early):]
     global last_lanes
     last_lanes = {"early": len(early), "momentum": len(mom)}
-    return mixed[:SCHEDULE["scan_per_run"]]
+    picked = mixed[:SCHEDULE["scan_per_run"]]
+    import dossier
+    for m in picked:
+        dossier.add(m, "SCOUT", "repéré", source=src.get(m, "listes DexScreener"), lane=market.lane(live[m]),
+                    liq_usd=round(live[m]["liq_usd"]), age_min=live[m].get("age_min"),
+                    chg_1h=live[m].get("chg_1h"), avg_trade=round(live[m].get("avg_trade_1h") or 0, 1))
+    return picked
 
 
 def scan() -> list[dict]:

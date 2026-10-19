@@ -27,6 +27,15 @@ def snapshot(mint: str, wallets: list[str]):
 SEED = os.path.join(os.path.dirname(os.path.abspath(__file__)), "seeds", "factory_wallets.json")
 
 
+def holders(mint: str) -> list[str]:
+    """The holder wallets GARDE recorded for this token, if any."""
+    try:
+        with open(os.path.join(HOLDERS, f"{mint}.json")) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return []
+
+
 def memory() -> dict:
     """What the desk learned, on top of the factory wallets found by hand (seeds/), which count as
     two crashes each: they sold in the one-block dumps of several Oct 19 rugs."""

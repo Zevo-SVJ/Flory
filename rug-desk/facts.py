@@ -54,7 +54,7 @@ def _rpc(method: str, params: list | dict):
 
 
 def _goplus(mint: str) -> dict:
-    r = requests.get(GOPLUS, params={"contract_addresses": mint}, timeout=30)
+    r = requests.get(GOPLUS, params={"contract_addresses": mint}, timeout=12)
     r.raise_for_status()
     d = r.json()
     res = (d.get("result") or {}).get(mint)

@@ -5,7 +5,7 @@
 import csv, json, os, time
 from config import DATA, ECHO_TIMEOUT_MIN, TICKET_USD, PAPER, ECHO_SILENT_MIN, ECHO_FALLBACK_SCORE
 from market import pool, market_kill
-import book
+import book, dossier
 
 MOMENTUM_DROP_PCT = 25     # down this much between the PASS and ECHO's BUY -> not bought
 
@@ -52,11 +52,11 @@ def write_queue(p: dict, done: dict):
     tmp = X_QUEUE + ".tmp"
     with open(tmp, "w", newline="") as f:
         w = csv.writer(f)
-        w.writerow(["mint", "symbol", "score", "flags", "waiting_min", "x_by_ca", "x_by_ticker"])
+        w.writerow(["mint", "symbol", "score", "flags", "waiting_min", "x_by_ca", "x_by_ticker", "contexte"])
         for m, v in rows:
             w.writerow([m, v["symbol"], v.get("score"), " ".join(v.get("flags") or []),
                         round((time.time() - v["since"]) / 60), f"https://x.com/search?q={m}&f=live",
-                        f"https://x.com/search?q=%24{v['symbol']}&f=live"])
+                        f"https://x.com/search?q=%24{v['symbol']}&f=live", dossier.brief(m)])
     os.replace(tmp, X_QUEUE)
 
 
@@ -90,6 +90,8 @@ def decide() -> list[dict]:
             if x or waited > ECHO_TIMEOUT_MIN * 60:
                 del p[mint]
                 if x:
+                    dossier.add(mint, "ECHO", x["verdict"].upper(), raison=x.get("raison"))
+                if x:
                     out.append({"kind": "info", "symbol": sym, "mint": mint,
                                 "text": f"${sym} X read after the buy: {x['verdict'].upper()} ({x.get('raison', '')[:70]})"})
                 if x and x["verdict"].upper() in ("SCAM", "SKIP") and mint in book.load():
@@ -108,6 +110,8 @@ def decide() -> list[dict]:
                 and (v.get("score") or 0) >= ECHO_FALLBACK_SCORE):
             x = {"verdict": "BUY", "raison": "NO X, ECHO silent, score " + str(v.get("score"))}
             mark_no_x(mint, sym)
+        if x and x["verdict"].upper() in ("BUY", "SKIP", "SCAM") and not x.get("raison", "").startswith("NO X"):
+            dossier.add(mint, "ECHO", x["verdict"].upper(), raison=x.get("raison"))
         if x and x["verdict"].upper() == "BUY":
             del p[mint]
             if (g := book.guard(mint)):
@@ -158,6 +162,7 @@ def decide() -> list[dict]:
             continue                          # no price now: VIGIE's chain read decides, not a blind sale at 0
         why = "x_" + x["verdict"].lower()
         pnl = book.sell(mint, 1.0, price, why, (m or {}).get("liq_usd"))
+        dossier.add(mint, "VIGIE", "vente", reason=why, pct=round((price / pos["entry"] - 1) * 100, 1), pnl=round(pnl, 2))
         out.append({"kind": "sell", "symbol": pos["symbol"], "mint": mint, "pnl": pnl, "reason": why, "closed": True,
                     "pct": (price / pos["entry"] - 1) * 100,
                     "text": f"{pos['symbol']}: sold on ECHO's {x['verdict'].upper()} read, pnl ${pnl:+.2f}"})

@@ -56,6 +56,9 @@ def audit(limit: int = 60) -> list[dict]:
                    "price_after": p1, "change_pct": round((p1 / p0 - 1) * 100, 1), "hours": round(hours, 1)}
             w.writerow(row)
             out.append(row)
+            import dossier
+            dossier.add(r["mint"], "AUDIT", "6 h après", change_pct=row["change_pct"], hours=row["hours"],
+                        verdict=r["verdict"], reason=r["reason"])
             smart.learn(r["mint"], row["change_pct"])     # the early holders of a runner or a crasher
             if row["change_pct"] <= RUG_PCT:          # near-total collapse: the creator goes on the blacklist
                 ruggers.add(ruggers.dev_of(r["mint"]), r["mint"], r["symbol"],

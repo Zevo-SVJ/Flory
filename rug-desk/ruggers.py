@@ -82,5 +82,9 @@ def funder_rugged(mint: str, symbol: str) -> str | None:
     return f
 
 
+def funder_of(mint: str) -> str | None:
+    return _load(SEEN).get(mint)
+
+
 def funders() -> set[str]:
     return set(_load(FUNDERS))

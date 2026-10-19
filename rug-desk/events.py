@@ -1,14 +1,16 @@
 # events.py
 # the desk's shared memory between agents and the dashboard: one line per thing that happened.
-import json, os, time
+import json, os, threading, time
 from config import DATA, EVENTS, AGENTS
+
+_LOCK = threading.Lock()      # VIGIE has its own thread: one writer at a time on these two files
 
 
 def emit(agent: str, kind: str, text: str, **extra) -> dict:
     """kind: scan, kill, pass, buy, sell, x, audit, report, error, info"""
     os.makedirs(DATA, exist_ok=True)
     e = {"id": time.time_ns(), "t": time.time(), "agent": agent, "kind": kind, "text": text, **extra}
-    with open(EVENTS, "a") as f:
+    with _LOCK, open(EVENTS, "a") as f:
         f.write(json.dumps(e) + "\n")
     return e
 
@@ -45,14 +47,15 @@ def count() -> int:
 def set_agent(name: str, **fields):
     """Each agent's live status: what it's doing, when it last ran, how often it failed."""
     os.makedirs(DATA, exist_ok=True)
-    state = agents()
-    a = state.setdefault(name, {"runs": 0, "errors": 0})
-    a.update(fields)
-    a["t"] = time.time()
-    tmp = AGENTS + ".tmp"
-    with open(tmp, "w") as f:
-        json.dump(state, f)
-    os.replace(tmp, AGENTS)
+    with _LOCK:
+        state = agents()
+        a = state.setdefault(name, {"runs": 0, "errors": 0})
+        a.update(fields)
+        a["t"] = time.time()
+        tmp = AGENTS + f".{threading.get_ident()}.tmp"
+        with open(tmp, "w") as f:
+            json.dump(state, f)
+        os.replace(tmp, AGENTS)
 
 
 def agents() -> dict:

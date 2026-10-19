@@ -790,6 +790,58 @@ class EchoSkipRetro(Base):
         self.assertEqual(ev[-1]["reason"], "x_skip")
 
 
+class Team(Base):
+    """What makes them a team: one book, shared dossiers, a rug that reaches every agent."""
+    def test_a_rug_sells_the_positions_its_holders_are_in(self):
+        import agents, smart
+        wallets = [f"F{i}" for i in range(8)]
+        smart.snapshot("RUGGED", wallets)
+        smart.snapshot(MINT, wallets[:6] + ["X1", "X2"])        # 6 holders in common
+        smart.snapshot("CLEAN", ["Y1", "Y2", "F0"])             # 1 in common
+        book.open_position(MINT, "TWIN", 0.001, 80000)
+        book.open_position("CLEAN", "CLEAN", 0.001, 80000)
+        with net():
+            agents.on_rug("RUGGED", "RUG", "liquidity_pulled")
+        self.assertNotIn(MINT, book.load())
+        self.assertIn("CLEAN", book.load())
+        import shutil
+        shutil.rmtree(smart.HOLDERS, ignore_errors=True)
+        for f in (smart.MEMORY,):
+            if os.path.exists(f):
+                os.remove(f)
+
+    def test_a_sale_on_a_closed_position_is_a_no_op(self):
+        book.open_position(MINT, "TEST", 0.001, 80000)
+        book.sell(MINT, 1.0, 0.002, "test")
+        self.assertEqual(book.sell(MINT, 1.0, 0.002, "test again"), 0.0)
+
+    def test_every_agent_writes_the_same_dossier(self):
+        import dossier, pending
+        for f in (pending.PENDING, pending.X_READS, pending.X_QUEUE):
+            if os.path.exists(f):
+                os.remove(f)
+        self.addCleanup(setattr, check, "ECHO_MODE", check.ECHO_MODE)
+        check.ECHO_MODE = "observe"
+        with net():
+            check.run(MINT)
+            pending.decide()
+        whats = [(e["agent"], e["what"]) for e in dossier.load(MINT)["entries"]]
+        self.assertIn(("GARDE", "PASS"), whats)
+        self.assertIn(("GARDE", "achat"), whats)
+        with open(pending.X_QUEUE) as f:
+            self.assertIn("note", f.read())                     # ECHO's queue carries GARDE's case
+
+    def test_vigie_runs_on_its_own_thread(self):
+        import agents, threading
+        calls = []
+        with mock.patch.object(agents, "vigie", lambda: calls.append(1) or "ok"):
+            stop = threading.Event()
+            th = agents.start_vigie(stop)
+            time.sleep(0.3)
+            stop.set(); th.join(2)
+        self.assertTrue(calls)
+
+
 class OnChainVigie(Base):
     def test_a_drained_pool_is_sold_even_if_dexscreener_lags(self):
         book.open_position(MINT, "TEST", 0.001, 80000, vaults=["VB", "VQ"], sol0=200)

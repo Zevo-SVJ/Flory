@@ -123,7 +123,7 @@ header { display: flex; align-items: center; gap: 14px; }
 .pctlabel { font-family: var(--mono); font-size: 12px; font-weight: 600; }
 
 /* agents */
-.agents { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; }
+.agents { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
 .agent { position: relative; text-align: center; padding: 10px 8px 8px; border-radius: 16px; background: var(--card);
          border: 1px solid var(--ring); transition: border-color .3s, box-shadow .3s, transform .3s; min-width: 0; }
 .agent::before { content: ""; position: absolute; left: 14px; top: 10px; width: 18px; height: 4px; border-radius: 4px; background: var(--c); }
@@ -153,10 +153,10 @@ header { display: flex; align-items: center; gap: 14px; }
 .agent:hover, .agent:focus-visible { border-color: color-mix(in srgb, var(--c) 55%, var(--ring)); outline: none; }
 
 /* agent panel: everything about one agent, only when asked */
-#panel { width: min(980px, calc(100vw - 32px)); max-height: calc(100vh - 48px); padding: 0; border: 1px solid var(--ring-strong);
+#panel, #dossier { width: min(980px, calc(100vw - 32px)); max-height: calc(100vh - 48px); padding: 0; border: 1px solid var(--ring-strong);
          border-radius: 18px; background: var(--card-solid); color: var(--ink); overflow: hidden; }
-#panel[open] { display: flex; flex-direction: column; animation: pop .25s ease; }
-#panel::backdrop { background: rgba(10,6,12,.55); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+#panel[open], #dossier[open] { display: flex; flex-direction: column; animation: pop .25s ease; }
+#panel::backdrop, #dossier::backdrop { background: rgba(10,6,12,.55); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
 .phead { display: flex; align-items: center; gap: 14px; padding: 16px 20px; border-bottom: 1px solid var(--ring);
          background: color-mix(in srgb, var(--c) 7%, var(--card-solid)); }
 .phead .blob { width: 44px; height: 38px; margin: 0; flex: none; }
@@ -174,6 +174,12 @@ header { display: flex; align-items: center; gap: 14px; }
 .does { margin: 0; padding-left: 18px; color: var(--ink-2); font-size: 13px; line-height: 1.6; }
 .now { font-family: var(--mono); font-size: 12px; color: var(--ink); }
 .pane[hidden] { display: none; }
+.tok { cursor: pointer; color: #8fb8f0; } .tok:hover { text-decoration: underline; }
+.dline { display: grid; grid-template-columns: 52px 64px 110px minmax(0, 1fr); gap: 10px; padding: 6px 0;
+         border-bottom: 1px solid var(--grid); font-family: var(--mono); font-size: 12px; align-items: baseline; }
+.dline .ag { font-weight: 600; letter-spacing: .08em; }
+.dline .facts { color: var(--ink-2); font-family: var(--sans); overflow-wrap: anywhere; }
+@media (max-width: 560px) { .dline { grid-template-columns: 44px 56px minmax(0, 1fr); } .dline .what { display: none; } }
 .srcs { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 8px; }
 .src { border: 1px solid var(--ring); border-radius: 10px; padding: 8px 10px; font-family: var(--mono); font-size: 12px; }
 .src .d { color: var(--muted); font-size: 11px; margin-top: 2px; overflow-wrap: anywhere; }
@@ -356,9 +362,17 @@ a { color: #8fb8f0; text-decoration: none; } a:hover { text-decoration: underlin
         <div class="scroll"><table id="byAge"></table></div>
       </div>
     </section>
-    <section class="pane" data-agent="PLUME" hidden><h3>Dernier rapport</h3><pre class="now" id="plumeReport" style="white-space:pre-wrap;margin:0"></pre></section>
+    <section class="pane" data-agent="AUDIT" hidden><h3>Dernier rapport</h3><pre class="now" id="plumeReport" style="white-space:pre-wrap;margin:0"></pre></section>
     <section><h3>Ses dernières actions</h3><div id="pevents"></div></section>
   </div>
+</dialog>
+<dialog id="dossier" aria-labelledby="dname">
+  <div class="phead">
+    <div><h2 id="dname"></h2><div class="role">le dossier du token : ce que chaque agent a vu, dans l'ordre</div></div>
+    <div class="state"><a id="dlink" target="_blank" rel="noopener noreferrer">DexScreener ↗</a></div>
+    <button class="pclose" id="dclose" aria-label="Fermer">×</button>
+  </div>
+  <div class="pbody"><div id="dbody"></div></div>
 </dialog>
 <div id="tip"></div>
 <div id="mega" role="dialog" aria-live="polite"><div class="megaring"><div class="megacard"><div class="t1"><i>✦</i><span id="megaTitle">MEGA PROFIT</span><i>✦</i></div><div class="sym" id="megaSym"></div><div class="pct" id="megaPct"></div><div class="usd" id="megaUsd"></div></div></div></div>
@@ -558,8 +572,8 @@ const DOES = {
           "Toutes les 2 h, relève les tendances de X : SCOUT cherche ces mots en premier."],
   AUDIT: ["Re-prix chaque verdict 6 h après : le filtre a-t-il tué des rugs ou des gagnants ?",
           "Apprend les wallets gagnants et ceux des rugs, met les devs qui rug sur liste noire.",
-          "Décide si le desk est prêt pour l'argent réel : 50 trades et un gain moyen positif avec 95 % de confiance."],
-  PLUME: ["Écrit le rapport du soir et le brief du matin à partir des fichiers du desk, rien de mémoire."],
+          "Décide si le desk est prêt pour l'argent réel : 50 trades et un gain moyen positif avec 95 % de confiance.",
+          "Écrit le rapport du soir et le brief du matin à partir des fichiers du desk, rien de mémoire."],
 };
 const STATE_TXT = { work: "en action", idle: "en attente", error: "erreur" };
 let current = null;
@@ -605,10 +619,41 @@ function drawPanel() {
     ["helius_das", "Helius (holders)", K.helius ? null : "RPC public : liste des holders limitée"],
     ["jupiter", "Jupiter"],
     ["stracker", `Solana Tracker · ${S.stracker_today || 0}/${S.stracker_cap || 75} auj.`, K.stracker ? null : "clé manquante"]]);
-  if (a.name === "PLUME") $("plumeReport").textContent = S.last_report || "Pas encore de rapport : le premier arrive à " + (S.report_at || "21:30") + ".";
+  if (a.name === "AUDIT") $("plumeReport").textContent = S.last_report || "Pas encore de rapport : le premier arrive à " + (S.report_at || "21:30") + ".";
   const evs = S.events.filter(e => e.agent === a.name).slice(0, 8);
   $("pevents").replaceChildren(...(evs.length ? evs.map(eventLine) : [el("div", { class: "empty" }, "Rien dans le journal récent.")]));
 }
+const FACT_LABELS = { source: "source", lane: "voie", liq_usd: "liquidité $", age_min: "âge (min)", chg_1h: "1 h %",
+  avg_trade: "trade moyen $", stage: "étape", reason: "raison", score: "note", flags: "signaux faibles", tier: "mise",
+  signals: "signaux", ticket: "ticket $", usd: "mise $", price: "prix", organic: "organique", organic_vol: "volume organique %",
+  dev_mints: "lancements du dev", cluster_pct: "cluster %", fresh_pct: "wallets neufs %", bundlers_pct: "bundlers %",
+  insiders_pct: "insiders %", snipers_pct: "snipers %", factory_wallets: "wallets d'usine", raison: "raison",
+  pct: "variation %", pnl: "PnL $", closed: "clôturé", change_pct: "variation 6 h %", hours: "heures", verdict: "verdict" };
+function tokenCell(mint, symbol) {
+  const s = el("span", { class: "tok", role: "button", tabindex: "0", title: "ouvrir le dossier" }, "$" + (symbol || mint.slice(0, 6)));
+  s.addEventListener("click", () => openDossier(mint, symbol));
+  s.addEventListener("keydown", (e) => { if (e.key === "Enter") openDossier(mint, symbol); });
+  return s;
+}
+async function openDossier(mint, symbol) {
+  $("dname").textContent = "$" + (symbol || mint.slice(0, 6));
+  $("dlink").href = `https://dexscreener.com/solana/${mint}`;
+  $("dbody").replaceChildren(el("div", { class: "empty" }, "chargement…"));
+  $("dossier").showModal();
+  const d = await fetch("/api/dossier?mint=" + encodeURIComponent(mint)).then(r => r.json()).catch(() => ({ entries: [] }));
+  const rows = (d.entries || []).map(e => {
+    const facts = Object.entries(e).filter(([k]) => !["t", "agent", "what", "symbol"].includes(k))
+      .map(([k, v]) => `${FACT_LABELS[k] || k} : ${Array.isArray(v) ? v.join(", ") : v}`).join(" · ");
+    const ag = el("span", { class: "ag" }, e.agent); ag.style.color = AGENT_COLORS[e.agent] || "var(--ink-2)";
+    const r = el("div", { class: "dline" });
+    r.append(el("span", { class: "clock" }, new Date(e.t * 1000).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })),
+             ag, el("span", { class: "what" }, e.what), el("span", { class: "facts" }, facts));
+    return r;
+  });
+  $("dbody").replaceChildren(...(rows.length ? rows : [el("div", { class: "empty" }, "Pas encore de dossier pour ce token (il date d'avant cette version).")]));
+}
+$("dclose").addEventListener("click", () => $("dossier").close());
+$("dossier").addEventListener("click", (e) => { if (e.target === $("dossier")) $("dossier").close(); });
 function openPanel(name) { current = name; $("panel").showModal(); drawPanel(); }
 $("agents").addEventListener("click", (e) => { const c = e.target.closest(".agent"); if (c) openPanel(c.dataset.name); });
 $("agents").addEventListener("keydown", (e) => {
@@ -651,7 +696,7 @@ const killLabel = (k) => KILLS[k] || (k && k.startsWith("danger:") ? "Piège Tok
 
 function drawPanels() {
   table("open", [["Token"], ["Entrée", 1], ["Prix", 1], ["Variation", 1], ["Plus haut", 1], ["Reste", 1], ["Depuis", 1], ["PnL latent", 1]],
-    S.open.map(p => [link(`https://dexscreener.com/solana/${p.mint}`, "$" + (p.symbol || p.mint.slice(0, 6))),
+    S.open.map(p => [tokenCell(p.mint, p.symbol),
       p.entry.toPrecision(3), p.price ? p.price.toPrecision(3) : "…", span(sign(p.pct), pct(p.pct, 0)), span(sign(p.peak_pct), pct(p.peak_pct, 0)),
       Math.round(p.left_pct) + "%", p.hours < 1 ? Math.round(p.hours * 60) + " min" : p.hours.toFixed(1) + " h",
       p.pnl == null ? "…" : span(sign(p.pnl), usd(p.pnl))]),
@@ -663,7 +708,7 @@ function drawPanels() {
     c.append(el("div", { class: "label" }, `${l} · ${v.n}`), el("div", { class: "v " + sign(v.pnl) }, usd(v.pnl))); g.append(c);
   });
   table("experiment", [["Token"], ["Note", 1], ["X"], ["Pourquoi"], ["Statut"], ["PnL", 1]],
-    S.experiment.map(e => [link(`https://dexscreener.com/solana/${e.mint}`, "$" + (e.symbol || e.mint.slice(0, 6))),
+    S.experiment.map(e => [tokenCell(e.mint, e.symbol),
       el("span", { title: flagText(e.flags) || "aucun signal" }, e.score == null ? "–" : String(e.score)),
       el("span", { class: "pill" }, e.x || "non lu"), el("div", { class: "why" }, e.why || flagText(e.flags)),
       el("span", { class: "pill" }, e.status),

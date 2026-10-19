@@ -23,8 +23,7 @@ AGENTS = [   # fixed order = fixed color slot on the page
     ("SCOUT", "trouve les tokens", "graduations pump.fun, tendances, toutes les 3 min"),
     ("GARDE", "tue les rugs", "pool, nom, contrat, holders, lecture approfondie"),
     ("ECHO", "lit X", "Claude dans Chrome, verdict BUY/SKIP par PASS"),
-    ("AUDIT", "vérifie le filtre", "re-prix des verdicts 6 h après"),
-    ("PLUME", "écrit le rapport", "bilan du soir à 21:30"),
+    ("AUDIT", "apprend et rend compte", "re-prix des verdicts 6 h après, rapports du soir et du matin"),
 ]
 
 
@@ -231,6 +230,13 @@ class Handler(BaseHTTPRequestHandler):
         if url.path == "/api/state":
             rng = parse_qs(url.query).get("range", ["auto"])[0]
             body, kind = json.dumps(state(rng)).encode(), "application/json"
+        elif url.path == "/api/dossier":
+            import dossier
+            mint = parse_qs(url.query).get("mint", [""])[0]
+            if not SOLANA_ADDRESS.match(mint):
+                self.send_error(400)
+                return
+            body, kind = json.dumps(dossier.load(mint)).encode(), "application/json"
         elif url.path in ("/", "/index.html"):
             with open(os.path.join(HERE, "dashboard.html"), "rb") as f:
                 body, kind = f.read(), "text/html; charset=utf-8"

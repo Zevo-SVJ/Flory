@@ -128,6 +128,28 @@ VIGIE also reads each PumpSwap position's pool vaults on chain every 20 s, so a 
 on the next tick even when DexScreener lags or drops the pair. ECHO can answer SCAM (concrete evidence on
 X): the desk sells at once.
 
+## The team
+
+A job is an agent only when it needs its own clock, its own failure domain or its own tools; the rest
+are functions. Five pass the bar (PLUME, a scheduled report, is now AUDIT's job):
+
+| agent | why it is separate | runs |
+|---|---|---|
+| VIGIE | the only latency-critical job: positions re-priced on chain every 20 s, whatever the others wait on | its own thread; restarted by the main loop if it dies, and it warns if the main loop stalls 5 min |
+| SCOUT | cheap and broad, the funnel's first cut | every 3 min |
+| GARDE | expensive and deep: checks, deep read, the buy (cost asymmetry with SCOUT) | per lead, + ECHO's reads every 30 s |
+| ECHO | the only job that needs a model and a browser | its own Claude session |
+| AUDIT | the slow learning loop and the reports | every 30 min, reports at 21:30 and 08:00 |
+
+How they work as one (following "share context" and "one writer at a time"):
+- **one book, one writer at a time**: book.LOCK around every buy and sale, so VIGIE's thread and GARDE
+  can never overwrite each other; a sale on a position already closed is a no-op
+- **a shared dossier per token** (dossier.py, data/dossiers/): SCOUT's source, GARDE's verdict and every
+  measure, ECHO's read, VIGIE's sale, AUDIT's 6 h price. ECHO's queue carries GARDE's case in one line;
+  the dashboard shows the dossier when you click a token
+- **a rug reaches every agent** (agents.on_rug): holders remembered at once, creator and cluster funder
+  blacklisted, and any other open position sharing 5+ holders or the funder is sold (contagion)
+
 ## Two lanes
 
 | lane | what | sources | rules |

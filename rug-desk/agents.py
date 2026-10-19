@@ -1,20 +1,22 @@
 # agents.py
-# the desk as a team. each agent has one job, its own clock, and its own status on the dashboard.
-#   VIGIE  every 20 s   prices every open position, fires exits, logs the balance
-#   SCOUT  every 10 min pulls fresh leads and hands each one to GARDE
-#   GARDE  per lead     limits, pool and contract checks: the 13 ways a token dies
-#   AUDIT  every 30 min re-prices old verdicts: did the filter kill crashers or winners?
-#   PLUME  daily        the evening report
-#   ECHO   outside      the Claude-in-Chrome X reader (its own session); the dashboard tracks it
-# one process, so no two agents ever write the same file at the same time.
-import json, os, time, traceback
+# the desk as a team. a job is an agent only when it needs its own clock, its own failure domain or its
+# own tools; everything else is a function. five agents pass that bar:
+#   VIGIE  own thread, 20 s   the only latency-critical job: prices positions on chain, fires exits.
+#                              it never waits for the others, and it watches the main loop
+#   SCOUT  every 3 min        cheap and broad: every source, the funnel's first cut
+#   GARDE  per lead           expensive and deep: the checks, the deep read, the buy (cost asymmetry
+#                              with SCOUT is why they are two). also settles ECHO's reads every 30 s
+#   ECHO   own Claude session the only job that needs a model and a browser (X)
+#   AUDIT  every 30 min       the slow loop: re-prices verdicts, learns wallets, writes the reports
+# one writer at a time on the book (book.LOCK) and on the event log (events._LOCK).
+import json, os, threading, time, traceback
 from config import SCHEDULE, PAPER, JUDGE, DATA, EQUITY, PAPER_BANKROLL_USD, TICKET_USD
 
 MARKS = os.path.join(DATA, "marks.json")
 INBOX = os.path.join(DATA, "inbox.txt")      # CAs pasted in the dashboard, checked by GARDE
 from events import emit, set_agent, agents as agent_state
 from notify import post
-import book, watch, scan, check, audit, report, pending, exitlab, ruggers, health, facts, smart, sources
+import book, watch, scan, check, audit, report, pending, exitlab, ruggers, health, facts, smart, sources, market
 
 
 def beat():
@@ -51,17 +53,8 @@ def vigie():
             continue
         emit("VIGIE", "sell", e["text"], symbol=e["symbol"], mint=e["mint"], pnl=round(e["pnl"], 2),
              pct=round(e["pct"], 1), reason=e["reason"], closed=e.get("closed"))
-        if e["reason"] in ("liquidity_pulled", "pool_gone", "x_scam"):   # x_skip is a doubt, not a rug
-            n = smart.learn(e["mint"], -100)       # its holders now count one rug each, at once, not in 6 h
-            if n:
-                emit("VIGIE", "kill", f"${e['symbol']}: {n} holder wallets remembered as rug holders", symbol=e["symbol"])
-        if e["reason"] in ("liquidity_pulled", "pool_gone") and (f := ruggers.funder_rugged(e["mint"], e["symbol"])):
-            emit("VIGIE", "kill", f"${e['symbol']}: its holders' funder {f[:6]}… blacklisted, GARDE kills any "
-                                  "token whose holders it funded", symbol=e["symbol"])
-        if e["reason"] in ("liquidity_pulled", "pool_gone") and ruggers.add(
-                ruggers.dev_of(e["mint"]), e["mint"], e["symbol"], e["reason"]):
-            emit("VIGIE", "kill", f"${e['symbol']}: creator blacklisted ({e['reason']}), "
-                                  "GARDE will kill every token it launches", symbol=e["symbol"])
+        if e["reason"] in RUG_EXITS:
+            on_rug(e["mint"], e["symbol"], e["reason"])
         post(e["text"])
     log_equity(marks)
     tmp = MARKS + ".tmp"        # live prices for the dashboard, so it never calls an API itself
@@ -70,6 +63,45 @@ def vigie():
     os.replace(tmp, MARKS)
     n = len(book.load())
     return f"{n} position(s) surveillée(s)" + (f", {len(exits)} sortie(s)" if exits else "")
+
+
+RUG_EXITS = ("liquidity_pulled", "pool_gone", "x_scam")     # x_skip is a doubt, not a rug
+CONTAGION_SHARED = 5          # open positions sharing this many holder wallets with a rug are sold
+
+
+def on_rug(mint: str, symbol: str, reason: str):
+    """Everything the team does when a position rugs, whoever saw it (VIGIE on chain, ECHO on X):
+    remember its holders, blacklist its creator and its cluster funder, and sell any other open position
+    the same hands are in. a factory runs several tokens at once with one wallet pool (Oct 19)."""
+    n = smart.learn(mint, -100)                # its holders count one rug each, at once, not in 6 h
+    if n:
+        emit("VIGIE", "kill", f"${symbol}: {n} holder wallets remembered as rug holders", symbol=symbol)
+    funder = ruggers.funder_of(mint)
+    if reason != "x_scam" and ruggers.funder_rugged(mint, symbol):
+        emit("VIGIE", "kill", f"${symbol}: its holders' funder {funder[:6]}… blacklisted, GARDE kills any "
+                              "token whose holders it funded", symbol=symbol)
+    if reason != "x_scam" and ruggers.add(ruggers.dev_of(mint), mint, symbol, reason):
+        emit("VIGIE", "kill", f"${symbol}: creator blacklisted ({reason}), GARDE will kill every token it launches",
+             symbol=symbol)
+    rug_holders = set(smart.holders(mint))
+    for other, pos in book.load().items():
+        if other == mint:
+            continue
+        shared = len(rug_holders & set(smart.holders(other)))
+        same_funder = bool(funder) and ruggers.funder_of(other) == funder
+        if shared < CONTAGION_SHARED and not same_funder:
+            continue
+        m = market.pool(other)
+        price = (m or {}).get("price") or 0
+        if not price:
+            continue
+        pnl = book.sell(other, 1.0, price, "contagion", (m or {}).get("liq_usd"))
+        why = f"{shared} holders en commun" if shared >= CONTAGION_SHARED else "même financeur"
+        emit("VIGIE", "sell", f"{pos['symbol']}: sold on contagion from ${symbol} ({why}), pnl ${pnl:+.2f}",
+             symbol=pos["symbol"], mint=other, pnl=round(pnl, 2), pct=round((price / pos["entry"] - 1) * 100, 1),
+             reason="contagion", closed=True)
+        import dossier
+        dossier.add(other, "VIGIE", "vente", reason="contagion", source=f"${symbol} ({why})", pnl=round(pnl, 2))
 
 
 down = set()        # sources already reported down, so each outage is said once
@@ -99,13 +131,6 @@ def scout():
     set_agent("SCOUT", funnel=scan.last_funnel)
     for mint in leads:
         garde(mint)
-        # one process runs every agent: a batch of deep reads can take minutes, and open positions must
-        # not go unwatched meanwhile. VIGIE gets its turn between two leads
-        if time.time() - _vigie_last["t"] >= SCHEDULE["vigie_every_s"]:
-            try:
-                vigie()
-            except Exception as e:
-                emit("VIGIE", "error", f"between leads: {e}")
     return f"{len(leads)} lead(s) envoyé(s) à GARDE"
 
 
@@ -175,6 +200,8 @@ def gate():
     for e in events:
         agent = {"buy": "GARDE", "sell": "VIGIE"}.get(e["kind"], "ECHO")
         emit(agent, e["kind"], e["text"], **{k: v for k, v in e.items() if k not in ("kind", "text")})
+        if e["kind"] == "sell" and e.get("reason") in RUG_EXITS:
+            on_rug(e["mint"], e["symbol"], e["reason"])
         if e["kind"] == "buy":
             post(e["text"])
     n = len(pending.load())
@@ -203,23 +230,65 @@ def auditor():
 
 
 def plume():
+    """The evening report. AUDIT writes it: a scheduled summary is a job, not an agent of its own."""
     text = report.report()
-    emit("PLUME", "report", text)
+    emit("AUDIT", "report", text)
     post(text)
     return "rapport du soir publié"
 
 
 def plume_morning():
     text = report.morning()
-    emit("PLUME", "report", text)
+    emit("AUDIT", "report", text)
     post(text)
     return "brief du matin publié"
 
 
+def run_job(name: str, job, every: float | None):
+    """One turn of one agent: its status before and after, its errors counted, never fatal."""
+    set_agent(name, status="work", msg="au travail…")
+    try:
+        msg = job()
+        set_agent(name, status="idle", msg=msg, runs=load_runs(name) + 1,
+                  next=time.time() + every if every else None)
+    except Exception as e:
+        set_agent(name, status="error", msg=str(e)[:160],
+                  errors=agent_state().get(name, {}).get("errors", 0) + 1,
+                  next=time.time() + every if every else None)
+        if name != "SCOUT":     # SCOUT already said which source is down
+            emit(name, "error", traceback.format_exc(limit=2)[-300:])
+
+
+def vigie_loop(stop: threading.Event):
+    """VIGIE on its own clock. Every other agent waits on the network (a deep read can take a minute);
+    an open position must be re-priced every 20 s whatever they do. It also watches the main loop."""
+    every = SCHEDULE["vigie_every_s"]
+    warned = False
+    while not stop.is_set():
+        t0 = time.time()
+        run_job("VIGIE", vigie, every)
+        hb = _main_beat["t"]
+        if hb and time.time() - hb > 300 and not warned:   # the main loop has not turned in 5 min
+            emit("DESK", "error", "la boucle principale (SCOUT, GARDE, AUDIT) est bloquée depuis 5 min : "
+                                  "VIGIE continue de surveiller les positions")
+            warned = True
+        elif hb and time.time() - hb < 60:
+            warned = False
+        stop.wait(max(1.0, every - (time.time() - t0)))
+
+
+_main_beat = {"t": 0.0}
+
+
+def start_vigie(stop: threading.Event) -> threading.Thread:
+    th = threading.Thread(target=vigie_loop, args=(stop,), name="VIGIE", daemon=True)
+    th.start()
+    return th
+
+
 def main():
     now = time.time()
-    plan = {   # name: (job, seconds between runs or None for daily, next run)
-        "VIGIE": [vigie, SCHEDULE["vigie_every_s"], now],
+    plan = {   # name: (job, seconds between runs or None for daily, next run). VIGIE has its own thread
         "SCOUT": [scout, SCHEDULE["scout_every_min"] * 60, now + 5],
         "AUDIT": [auditor, SCHEDULE["audit_every_min"] * 60, now + 60],
         "GARDE": [gate, 30, now + 10],
@@ -228,7 +297,6 @@ def main():
     # started after 08:00: today's brief is not owed (it would describe the hours before the desk ran)
     briefed_on = time.strftime("%Y-%m-%d") if time.strftime("%H:%M") >= SCHEDULE["morning_at"] else None
     set_agent("GARDE", status="idle", msg="attend les leads de SCOUT")
-    set_agent("PLUME", status="idle", msg=f"rapport à {SCHEDULE['report_at']}")
     emit("DESK", "info", f"Claude Bot up. {'PAPER' if PAPER else 'LIVE'} mode, bankroll ${PAPER_BANKROLL_USD}")
     post(f"CLAUDE BOT up. {'PAPER' if PAPER else 'LIVE'} mode, judge={JUDGE}, bankroll ${PAPER_BANKROLL_USD}. "
          f"VIGIE {SCHEDULE['vigie_every_s']}s, SCOUT {SCHEDULE['scout_every_min']}m, "
@@ -240,8 +308,14 @@ def main():
     if (h := health.summary()):            # what the last 24 h looked like, said once at start
         emit("DESK", "error", "dernières 24 h : " + h)
     jobs = list(plan.items())
+    stop = threading.Event()
+    vigie_thread = start_vigie(stop)
     last = time.time()
     while True:
+        _main_beat["t"] = time.time()
+        if not vigie_thread.is_alive():         # VIGIE must never stay down: restart it, say it once
+            emit("VIGIE", "error", "le fil de VIGIE s'était arrêté : relancé")
+            vigie_thread = start_vigie(stop)
         if time.time() - last > health.GAP_S:   # the loop sleeps 1 s: a long hole means the Mac slept
             health.record(last, time.time(), "sleep")
             fmt = lambda t: time.strftime("%H:%M", time.localtime(t))
@@ -251,24 +325,14 @@ def main():
         due = [(name, p) for name, p in jobs if time.time() >= p[2]]
         if time.strftime("%H:%M") >= SCHEDULE["report_at"] and reported_on != time.strftime("%Y-%m-%d"):
             reported_on = time.strftime("%Y-%m-%d")
-            due.append(("PLUME", [plume, None, 0]))
+            due.append(("AUDIT", [plume, None, 0]))
         if (SCHEDULE["morning_at"] <= time.strftime("%H:%M") < SCHEDULE["report_at"]
                 and briefed_on != time.strftime("%Y-%m-%d")):
             briefed_on = time.strftime("%Y-%m-%d")
-            due.append(("PLUME", [plume_morning, None, 0]))
+            due.append(("AUDIT", [plume_morning, None, 0]))
         for name, p in due:
             job, every = p[0], p[1]
-            set_agent(name, status="work", msg="au travail…")
-            try:
-                msg = job()
-                set_agent(name, status="idle", msg=msg, runs=load_runs(name) + 1,
-                          next=time.time() + every if every else None)
-            except Exception as e:
-                set_agent(name, status="error", msg=str(e)[:160],
-                          errors=agent_state().get(name, {}).get("errors", 0) + 1,
-                          next=time.time() + every if every else None)
-                if name != "SCOUT":     # SCOUT already said which source is down
-                    emit(name, "error", traceback.format_exc(limit=2)[-300:])
+            run_job(name, job, every)
             if every:
                 p[2] = time.time() + every
         try:

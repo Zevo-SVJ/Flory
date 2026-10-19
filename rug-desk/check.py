@@ -163,6 +163,11 @@ def run(mint: str) -> dict:
     v = check(mint)
     v.update(market.sol_regime() or {})
     log({"time": time.strftime("%Y-%m-%d %H:%M"), "mint": mint, **v})
+    import dossier
+    dossier.add(mint, "GARDE", v["verdict"], **{k: v.get(k) for k in (
+        "stage", "reason", "symbol", "lane", "score", "flags", "tier", "signals", "ticket", "price", "liq_usd",
+        "organic", "organic_vol", "dev_mints", "cluster_pct", "fresh_pct", "bundlers_pct", "insiders_pct",
+        "snipers_pct", "factory_wallets")})
     enter = v["verdict"] == "BUY" or (v["verdict"] == "PASS" and PAPER and PAPER_BUY_ON_PASS)
     if enter and (v.get("score") or 0) < MIN_SCORE:
         v["action"] = f"not bought: score {v['score']} < {MIN_SCORE} ({v.get('flags') or 'no flag'})"
@@ -174,6 +179,7 @@ def run(mint: str) -> dict:
     if enter and PAPER:
         book.open_position(mint, v["symbol"], v["price"], v["liq_usd"], usd=v.get("ticket") or TICKET_USD,
                            vaults=v.get("vaults"), sol0=v.get("sol0"))
+        dossier.add(mint, "GARDE", "achat", usd=v.get("ticket") or TICKET_USD, tier=v.get("tier"), price=v["price"])
         v["action"] = (f"PAPER BUY ${v.get('ticket') or TICKET_USD:.0f} ({v.get('tier', 'base')}"
                        + (f": {', '.join(v['signals'])}" if v.get("signals") else "") + f") at {v['price']}")
         if v["verdict"] == "PASS" and ECHO_MODE == "observe":   # ECHO still reads it, after the buy
