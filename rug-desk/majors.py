@@ -313,12 +313,15 @@ def simulate(series: dict, days: list[str], start: int, end: int, mode: str = "t
     an asset joins the day it has 200 closes (SOL in 2022, BTC in 2015): the book is never longer than the data."""
     names = list(series)
     cash, qty, curve, costs, trades, exposed, want = BANKROLL, {}, [], 0.0, 0, 0, None
+    drag = 0.0                                            # costs as % of the book when paid: $ grow with the book
     for i in range(start, end):
         d = days[i]
         px = {n: series[n][d][0] for n in names if d in series[n]}
         if want is not None:                              # yesterday's signal, filled at today's close
+            eq = cash + sum(q * px[n] for n, q in qty.items())
             cash, done = _move(cash, qty, px, want)
             costs += sum(f[3] for f in done)
+            drag += 100 * sum(f[3] for f in done) / eq if eq > 0 else 0
             trades += len(done)
             want = None
         curve.append(cash + sum(q * px[n] for n, q in qty.items()))
@@ -327,7 +330,7 @@ def simulate(series: dict, days: list[str], start: int, end: int, mode: str = "t
         now_in = live if mode == "hold" else {n for n in live if series[n][d][1]}
         if now_in != set(qty):
             want = now_in
-    return {"curve": curve, "costs": round(costs, 2), "trades": trades, "exposed": exposed / max(1, end - start)}
+    return {"curve": curve, "costs": round(costs, 2), "drag": drag, "trades": trades, "exposed": exposed / max(1, end - start)}
 
 
 def metrics(curve: list[float], years: float) -> dict:
@@ -403,6 +406,7 @@ def backtest_one(data: dict, names: list[str]) -> dict | None:
     v, why = verdict(full, halves)
     return {"assets": names, "from": days[0], "to": days[-1], "days": len(days), **full,
             "halves": halves, "trades": t["trades"], "costs": t["costs"],
+            "cost_pct_year": round(t["drag"] / _years(days), 2),
             "exposed": round(t["exposed"] * 100), "verdict": v, "why": why}
 
 
@@ -558,7 +562,7 @@ if __name__ == "__main__":
     r = backtest(data)
     for run in r["runs"]:
         print(f"\n{run['name']} ({run['from']} → {run['to']}, {run['days']} jours, {run['trades']} ordres, "
-              f"coûts ${run['costs']}, investi {run['exposed']} % du temps)")
+              f"coûts {run['cost_pct_year']} % du capital par an, investi {run['exposed']} % du temps)")
         print(f"  règle 200 j : {run['trend']['cagr']:+.1f} %/an, chute max {run['trend']['mdd']} %, Sharpe {run['trend']['sharpe']}")
         print(f"  garder      : {run['hold']['cagr']:+.1f} %/an, chute max {run['hold']['mdd']} %, Sharpe {run['hold']['sharpe']}")
         print(f"  → {run['verdict']} : {run['why']}")
