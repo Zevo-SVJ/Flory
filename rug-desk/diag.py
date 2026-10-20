@@ -42,6 +42,24 @@ if "--trades" in sys.argv:
         print(f"ouvert : {o['t']} {m[:20]} mise {o['usd']:.2f} $")
     sys.exit(0)
 
+if "--pos" in sys.argv:
+    # every open position as VIGIE sees it now: why it is still open. reads the book and the price paths
+    import exits, paths
+    prof = exits.active()
+    print(f"profil de sortie : stop {prof['stop_pct']} % · stop de temps {prof['time_stop_hours']} h sous +{prof['time_stop_min_pct']} %")
+    for m, pos in book.load().items():
+        hist = paths.load(m, since=time.time() - 3600)
+        last = hist[-1] if hist else None
+        print(f"{pos['symbol']} {m}")
+        print(f"  ouvert il y a {(time.time() - pos['opened']) / 3600:.1f} h · entrée {pos['entry']:.8g} · plus haut {pos['peak']:.8g}")
+        if not last:
+            print("  AUCUN PRIX enregistré dans la dernière heure : VIGIE ne lit pas ce token")
+            continue
+        print(f"  dernier prix il y a {(time.time() - last['t']) / 60:.0f} min : {last['price']:.8g} "
+              f"({(last['price'] / pos['entry'] - 1) * 100:+.1f} %) · pool {last.get('liq')}")
+        print(f"  décision de VIGIE maintenant : {exits.decide(pos, exits.features(hist)[-1], prof) or 'garder'}")
+    sys.exit(0)
+
 H = float(sys.argv[1]) if len(sys.argv) > 1 else 6
 since = time.time() - H * 3600
 cut = time.strftime("%Y-%m-%d %H:%M", time.localtime(since))
