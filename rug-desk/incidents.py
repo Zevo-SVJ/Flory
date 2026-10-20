@@ -149,8 +149,20 @@ def analyze(level: str, why: str, window: float, drop: float, peak: float, now: 
             contrib.append({"symbol": p["symbol"], "mint": m, "usd": round(p["qty"] * (px - hist[0]["price"]), 2),
                             "pct": round((px / hist[0]["price"] - 1) * 100, 1)})
     closes = _closes_since(t0)
-    realized = [{"symbol": c["symbol"], "mint": c["mint"], "usd": round(float(c["pnl"]), 2), "reason": c["reason"]}
-                for c in closes]
+
+    def window_move(c):
+        """A sale's part of the fall: what the sold tokens were worth when the window opened, against what they
+        sold for. a winner that gave back from its peak before its trailing stop sold shows here as a loss, which
+        is what it did to the balance, though its own pnl is a profit (Wick, Oct 20: +$17.80 sold, -$30 from peak)"""
+        hist = paths.load(c["mint"], since=t0)
+        sale_t = time.mktime(time.strptime(c["time"], "%Y-%m-%d %H:%M")) + 59
+        at_sale = [h for h in hist if h["t"] <= sale_t and h["price"] > 0]
+        if not hist or not at_sale or hist[0]["price"] <= 0:
+            return float(c["pnl"])
+        usd = float(c["usd"] or 0)
+        return usd * (1 - hist[0]["price"] / at_sale[-1]["price"])
+    realized = [{"symbol": c["symbol"], "mint": c["mint"], "usd": round(window_move(c), 2), "pnl": round(float(c["pnl"]), 2),
+                 "reason": c["reason"], "sold": True} for c in closes]
     rugs = [c for c in realized if c["reason"] in RUG_EXITS]
     moves = sorted(contrib + realized, key=lambda c: c["usd"])
     lost = -sum(c["usd"] for c in moves if c["usd"] < 0) or 1e-9
@@ -163,13 +175,16 @@ def analyze(level: str, why: str, window: float, drop: float, peak: float, now: 
         dial = None
     if rugs:
         cause = "rug"
-        detail = "sortie " + ", ".join(f"${r['symbol']} ({r['reason']}, {r['usd']:+.2f} $)" for r in rugs)
+        detail = "sortie " + ", ".join(f"${r['symbol']} ({r['reason']}, {r['pnl']:+.2f} $)" for r in rugs)
     elif contrib and len(down) >= max(2, 0.6 * len(contrib)) and ((regime.get("sol_1h") or 0) <= -2 or (dial is not None and dial < 0.5)):
         cause = "marché"
         detail = f"{len(down)}/{len(contrib)} positions en baisse avec le marché (SOL 1 h {regime.get('sol_1h')} %, cadran {dial})"
     elif moves and moves[0]["usd"] < 0 and -moves[0]["usd"] >= 0.7 * lost:
         cause = "une position"
-        detail = f"${moves[0]['symbol']} fait {-moves[0]['usd'] / lost * 100:.0f} % de la baisse ({moves[0]['usd']:+.2f} $)"
+        m0 = moves[0]
+        detail = f"${m0['symbol']} fait {-m0['usd'] / lost * 100:.0f} % de la baisse ({m0['usd']:+.2f} $)" + (
+            f" : redescendu de son plus haut avant que sa sortie ({m0['reason']}) ne vende, le trade reste à {m0['pnl']:+.2f} $"
+            if m0.get("sold") and m0["pnl"] > 0 else "")
     elif not moves:
         cause = "non attribuée"
         detail = "aucune position ouverte ni vente dans la fenêtre : relevé de prix à vérifier"

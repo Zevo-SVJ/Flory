@@ -2119,3 +2119,24 @@ class Incidents(Base):
             small = size.ticket({"score": 60}, {"liq_usd": 1e6, "symbol": "X"})[0]
         big = size.ticket({"score": 60}, {"liq_usd": 1e6, "symbol": "X"})[0]
         self.assertLess(small, big)
+
+
+class IncidentAttribution(Base):
+    def test_a_winner_giving_back_before_its_stop_is_the_cause(self):
+        """Wick, Oct 20: sold at +181% by its trailing stop after a +273% peak; the fall is Wick, not the others."""
+        import incidents, paths
+        for f in (incidents.LOG, incidents.STATE, config.EQUITY):
+            if os.path.exists(f):
+                os.remove(f)
+        now = time.time()
+        W = "Wick111111111111111111111111111111111111111"     # its own price path: other tests write MINT's
+        book.open_position(W, "WICK", 1.0, 20000, usd=10)
+        paths.append(W, {"t": now - 500, "price": 3.7, "liq": 20000})
+        paths.append(W, {"t": now - 30, "price": 2.8, "liq": 20000})
+        book.sell(W, 1.0, 2.8, "trailing_stop")
+        r = incidents.analyze("note", "test", 600, 9.0, 1100, now, 3.0)
+        self.assertEqual(r["cause"], "une position")
+        self.assertIn("WICK", r["detail"])
+        self.assertIn("redescendu de son plus haut", r["detail"])
+        self.assertLess(r["moves"][0]["usd"], 0)                  # its part of the fall
+        self.assertGreater(r["moves"][0]["pnl"], 0)               # yet a winning trade
