@@ -174,6 +174,7 @@ SCHEDULE = {                # used by agents.py: one entry per agent
     "backtest_every_h": 6,
     "backtest_n": 40,           # graduations per run: ~3% of them are entries under the current rule
     "backtest_momentum_n": 40,
+    "trend_every_min": 5,       # TREND: the majors book (majors.py), prices topped up every 15 min
 }
 
 # the rules the real-money decision judges: every trade opened before this ran under rules that no longer

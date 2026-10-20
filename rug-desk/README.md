@@ -293,6 +293,22 @@ shown in the journal and the morning brief, with macOS's reason. What can still 
 
 PLUME posts a morning brief at 08:00: what was bought, sold and killed overnight, and whether ECHO went silent.
 
+## TENDANCE: a second book on the majors (Oct 20)
+
+The memecoin desk can sit idle for hours when the market is thin: that is the filter working. TREND
+(majors.py) is a second paper book with its own $1,000 that moves every day: BTC, ETH, SOL, QQQ, SPY.
+It holds an asset while its close is above its 200-day average (in at +1%, out at -3%), equal weight
+among the assets in, cash otherwise. No leverage, no short. Costs: 0.40% per order in crypto, 0.05% on ETFs.
+
+The same rule is backtested every day on up to 10 years of daily closes, against simply holding, on
+the whole period and on each half, with a plain verdict: DATA VALIDATED, TRADE-OFF (less drawdown,
+not more return) or NO EDGE. Run it yourself: `python3 majors.py`.
+
+The regime dial (BTC > 200 d, ETH > 200 d, SOL > 50 d) is logged with every memecoin verdict. If
+memecoins passed in a red regime clearly lose (40 cases, beyond noise, both halves), TREND's
+self-review makes the meme desk stand down under a dial of 0.5, re-tested after 48 h like every change.
+VIGIE's review also tests a "volume fade" exit (5-min volume under 25% of its hour average).
+
 ## Real money
 
 `edge.py` is the go-live gate, on the dashboard header and in every evening report. Real money only when:

@@ -123,7 +123,7 @@ header { display: flex; align-items: center; gap: 14px; }
 .pctlabel { font-family: var(--mono); font-size: 12px; font-weight: 600; }
 
 /* agents */
-.agents { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
+.agents { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; }
 .agent { position: relative; text-align: center; padding: 10px 8px 8px; border-radius: 16px; background: var(--card);
          border: 1px solid var(--ring); transition: border-color .3s, box-shadow .3s, transform .3s; min-width: 0; }
 .agent::before { content: ""; position: absolute; left: 14px; top: 10px; width: 18px; height: 4px; border-radius: 4px; background: var(--c); }
@@ -268,6 +268,7 @@ a { color: #8fb8f0; text-decoration: none; } a:hover { text-decoration: underlin
     <span class="spacer"></span>
     <span class="live" id="ready" title=""><i></i><span id="readyText">…</span></span>
     <span class="tasks" id="sol" title="Tendance de SOL : les memecoins Solana suivent SOL. AUDIT mesure si les PASS chutent plus quand SOL baisse."></span>
+    <span class="tasks" id="dial" title="Cadran de régime : BTC au-dessus de sa moyenne 200 jours, ETH au-dessus de sa 200 jours, SOL au-dessus de sa 50 jours. Enregistré avec chaque verdict memecoin : TREND mesure si les memecoins perdent quand il est rouge."></span>
     <span class="tasks" id="tasks"></span>
     <span class="live" id="live"><i></i><span id="liveText">…</span></span>
   </header>
@@ -315,6 +316,12 @@ a { color: #8fb8f0; text-decoration: none; } a:hover { text-decoration: underlin
  <div class="details">
   <div class="hint">cliquez sur un agent pour voir ce qu'il fait</div>
   <section class="card">
+    <h2 class="section">TENDANCE : BTC, ETH, SOL, QQQ, SPY (règle des 200 jours, paper séparé)</h2>
+    <div class="stats3" id="trendStats"></div>
+    <div class="scroll"><table id="trendAssets"></table></div>
+    <p class="note" id="trendNote"></p>
+  </section>
+  <section class="card">
     <h2 class="section">Positions ouvertes</h2>
     <div class="scroll"><table id="open"></table></div>
   </section>
@@ -354,6 +361,9 @@ a { color: #8fb8f0; text-decoration: none; } a:hover { text-decoration: underlin
     <section class="pane" data-agent="VIGIE" hidden><h3>Test de vitesse</h3>
       <div class="stats3" id="speed"></div><p class="note" id="speedNote"></p>
     </section>
+    <section class="pane" data-agent="TREND" hidden><h3>Backtest : la règle contre « garder », coûts compris</h3>
+      <div class="scroll"><table id="trendBt"></table></div><p class="note" id="trendBtNote"></p></section>
+    <section class="pane" data-agent="TREND" hidden><h3>Derniers ordres</h3><div class="scroll"><table id="trendFills"></table></div></section>
     <section class="pane" data-agent="AUDIT" hidden><h3>Prêt pour l'argent réel ?</h3>
       <div class="stats3" id="edgeStats"></div><p class="note" id="edgeNote"></p>
     </section>
@@ -410,7 +420,7 @@ a { color: #8fb8f0; text-decoration: none; } a:hover { text-decoration: underlin
 <script>
 const $ = (id) => document.getElementById(id);
 const NS = "http://www.w3.org/2000/svg";
-const AGENT_COLORS = { VIGIE: "var(--a1)", SCOUT: "var(--a2)", GARDE: "var(--a3)", ECHO: "var(--a4)", AUDIT: "var(--a5)", PLUME: "var(--a6)", DESK: "var(--muted)" };
+const AGENT_COLORS = { VIGIE: "var(--a1)", SCOUT: "var(--a2)", GARDE: "var(--a3)", ECHO: "var(--a4)", AUDIT: "var(--a5)", TREND: "var(--a6)", PLUME: "var(--a6)", DESK: "var(--muted)" };
 let S = null, range = "auto", lastEventId = 0, firstLoad = true;   // auto: TOUT until a full day, then 24H
 
 function el(tag, attrs = {}, text) {
@@ -599,6 +609,10 @@ const DOES = {
   ECHO:  ["Lit X (Claude dans Chrome) pour chaque token acheté : comptes réels ou bots, copies, dev, campagnes d'arnaque.",
           "Répond BUY, SKIP ou SCAM. Un SKIP ou un SCAM fait vendre la position.",
           "Toutes les 2 h, relève les tendances de X : SCOUT cherche ces mots en premier."],
+  TREND: ["Un second portefeuille paper de 1 000 $, à part des memecoins : BTC, ETH, SOL (crypto, 7 j/7) et QQQ, SPY (Nasdaq 100, S&P 500).",
+          "Règle : on détient un actif tant que sa clôture est au-dessus de sa moyenne 200 jours (entrée à +1 %, sortie à −3 %, pour ne pas trader à chaque croisement). Les actifs « dedans » se partagent le portefeuille à parts égales, le reste est en cash. Pas de levier.",
+          "Toutes les 5 min : prix (Coinbase ou Kraken, Yahoo ou Stooq), signal, ordres si l'ensemble des actifs dedans change. Backtest refait chaque jour, coûts compris, verdict DATA VALIDATED, TRADE-OFF ou NO EDGE.",
+          "Calcule le cadran de régime pour les memecoins : s'ils perdent clairement quand il est rouge, il les met en retrait (sous garde-fous, annulé s'il déçoit)."],
   AUDIT: ["Re-prix chaque verdict 6 h après : le filtre a-t-il tué des rugs ou des gagnants ?",
           "Apprend les wallets gagnants et ceux des rugs, met les devs qui rug sur liste noire.",
           "Décide si le desk est prêt pour l'argent réel : 200 trades et un gain moyen positif avec 95 % de confiance. Rejoue toutes les 6 h de nouvelles graduations et les tokens momentum (backtest cumulatif).",
@@ -740,7 +754,34 @@ const DANGERS = { honeypot: "honeypot (revente impossible)", high_tax: "taxe > 1
   tax_per_wallet: "taxe par wallet", trading_cooldown: "délai entre trades", creator_made_honeypots: "créateur de honeypots", closed_source: "code non publié" };
 const killLabel = (k) => KILLS[k] || (k && k.startsWith("danger:") ? "Piège du contrat : " + (DANGERS[k.slice(7)] || k.slice(7)) : k);
 
+function drawTrend() {
+  const T = S.trend || {}, st = $("trendStats"); st.replaceChildren();
+  if (T.error) { $("trendNote").textContent = "TENDANCE illisible : " + T.error; return; }
+  const eq = T.equity, chg = eq == null ? null : (eq / T.bankroll - 1) * 100;
+  [["Valeur", eq == null ? "…" : plain(eq), chg == null ? "prix pas encore lus" : pct(chg) + " depuis le début"],
+   ["En position", String((T.assets || []).filter(a => a.usd).length) + " / " + (T.assets || []).length, "cash " + (T.cash == null ? "–" : plain(T.cash))],
+   ["Ordres", String(T.n_fills || 0), T.started ? "depuis le " + new Date(T.started * 1000).toLocaleDateString("fr-FR") : "pas encore lancé"]]
+    .forEach(([l, v, sub]) => { const c = el("div", { class: "card" }); c.append(el("div", { class: "label" }, l), el("div", { class: "big" }, v), el("div", { class: "sub" }, sub)); st.append(c); });
+  table("trendAssets", [["Actif"], ["Prix", 1], ["vs moyenne 200 j", 1], ["Signal"], ["Détenu", 1], ["Source"]],
+    (T.assets || []).map(a => [a.asset, a.price == null ? "…" : a.price.toLocaleString("fr-FR", { maximumFractionDigits: 2 }),
+      a.gap_pct == null ? "–" : span(sign(a.gap_pct), pct(a.gap_pct)),
+      a.in == null ? (a.why || "…") : span(a.in ? "up" : "down", a.in ? "dedans" : "dehors"),
+      a.usd ? plain(a.usd) : "–", a.src || "–"]), "Pas encore de prix : TREND les lit au démarrage du desk.");
+  const errs = Object.entries(T.errors || {});
+  const best = ((T.bt || {}).runs || []).find(r => r.name === "portefeuille");
+  $("trendNote").textContent = (best ? `Backtest ${best.from.slice(0, 4)}–${best.to.slice(0, 4)} du portefeuille : ${best.verdict}, ${best.why}. ` : "Backtest au premier passage de TREND. ")
+    + (errs.length ? "Source en panne : " + errs.map(([k, v]) => `${k} (${v})`).join(" · ") : "");
+  table("trendBt", [["Actifs"], ["Période"], ["Règle %/an", 1], ["Chute max", 1], ["Garder %/an", 1], ["Chute max", 1], ["Ordres", 1], ["Verdict"]],
+    ((T.bt || {}).runs || []).map(r => [r.name, `${r.from.slice(0, 7)} → ${r.to.slice(0, 7)}`, pct(r.trend.cagr), r.trend.mdd + "%",
+      pct(r.hold.cagr), r.hold.mdd + "%", String(r.trades),
+      span(r.verdict === "DATA VALIDATED" ? "up" : r.verdict === "NO EDGE" ? "down" : "", r.verdict)]), "Pas encore de backtest.");
+  $("trendBtNote").textContent = "DATA VALIDATED : positif et meilleur Sharpe que garder sur chaque moitié de la période, et chute max plus faible. TRADE-OFF : chute max au plus 3/4 de celle de garder, rendement positif, mais pas meilleur partout. NO EDGE : le reste. Coûts : 0,40 % par ordre en crypto, 0,05 % en ETF.";
+  table("trendFills", [["Quand"], ["Actif"], ["Sens"], ["Montant", 1], ["Prix", 1], ["Pourquoi"]],
+    (T.fills || []).map(f => [f.time, f.asset, f.side, plain(+f.usd), (+f.price).toLocaleString("fr-FR", { maximumFractionDigits: 2 }), f.why]),
+    "Aucun ordre pour l'instant.");
+}
 function drawPanels() {
+  drawTrend();
   table("open", [["Token"], ["Entrée", 1], ["Prix", 1], ["Variation", 1], ["Plus haut", 1], ["Reste", 1], ["Depuis", 1], ["PnL latent", 1]],
     S.open.map(p => [tokenCell(p.mint, p.symbol),
       p.entry.toPrecision(3), p.price ? p.price.toPrecision(3) : "…", span(sign(p.pct), pct(p.pct, 0)), span(sign(p.peak_pct), pct(p.peak_pct, 0)),
@@ -911,6 +952,10 @@ function drawTop() {
   const sol = S.sol || {};
   $("sol").textContent = sol.sol_24h == null ? "" : `SOL 24H ${pct(sol.sol_24h)} · 1H ${pct(sol.sol_1h)}`;
   $("sol").className = "tasks " + sign(sol.sol_24h || 0);
+  const dl = (S.trend || {}).dial;
+  $("dial").textContent = dl ? `CADRAN ${Object.values(dl.parts).filter(Boolean).length}/${Object.keys(dl.parts).length}` : "";
+  $("dial").className = "tasks " + (dl ? (dl.value >= 0.5 ? "up" : "down") : "");
+  if (dl) $("dial").title = $("dial").title.split(" · ")[0] + " · " + Object.entries(dl.parts).map(([k, v]) => `${k} ${v ? "oui" : "non"}`).join(" · ");
   $("balance").textContent = plain(S.balance);
   $("balanceSub").textContent = `started at ${plain(S.bankroll)}`;
   $("pnl").textContent = usd(S.pnl); $("pnl").className = "big " + sign(S.pnl);

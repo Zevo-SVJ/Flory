@@ -1699,3 +1699,159 @@ class Coach(Base):
         self.assertTrue(coach.get("echo_skip_sells"))
         self.assertEqual(pending.sell_on(), ("SCAM", "SKIP"))
         os.remove(pending.X_READS); os.remove(shadow.FILE)
+
+
+class Trend(Base):
+    """TENDANCE: the 200-day rule on the majors, its backtest, its paper book, the regime dial."""
+    def setUp(self):
+        super().setUp()
+        self.clean()
+        self.addCleanup(self.clean)
+
+    def clean(self):
+        import majors, coach
+        for f in (majors.PRICES, majors.STATE, majors.BT, majors.FILLS, majors.EQUITY, coach.JOURNAL, coach.TUNING):
+            if os.path.exists(f):
+                os.remove(f)
+        majors._dial["t"] = 0
+
+    @staticmethod
+    def bars(closes, crypto=True, end=None):
+        """Daily bars ending yesterday (all complete): crypto every day, ETFs on weekdays at the 09:30 open."""
+        end = end or (int(time.time()) // 86400) * 86400 - 86400
+        if crypto:
+            return [[end - (len(closes) - 1 - i) * 86400, c] for i, c in enumerate(closes)]
+        out, d = [], end
+        for c in reversed(closes):
+            while time.gmtime(d).tm_wday >= 5:
+                d -= 86400
+            out.append([d + 13.5 * 3600, c]); d -= 86400
+        return out[::-1]
+
+    def fake(self, closes: dict):
+        import majors
+        return mock.patch.object(majors, "_fetch", lambda n, have: (self.bars(closes[n], majors.ASSETS[n]["kind"] == "crypto"), "test")
+                                 if n in closes else (_ for _ in ()).throw(RuntimeError("source down")))
+
+    def test_the_bands_keep_it_from_trading_every_cross(self):
+        import majors
+        flat = [100.0] * 200
+        s = majors.signals(flat + [100.5, 101.5, 99.0, 98.0, 96.0, 100.5, 101.6])
+        self.assertEqual(s[199], False)                     # first verdict: not above its average
+        self.assertEqual(s[200:], [False, True, True, True, False, False, True])
+        self.assertIsNone(majors.signals([1.0] * 10)[-1])    # no average yet: no opinion
+
+    def test_backtest_cuts_the_drawdown_and_pays_costs(self):
+        import majors
+        up = [100 * 1.004 ** i for i in range(400)]
+        down = [up[-1] * 0.995 ** i for i in range(1, 300)]
+        again = [down[-1] * 1.004 ** i for i in range(1, 400)]
+        data = {"BTC": {"bars": self.bars(up + down + again)}}
+        r = majors.backtest_one(data, ["BTC"])
+        self.assertLess(r["trend"]["mdd"], r["hold"]["mdd"])
+        self.assertGreater(r["costs"], 0)
+        self.assertIn(r["verdict"], ("DATA VALIDATED", "TRADE-OFF", "NO EDGE"))
+        # a coin flip market: the rule must not be called validated
+        import random
+        rng = random.Random(7)
+        p, noise = 100.0, []
+        for _ in range(1100):
+            p *= 1 + rng.gauss(0, 0.03); noise.append(p)
+        r = majors.backtest_one({"BTC": {"bars": self.bars(noise)}}, ["BTC"])
+        self.assertNotEqual(r["verdict"], "DATA VALIDATED", r)
+
+    def test_tick_trades_only_when_the_set_changes(self):
+        import majors
+        rising = [100 * 1.002 ** i for i in range(260)]
+        falling = [100 * 0.998 ** i for i in range(260)]
+        closes = {"BTC": rising, "ETH": falling, "SOL": rising, "QQQ": rising, "SPY": falling}
+        with self.fake(closes), mock.patch.object(majors, "REFRESH_S", 0):
+            line, did = majors.tick()
+            self.assertEqual(sorted(majors.book()["qty"]), ["BTC", "QQQ", "SOL"])
+            self.assertEqual(len(did), 3)
+            eq = majors.equity()
+            self.assertLess(eq, 1000)                                     # costs were paid
+            self.assertGreater(eq, 1000 * (1 - 0.004))
+            self.assertEqual(majors.tick()[1], [])                        # nothing changed: no order
+            closes["BTC"] = rising + [rising[-1] * 0.7] * 2               # BTC breaks down
+            line, did = majors.tick()
+        self.assertEqual(sorted(majors.book()["qty"]), ["QQQ", "SOL"])
+        self.assertTrue(any(d.startswith("vend BTC") for d in did), did)
+        self.assertEqual({f["asset"] for f in majors.fills() if f["side"] == "vente"}, {"BTC"})
+        self.assertTrue(os.path.exists(majors.BT))                         # the backtest ran on the way
+
+    def test_a_source_down_never_sells_blind(self):
+        import majors
+        rising = [100 * 1.002 ** i for i in range(260)]
+        with self.fake({"BTC": rising}), mock.patch.object(majors, "REFRESH_S", 0):
+            majors.tick()
+        self.assertEqual(list(majors.book()["qty"]), ["BTC"])
+        data = majors.prices()
+        data["BTC"]["bars"] = data["BTC"]["bars"][:50]                     # history lost, source down
+        majors._write(majors.PRICES, data)
+        with self.fake({}), mock.patch.object(majors, "REFRESH_S", 0):
+            line, did = majors.tick()
+        self.assertEqual(did, [])
+        self.assertIn("BTC", majors.book()["qty"])
+        self.assertIn("source en panne", line)
+
+    def test_the_dial_and_what_garde_logs(self):
+        import majors
+        up, down = [100 * 1.002 ** i for i in range(260)], [100 * 0.998 ** i for i in range(260)]
+        data = {"BTC": {"bars": self.bars(up)}, "ETH": {"bars": self.bars(down)}, "SOL": {"bars": self.bars(up)},
+                "checked": time.time()}
+        d = majors.dial(data)
+        self.assertEqual(d["value"], 0.67)
+        self.assertEqual(d["parts"], {"BTC>200j": True, "ETH>200j": False, "SOL>50j": True})
+        majors._write(majors.PRICES, data)
+        self.assertEqual(majors.dial_value(), 0.67)
+        import learn
+        self.assertEqual(learn.features({"dial": "0.67"})["dial"], 0.67)
+
+    def test_memecoins_stand_down_only_when_the_coach_says_so(self):
+        import coach, majors, shadow
+        self.addCleanup(setattr, check, "ECHO_MODE", check.ECHO_MODE)
+        check.ECHO_MODE = "observe"
+        with mock.patch.object(majors, "dial_value", lambda: 0.0), net():
+            v = check.run(MINT)
+        self.assertIn("PAPER BUY", v["action"])                              # no gate without evidence
+        self.assertEqual(v["dial"], 0.0)
+        Base.setUp(self)                                                     # empty book again
+        coach._write(coach.TUNING, {"meme_dial_gate": 0.5})
+        with mock.patch.object(majors, "dial_value", lambda: 0.0), net():
+            v = check.run(MINT)
+        self.assertIn("regime dial", v["action"])
+        self.assertNotIn(MINT, book.load())
+        # still followed as a pass: the gate's own re-test needs these tokens
+        with mock.patch.object(shadow, "paths"), mock.patch.object(shadow, "FILE", os.path.join(config.DATA, "sh_t.csv")):
+            self.assertTrue(shadow.note(MINT, v))
+            self.assertEqual(shadow._rows()[0]["reason"], "pass")
+            os.remove(shadow.FILE)
+
+    def test_trend_review_needs_evidence(self):
+        import reviews, coach
+        out = reviews.trend(1000.0)
+        self.assertIsNone(coach.get("meme_dial_gate"))
+        self.assertIn("quel que soit le cadran", out["change"])
+        self.assertEqual(reviews._whipsaws([{"asset": "BTC", "side": "achat", "price": "100"},
+                                            {"asset": "BTC", "side": "vente", "price": "95"}]), ["BTC -5.0 %"])
+
+    def test_volume_fade_is_a_lab_profile_only(self):
+        import exits, exitlab
+        t0 = 1_000_000.0
+        pos = {"entry": 1.0, "peak": 1.1, "peak_t": t0, "opened": t0, "liq0": 1000, "steps": 0, "qty": 1, "qty0": 1}
+        s = {"t": t0 + 3600, "price": 1.05, "liq": 1000, "b5": 5, "s5": 5, "v5": 10, "v5_avg": 100, "vol": 5}
+        p = {**config.EXIT, **exitlab.PROFILES["volume fade 25%"]}
+        self.assertEqual(exits.decide(pos, s, p), (1.0, "volume_fade"))
+        self.assertIsNone(exits.decide(pos, {**s, "v5": None}, p))          # volume unknown is not a fade
+        self.assertIsNone(exits.decide(pos, s, dict(config.EXIT)))          # off in the live profile
+
+    def test_status_and_dashboard_show_it(self):
+        import majors, dashboard
+        rising = [100 * 1.002 ** i for i in range(260)]
+        with self.fake({"BTC": rising}), mock.patch.object(majors, "REFRESH_S", 0):
+            majors.tick()
+        self.assertIn("TENDANCE", report.status())
+        st = dashboard.trend_state()
+        self.assertEqual([a["asset"] for a in st["assets"] if a["usd"]], ["BTC"])
+        self.assertIn("TREND", [a[0] for a in dashboard.AGENTS])

@@ -24,6 +24,7 @@ AGENTS = [   # fixed order = fixed color slot on the page
     ("GARDE", "tue les rugs", "pool, nom, contrat, holders, lecture approfondie"),
     ("ECHO", "lit X", "Claude dans Chrome, verdict BUY/SKIP par PASS"),
     ("AUDIT", "apprend et rend compte", "re-prix des verdicts 6 h après, rapports du soir et du matin"),
+    ("TREND", "suit la tendance", "BTC ETH SOL QQQ SPY, règle des 200 jours, paper à part"),
 ]
 
 
@@ -268,7 +269,16 @@ def state(range_key: str = "auto") -> dict:
         "backtest": (bt := backtest_state()), "bilan": edge.bilan(bt["card"]), "tgbot": tgbot.stats(), "shadow": shadow_state(), "learn": learn_state(),
         "reviews": __import__("coach").reviews(), "journal": __import__("coach").journal(last=20),
         "by_chain": edge.split(lambda t: __import__("chains").split(t["mint"])[0]),
+        "trend": trend_state(),
     }
+
+
+def trend_state() -> dict:
+    try:
+        import majors
+        return majors.summary()
+    except Exception as e:
+        return {"error": str(e)[:160]}
 
 
 class Handler(BaseHTTPRequestHandler):

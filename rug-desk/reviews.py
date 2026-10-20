@@ -7,6 +7,8 @@
 #           its model learns (learn.py); this review reports both
 #   SCOUT   which sources bring the tokens that pay; the best ones get looked at first (never one dropped)
 #   ECHO    do its SKIPs foresee the drops? if clearly yes, a SKIP sells again; if not, it stays a note
+#   TREND   its own book (majors.py) and its backtest verdicts; and do memecoins bought in a red regime
+#           (dial < 0.5) lose? if clearly yes, the meme desk stands down below 0.5 (coach "meme_dial_gate")
 #   AUDIT   the referee: re-tests past changes on new data, undoes the bad ones, trips the breaker
 import csv, math, os, statistics, time
 from config import EXIT
@@ -207,16 +209,91 @@ def _test_echo(entry) -> dict:
     return {"n": min(len(skip), len(other)), "mean": statistics.mean(other) - statistics.mean(skip)}
 
 
+# ---------------------------------------------------------------- TREND
+GATE = 0.5
+
+
+def _dials() -> dict:
+    """mint -> the regime dial when GARDE passed it (checks.csv, logged since Oct 20)."""
+    from config import LOG
+    out = {}
+    if os.path.exists(LOG):
+        with open(LOG, newline="") as f:
+            for r in csv.DictReader(f):
+                if r.get("verdict") in ("PASS", "BUY") and r.get("dial") not in (None, "") and r["mint"] not in out:
+                    out[r["mint"]] = float(r["dial"])
+    return out
+
+
+def _dial_groups(after: float = 0) -> tuple[list[float], list[float]]:
+    """Passes followed 6 h, split by the dial at the verdict: (red, under GATE) and (green)."""
+    dials = _dials()
+    red, green = [], []
+    for d in lessons(("pass",)):
+        x = dials.get(d["row"]["mint"])
+        if float(d["row"]["t"]) <= after or x is None:
+            continue
+        (red if x < GATE else green).append(d["y"])
+    return red, green
+
+
+def _whipsaws(fills: list[dict]) -> list[str]:
+    """Sales under the price of the buy before them: the rule's known cost, a trend that was not one."""
+    last_buy, out = {}, []
+    for f in fills:
+        if f["side"] == "achat":
+            last_buy[f["asset"]] = float(f["price"])
+        elif f["asset"] in last_buy and float(f["price"]) < last_buy[f["asset"]]:
+            out.append(f"{f['asset']} {(float(f['price']) / last_buy.pop(f['asset']) - 1) * 100:+.1f} %")
+    return out
+
+
+def trend(balance: float | None) -> dict:
+    import majors
+    s = majors.summary()
+    did = []
+    if s["equity"] is not None:
+        held = [a["asset"] for a in s["assets"] if a["usd"]]
+        did.append(f"TENDANCE {s['equity']:.2f} $ ({(s['equity'] / s['bankroll'] - 1) * 100:+.1f} %), {s['n_fills']} ordres, "
+                   f"en position : {', '.join(held) or 'rien'}")
+    for r in (s["bt"].get("runs") or [])[:6]:
+        did.append(f"backtest {r['name']} ({r['from'][:7]} → {r['to'][:7]}) : {r['verdict']} · {r['why']}")
+    mistakes = []
+    if (w := _whipsaws(majors.fills())):
+        mistakes.append(f"{len(w)} aller-retour(s) perdant(s), le coût connu de la règle : " + ", ".join(w[-4:]))
+    red, green = _dial_groups()
+    mean = lambda xs: f"{statistics.mean(xs):+.1f} %" if xs else "—"
+    did.append(f"memecoins PASS suivis 6 h : cadran rouge (< {GATE}) {mean(red)} sur {len(red)}, vert {mean(green)} sur {len(green)}")
+    res = _gap_test(green, red, k=1)
+    gate = coach.get("meme_dial_gate")
+    if gate is None and res["ok"] and statistics.mean(red) < 0:
+        e = coach.apply("TREND", "meme_dial_gate", GATE, res, balance)
+        change = (f"les memecoins se mettent en retrait sous un cadran de {GATE} : {res['why']}" if e else
+                  "le retrait des memecoins en régime rouge est justifié (changement récent, j'attends)")
+    else:
+        change = (f"memecoins en retrait sous un cadran de {gate}" if gate is not None else
+                  "les memecoins tradent quel que soit le cadran") + f" · rouge contre vert : {res['why']}"
+    return {"did": did, "mistakes": mistakes, "change": change}
+
+
+def _test_gate(entry) -> dict:
+    """After the gate: the red-regime passes it kept the desk out of must have lost money."""
+    red, _ = _dial_groups(after=entry["t"])
+    if len(red) < 2:
+        return {"n": 0}
+    return {"n": len(red), "mean": -statistics.mean(red)}
+
+
 # ---------------------------------------------------------------- AUDIT
 def run_all(balance: float | None) -> dict:
     """Every self-review, then the referee: re-test past changes, then the circuit breaker."""
     out = {}
-    for name, fn in (("VIGIE", vigie), ("GARDE", garde), ("SCOUT", scout), ("ECHO", echo)):
+    for name, fn in (("VIGIE", vigie), ("GARDE", garde), ("SCOUT", scout), ("ECHO", echo), ("TREND", trend)):
         try:
             out[name] = fn(balance)
         except Exception as e:
             out[name] = {"did": [], "mistakes": [], "change": f"revue impossible : {str(e)[:120]}"}
-    judged = coach.evaluate({"exit_profile": _test_exit, "echo_skip_sells": _test_echo})
+    judged = coach.evaluate({"exit_profile": _test_exit, "echo_skip_sells": _test_echo, "meme_dial_gate": _test_gate})
     tripped = coach.circuit(balance) if balance is not None else []
     out["AUDIT"] = {"did": [f"{len(coach.journal())} changements au journal, "
                             f"{sum(1 for e in coach.journal() if e['status'] == 'active')} en test"],

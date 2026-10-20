@@ -28,6 +28,7 @@ PROFILES = {
     "no ladder": {"ladder": []},
     "no stall exit": {"stall_min": 10**9},
     "arm trail at +20%": {"arm_pct": 20, "lock_after_pct": 20},
+    "volume fade 25%": {"fade_ratio": 0.25},
 }
 
 

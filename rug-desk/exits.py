@@ -11,6 +11,8 @@
 #   dump                 the textbook dump: 30% under the peak with volume collapsing under half its average
 #   stall                in profit, no new high for a while, sellers taking over: a stall rarely re-pumps
 #   time stop            six flat hours free the slot
+#   volume fade          (a lab profile, off by default) 5-min volume under a share of its hour average:
+#                        the crowd has left. VIGIE's self-review switches to it only if it pays (reviews.py)
 import json, os
 from config import EXIT, DATA
 
@@ -98,6 +100,10 @@ def decide(pos: dict, s: dict, p: dict | None = None) -> tuple[float, str] | Non
     if (pct >= p["stall_min_pct"] and s["t"] - pos.get("peak_t", pos["opened"]) >= p["stall_min"] * 60
             and (s.get("s5") or 0) >= p["stall_sell_ratio"] * max(1, s.get("b5") or 0)):
         return 1.0, "stall"
+    fade = p.get("fade_ratio")
+    if (fade and hours >= 0.5 and s.get("v5") is not None and s.get("v5_avg")
+            and s["v5"] < s["v5_avg"] * fade):
+        return 1.0, "volume_fade"
     if hours >= p["time_stop_hours"] and pct < p["time_stop_min_pct"]:
         return 1.0, "time_stop"
     return None

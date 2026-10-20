@@ -10,6 +10,8 @@
 #   (GARDE also answers on Telegram, tgbot.py, read-only, when TELEGRAM_BOT_TOKEN is in .env)
 #   AUDIT  every 30 min       the slow loop: re-prices verdicts, learns wallets, writes the reports, and
 #                              every 6 h starts the cumulative backtest in a child process
+#   TREND  every 5 min        the second book (majors.py): BTC ETH SOL QQQ SPY on the 200-day rule, its own
+#                              $1,000 in paper, and the regime dial every memecoin verdict is logged with
 # one writer at a time on the book (book.LOCK) and on the event log (events._LOCK).
 import atomic
 import json, os, threading, time, traceback
@@ -363,6 +365,24 @@ def plume_morning():
     return "brief du matin publié"
 
 
+def trend():
+    """TREND's turn: the majors book (majors.py). Each trade is said on the page and on Telegram."""
+    import majors
+    line, did = majors.tick()
+    for d in did:
+        emit("TREND", "buy" if d.startswith("achète") else "sell", f"TENDANCE {d} (règle des 200 jours)")
+    if did:
+        post("TENDANCE · " + " · ".join(did) + " · " + line)
+    errs = majors.prices().get("errors") or {}
+    if errs and set(errs) != _trend_errs:
+        emit("TREND", "error", "prix indisponibles : " + " · ".join(f"{k} ({v[:90]})" for k, v in sorted(errs.items())))
+    _trend_errs.clear(); _trend_errs.update(errs)
+    return line
+
+
+_trend_errs = set()
+
+
 def run_job(name: str, job, every: float | None):
     """One turn of one agent: its status before and after, its errors counted, never fatal."""
     set_agent(name, status="work", msg="au travail…")
@@ -411,6 +431,7 @@ def main():
         "SCOUT": [scout, SCHEDULE["scout_every_min"] * 60, now + 5],
         "AUDIT": [auditor, SCHEDULE["audit_every_min"] * 60, now + 60],
         "GARDE": [gate, 30, now + 10],
+        "TREND": [trend, SCHEDULE["trend_every_min"] * 60, now + 20],
     }
     reported_on = time.strftime("%Y-%m-%d") if time.strftime("%H:%M") >= SCHEDULE["report_at"] else None
     # started after 08:00: today's brief is not owed (it would describe the hours before the desk ran)

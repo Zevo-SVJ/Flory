@@ -21,7 +21,7 @@ FIELDS = ["time", "mint", "symbol", "stage", "verdict", "confidence", "reason", 
           "snipers_pct", "factory_wallets", "lane",
           # what learn.py learns from: the token as GARDE saw it at the verdict
           "chain", "vol_liq", "avg_trade", "chg_1h", "chg_5m", "buy_ratio", "mcap_liq", "socials",
-          "top10", "max_wallet", "holders", "expected", "override"]
+          "top10", "max_wallet", "holders", "expected", "override", "dial"]
 
 
 def _migrate():
@@ -229,6 +229,11 @@ def deep_read(mint: str, token: dict, desk: bool = True, skip: frozenset | set =
 def run(mint: str) -> dict:
     v = check(mint)
     v.update(market.sol_regime() or {})
+    try:
+        import majors                    # BTC, ETH, SOL against their averages: the market's regime
+        v["dial"] = majors.dial_value()
+    except Exception:
+        v["dial"] = None
     log({"time": time.strftime("%Y-%m-%d %H:%M"), "mint": mint, **v})
     import dossier
     dossier.add(mint, "GARDE", v["verdict"], **{k: v.get(k) for k in (
@@ -238,6 +243,11 @@ def run(mint: str) -> dict:
     enter = v["verdict"] == "BUY" or (v["verdict"] == "PASS" and PAPER and PAPER_BUY_ON_PASS)
     if enter and v.get("expected") is not None and v["expected"] < 0:
         v["action"] = f"not bought: the model expects {v['expected']:+.1f}% per trade"
+        return v
+    import coach                         # set only by TREND's self-review, when red regimes clearly lose
+    gate = coach.get("meme_dial_gate")
+    if enter and gate is not None and v.get("dial") is not None and v["dial"] < gate:
+        v["action"] = f"not bought: regime dial {v['dial']:.2f} < {gate} (memecoins stand down)"
         return v
     import shadow
     if enter and (v.get("score") or 0) < MIN_SCORE and "low_score" not in shadow.waived() \

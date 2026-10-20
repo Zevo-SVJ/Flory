@@ -169,6 +169,17 @@ def status(hours: float = 1) -> str:
                                                 if sh.get("all") else " · premiers résultats 6 h après")
         + (f" · règles levées : {', '.join(lifted)}" if lifted else ""),
     ]
+    try:
+        import majors                     # the second book: majors on the 200-day rule
+        M = majors.summary()
+        if M["equity"] is not None:
+            held = [a["asset"] for a in M["assets"] if a["usd"]]
+            d = M["dial"]
+            lines.insert(3, f"TENDANCE {M['equity']:.2f} $ ({(M['equity'] / M['bankroll'] - 1) * 100:+.1f} %) · "
+                            f"en position : {', '.join(held) or 'cash'}"
+                            + (f" · cadran {sum(d['parts'].values())}/{len(d['parts'])}" if d else ""))
+    except Exception:
+        pass
     import learn
     L = learn.load()
     if L:
@@ -180,7 +191,7 @@ def status(hours: float = 1) -> str:
             lines.append(f"Backtest règle actuelle : {r['mean']:+.1f} %/trade sur {r['n']} trades · {r['why']}")
     except Exception:
         pass
-    return "\n".join(lines[:6])
+    return "\n".join(lines[:7])
 
 
 def weekly(save: bool = True) -> str:
