@@ -160,8 +160,9 @@ def complete(name: str, bars: list, now: float | None = None) -> list:
     return [b for b in bars if b[0] + span(name) <= now]
 
 
-def refresh(force: bool = False) -> dict:
-    """Top up every asset's bars. A source that fails keeps the cache and says why (data['errors'])."""
+def refresh(force: bool = False, say=None) -> dict:
+    """Top up every asset's bars. A source that fails keeps the cache and says why (data['errors']).
+    say: called with a line before and after each asset (the command line shows progress with it)."""
     data = _read(PRICES, {})
     errors = {}
     for name in ASSETS:
@@ -169,11 +170,18 @@ def refresh(force: bool = False) -> dict:
         if not force and time.time() - cur.get("t", 0) < REFRESH_S:
             continue
         deep = ASSETS[name]["kind"] == "crypto" and cur.get("depth") != CRYPTO_DAYS   # the whole history, once
+        if say:
+            say(f"{name} : lecture des prix" + (" depuis le début (une seule fois, ~15 s)" if deep else "") + "…")
+        t0 = time.time()
         try:
             bars, src = _fetch(name, deep)
         except Exception as e:
             errors[name] = str(e)[:200]
+            if say:
+                say(f"{name} : source en panne : {errors[name]}")
             continue
+        if say:
+            say(f"{name} : {len(bars)} jours reçus de {src} en {time.time() - t0:.0f} s")
         merged = {b[0]: b[1] for b in cur.get("bars") or []}
         merged.update({b[0]: b[1] for b in bars})
         data[name] = {"t": time.time(), "src": src, "bars": [[t, merged[t]] for t in sorted(merged)],
@@ -536,16 +544,17 @@ def summary() -> dict:
 
 
 if __name__ == "__main__":
-    import sys
-    data = refresh(force=True)
-    for n, e in (data.get("errors") or {}).items():
-        print(f"{n}: source en panne : {e}")
+    say = lambda s: print(s, flush=True)
+    say("TENDANCE : prix, puis backtest. compter 1 minute la première fois.")
+    data = refresh(force=True, say=say)
+    say("")
     for n in ASSETS:
         bars = (data.get(n) or {}).get("bars") or []
         print(f"{n}: {len(bars)} jours ({(data.get(n) or {}).get('src')})"
               + (f", de {_day(bars[0][0])} à {_day(bars[-1][0])}" if bars else ""))
     d = dial(data)
     print("cadran :", d)
+    say("backtest en cours…")
     r = backtest(data)
     for run in r["runs"]:
         print(f"\n{run['name']} ({run['from']} → {run['to']}, {run['days']} jours, {run['trades']} ordres, "
