@@ -303,12 +303,30 @@ def trend_state() -> dict:
         return {"error": str(e)[:160]}
 
 
+import threading
+_state = {"lock": threading.Lock(), "body": None, "t": 0.0, "key": None}
+
+
+def state_body(rng: str, series: str) -> bytes:
+    """One computation at a time: the page asks every 3 s and a slow read (thousands of shadow tokens after
+    a restart) must not pile up. while one runs, the others get the last answer if it is under 2 min old."""
+    key = (rng, series)
+    if not _state["lock"].acquire(blocking=_state["body"] is None or time.time() - _state["t"] > 120):
+        return _state["body"]
+    try:
+        body = json.dumps(state(rng, series)).encode()
+        _state.update(body=body, t=time.time(), key=key)
+        return body
+    finally:
+        _state["lock"].release()
+
+
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         url = urlparse(self.path)
         if url.path == "/api/state":
             q = parse_qs(url.query)
-            body, kind = json.dumps(state(q.get("range", ["auto"])[0], q.get("book", ["memes"])[0])).encode(), "application/json"
+            body, kind = state_body(q.get("range", ["auto"])[0], q.get("book", ["memes"])[0]), "application/json"
         elif url.path == "/api/dossier":
             import dossier
             mint = parse_qs(url.query).get("mint", [""])[0]

@@ -1058,22 +1058,37 @@ $("checkForm").addEventListener("submit", async (evt) => {
 function render() {
   drawTop(); drawChart(); drawAgents(); drawPanels(); drawPanel();
 }
+let loading = false;      // one request at a time: a slow answer must not stack new ones behind it
 async function load() {
+  if (loading) return;
+  loading = true;
+  const slow = setTimeout(() => { if (!S) $("liveText").textContent = "CHARGEMENT…"; }, 4000);
   try {
-    const r = await fetch("/api/state?range=" + range + "&book=" + book, { cache: "no-store" });
-    S = await r.json();
-  } catch {
-    $("live").className = "live off"; $("liveText").textContent = "DASHBOARD HORS LIGNE"; return;
+    let r;
+    try {
+      r = await fetch("/api/state?range=" + range + "&book=" + book, { cache: "no-store" });
+      S = await r.json();
+    } catch {
+      $("live").className = "live off"; $("liveText").textContent = "DASHBOARD HORS LIGNE"; return;
+    }
+    const newIds = new Set(S.events.filter(e => e.id > lastEventId).map(e => e.id));
+    if (!firstLoad) {
+      // every sale that made money gets the card: PROFIT, or MEGA PROFIT past the threshold. oldest first
+      S.events.filter(e => newIds.has(e.id) && e.kind === "sell" && e.pnl > 0).reverse().forEach(mega);
+    }
+    lastEventId = Math.max(lastEventId, ...S.events.map(e => e.id), 0);
+    drawLog(firstLoad ? new Set() : newIds);
+    firstLoad = false;
+    render();
+  } catch (err) {        // a drawing error: said on the page instead of a page stuck on "…"
+    $("liveText").textContent = "ERREUR D'AFFICHAGE";
+    const row = el("div", { class: "ev" });
+    row.append(el("span", { class: "tag", style: "color: var(--down)" }, "[PAGE]"),
+               el("span", { class: "txt", style: "white-space: normal" }, String(err && err.stack || err).slice(0, 300)));
+    $("log").prepend(row);
+  } finally {
+    clearTimeout(slow); loading = false;
   }
-  const newIds = new Set(S.events.filter(e => e.id > lastEventId).map(e => e.id));
-  if (!firstLoad) {
-    // every sale that made money gets the card: PROFIT, or MEGA PROFIT past the threshold. oldest first
-    S.events.filter(e => newIds.has(e.id) && e.kind === "sell" && e.pnl > 0).reverse().forEach(mega);
-  }
-  lastEventId = Math.max(lastEventId, ...S.events.map(e => e.id), 0);
-  drawLog(firstLoad ? new Set() : newIds);
-  firstLoad = false;
-  render();
 }
 setInterval(() => {   // the clock and the live edge of the chart move every second
   if (S) $("clock").textContent = new Date().toLocaleTimeString("fr-FR") + " / " + S.range.toUpperCase();
