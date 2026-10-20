@@ -2007,3 +2007,26 @@ class EchoWatch(Base):
             agents.gate()                                                             # once an hour, not every 30 s
         self.assertEqual(len(said), 2)
         self.assertIn("ECHO ne lit plus X", said[0][2])
+
+
+class BalanceRestart(Base):
+    """Oct 20: the balance starts again at the bankroll, positions and history kept."""
+    def test_reset_keeps_positions_and_history(self):
+        import dashboard
+        self.addCleanup(lambda: os.path.exists(book.RESET) and os.remove(book.RESET))
+        book.open_position(MINT, "OLD", 1.0, 20000, usd=25)
+        book.sell(MINT, 1.0, 0.5, "stop")                       # an old loss
+        book.open_position("Mint222222222222222222222222222222222222222", "OPEN", 1.0, 20000, usd=25)
+        with open(config.EQUITY, "w") as f:
+            f.write("t,balance,realized,unrealized,open\n1,990,0,0,0\n")
+        self.assertLess(book.realized(), -10)
+        info = book.reset()
+        self.assertEqual(book.realized(), 0.0)
+        self.assertIn("Mint222222222222222222222222222222222222222", book.load())   # still open
+        self.assertEqual(len(book.trades()), 3)                                     # nothing deleted
+        self.assertFalse(os.path.exists(config.EQUITY))                             # the curve starts fresh
+        self.assertLess(info["realized_before"], -10)
+        self.assertEqual(dashboard.state()["wins"] + dashboard.state()["losses"], 0)
+        book.sell("Mint222222222222222222222222222222222222222", 1.0, 1.2, "take")  # a new trade counts
+        self.assertGreater(book.realized(), 0)
+        self.assertEqual(dashboard.state()["wins"], 1)

@@ -3,7 +3,7 @@
 import atomic
 import csv, json, os, sys, threading, time
 from config import (DATA, POSITIONS, TRADES, TICKET_USD, MAX_OPEN, MAX_ENTRIES_PER_DAY,
-                    DAILY_LOSS_HALT_USD, COOLDOWN_HOURS, PAPER_BANKROLL_USD, PAPER_COSTS, PAPER)
+                    DAILY_LOSS_HALT_USD, COOLDOWN_HOURS, PAPER_BANKROLL_USD, PAPER_COSTS, PAPER, EQUITY)
 
 COSTS = PAPER        # paper fills pay fees and price impact; live fills are booked at the price you paid
 # VIGIE runs in its own thread and GARDE buys from the main one: every read-change-write of the book
@@ -64,8 +64,37 @@ def today_pnl() -> float:
     return sum(float(t["pnl"]) for t in trades() if t["time"].startswith(day))
 
 
+RESET = os.path.join(DATA, "book_reset.json")
+
+
+def reset_info() -> dict:
+    """The balance restart (python3 book.py reset): when, and the realized pnl left behind. {} if none."""
+    try:
+        with open(RESET) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
 def realized() -> float:
-    return sum(float(t["pnl"]) for t in trades())
+    """Realized pnl since the balance restart. trades.csv keeps every trade: the lessons, the exit lab and
+    the edge test still read all of it."""
+    return sum(float(t["pnl"]) for t in trades()) - reset_info().get("realized_before", 0.0)
+
+
+def reset():
+    """Back to the starting bankroll, open positions kept as they are (they count in the new period).
+    the old balance curve is kept aside, nothing is deleted."""
+    if os.path.exists(EQUITY):
+        os.replace(EQUITY, EQUITY.replace(".csv", time.strftime("_avant_%Y%m%d_%H%M.csv")))
+    rows = trades()
+    info = {"t": time.time(), "time": time.strftime("%Y-%m-%d %H:%M"), "n_trades": len(rows),
+            "realized_before": round(sum(float(t["pnl"]) for t in rows), 2)}
+    tmp = atomic.tmp(RESET)
+    with open(tmp, "w") as f:
+        json.dump(info, f)
+    os.replace(tmp, RESET)
+    return info
 
 
 def cash(book: dict | None = None) -> float:
@@ -138,5 +167,9 @@ if __name__ == "__main__":
         open_position(mint, mint[:6], price, liq, usd)
     elif cmd == "close":
         print(round(sell(sys.argv[2], 1.0, float(sys.argv[3]), "manual"), 2))
+    elif cmd == "reset":                       # python3 book.py reset : the balance starts again at the bankroll
+        i = reset()
+        print(f"solde remis à {PAPER_BANKROLL_USD} $ ({i['time']}) · {i['realized_before']:+.2f} $ réalisés laissés derrière · "
+              f"{len(load())} position(s) ouverte(s) gardée(s) · historique des trades intact")
     else:
         print(json.dumps(load(), indent=2))

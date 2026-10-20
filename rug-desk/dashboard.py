@@ -215,7 +215,8 @@ def state(range_key: str = "auto", series: str = "memes") -> dict:
     per_mint = Counter()
     for t in exits:
         per_mint[t["mint"]] += float(t["pnl"])
-    closed = {t["mint"] for t in trades if t["action"] == "close"}
+    after = book.reset_info().get("n_trades", 0)            # the win rate restarts with the balance
+    closed = {t["mint"] for t in trades[after:] if t["action"] == "close"}
     wins = sum(1 for m in closed if per_mint[m] > 0)
     for r in open_rows:
         per_mint[r["mint"]] += r["pnl"] or 0
