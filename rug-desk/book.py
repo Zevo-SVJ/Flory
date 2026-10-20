@@ -60,8 +60,9 @@ def record(mint, symbol, action, usd, pnl, reason):
 
 
 def today_pnl() -> float:
+    """Realized today, since the balance restart if it was today (the day bar and the loss halt)."""
     day = time.strftime("%Y-%m-%d")
-    return sum(float(t["pnl"]) for t in trades() if t["time"].startswith(day))
+    return sum(float(t["pnl"]) for t in trades()[reset_info().get("n_trades", 0):] if t["time"].startswith(day))
 
 
 RESET = os.path.join(DATA, "book_reset.json")
