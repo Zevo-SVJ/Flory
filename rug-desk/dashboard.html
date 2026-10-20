@@ -963,8 +963,8 @@ function drawTop() {
   $("sol").textContent = sol.sol_24h == null ? "" : `SOL 24H ${pct(sol.sol_24h)} · 1H ${pct(sol.sol_1h)}`;
   $("sol").className = "tasks " + sign(sol.sol_24h || 0);
   const LC = S.learn || {};
-  const SH = S.shadow || {}, ready = Math.max(LC.n || 0, (SH.all || {}).n || 0);   // lessons matured since the last training count too
-  $("learnChip").textContent = LC.trusted ? "MODÈLE FIABLE" : `MODÈLE ${ready}/${LC.min || 110} LEÇONS` + (SH.waiting ? ` (+${SH.waiting} EN COURS)` : "");
+  const SH = S.shadow || {}, matured = Math.max(LC.n || 0, (SH.all || {}).n || 0);   // lessons matured since the last training count too
+  $("learnChip").textContent = LC.trusted ? "MODÈLE FIABLE" : `MODÈLE ${matured}/${LC.min || 110} LEÇONS` + (SH.waiting ? ` (+${SH.waiting} EN COURS)` : "");
   $("learnChip").className = "tasks " + (LC.trusted ? "up" : "");
   const dl = (S.trend || {}).dial;
   $("dial").textContent = dl ? `CADRAN ${Object.values(dl.parts).filter(Boolean).length}/${Object.keys(dl.parts).length}` : "";

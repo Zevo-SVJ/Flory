@@ -1953,3 +1953,19 @@ class ModelRescues(Base):
     def test_a_rug_factory_is_never_held(self):
         v = self.run_with(True, 50.0, kill="serial_farm")
         self.assertEqual((v["verdict"], v["reason"]), ("SKIP", "serial_farm"))
+
+
+class PageScript(unittest.TestCase):
+    def test_the_page_script_parses(self):
+        """A script that does not parse leaves the whole page on '…' (Oct 20: a name declared twice)."""
+        import re, shutil, subprocess
+        node = shutil.which("node")
+        if not node:
+            self.skipTest("node absent")
+        with open(os.path.join(config.HERE, "dashboard.html")) as f:
+            js = "\n".join(re.findall(r"<script>(.*?)</script>", f.read(), re.S))
+        path = os.path.join(config.DATA, "page.js")
+        with open(path, "w") as f:
+            f.write(js)
+        r = subprocess.run([node, "--check", path], capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr[-400:])
