@@ -32,7 +32,6 @@ body { min-height: 100vh; overflow-x: hidden;
 main { position: relative; z-index: 1; padding: 0 18px 40px; }
 .screen { height: 100vh; min-height: 520px; display: grid; gap: 10px; padding: 14px 0 12px;
           grid-template-rows: auto auto minmax(160px, 1fr) auto auto; }
-.details { max-width: 1400px; margin: 0 auto; }
 .label { font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-2); }
 .card { background: var(--card); border: 1px solid var(--ring); border-radius: 14px; padding: 12px 16px;
         backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
@@ -83,11 +82,6 @@ header { display: flex; align-items: center; gap: 14px; }
 .mainrow > .card { display: flex; flex-direction: column; min-height: 0; }
 .cardhead { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
 .clock { font-family: var(--mono); font-size: 11px; color: var(--muted); letter-spacing: .06em; }
-.ranges { display: inline-flex; gap: 4px; }
-.ranges button { font-family: var(--mono); font-size: 10px; letter-spacing: .06em; color: var(--muted); background: transparent;
-                 border: 1px solid transparent; border-radius: 6px; padding: 3px 7px; cursor: pointer; }
-.ranges button[aria-pressed="true"] { color: var(--ink); border-color: var(--ring); background: rgba(255,255,255,.05); }
-.ranges button:hover { color: var(--ink-2); }
 #chart { position: relative; flex: 1; min-height: 0; }
 #chart svg { width: 100%; height: 100%; display: block; overflow: visible; }
 #chart text { font-family: var(--mono); font-size: 10px; fill: var(--muted); }
@@ -146,8 +140,11 @@ header { display: flex; align-items: center; gap: 14px; }
 .agent .msg { font-family: var(--mono); font-size: 10px; color: var(--muted); margin-top: 4px; min-height: 0;
               overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .agent .when { font-family: var(--mono); font-size: 10px; color: var(--muted); margin-top: 2px; opacity: .8; }
-.hint { text-align: center; font-family: var(--mono); font-size: 10px; letter-spacing: .1em; color: var(--muted); margin: 6px 0 14px; }
-#ready { cursor: pointer; }
+.chips { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 12px; }
+#trendTile { cursor: pointer; } #trendTile:hover { border-color: var(--ring-strong); }
+.agent { padding: 14px 8px 14px; }
+.agent .blob { margin: 10px auto 12px; }
+.agent:active { transform: scale(.97); }
 
 .agent { cursor: pointer; }
 .agent:hover, .agent:focus-visible { border-color: color-mix(in srgb, var(--c) 55%, var(--ring)); outline: none; }
@@ -155,8 +152,12 @@ header { display: flex; align-items: center; gap: 14px; }
 /* agent panel: everything about one agent, only when asked */
 #panel, #dossier { width: min(980px, calc(100vw - 32px)); max-height: calc(100vh - 48px); padding: 0; border: 1px solid var(--ring-strong);
          border-radius: 18px; background: var(--card-solid); color: var(--ink); overflow: hidden; }
-#panel[open], #dossier[open] { display: flex; flex-direction: column; animation: pop .25s ease; }
-#panel::backdrop, #dossier::backdrop { background: rgba(10,6,12,.55); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+#panel[open], #dossier[open] { display: flex; flex-direction: column; animation: rise .32s cubic-bezier(.2, .8, .2, 1); }
+#panel::backdrop, #dossier::backdrop { background: rgba(10,6,12,.55); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+         animation: fadein .25s ease; }
+#panel[open] .phead .blob { animation: hop .6s cubic-bezier(.3, 1.6, .5, 1) .08s both; }
+@keyframes rise { from { opacity: 0; transform: translateY(18px) scale(.97); } to { opacity: 1; transform: none; } }
+@keyframes hop { from { transform: translateY(8px) scale(.7); opacity: 0; } to { transform: none; opacity: 1; } }
 .phead { display: flex; align-items: center; gap: 14px; padding: 16px 20px; border-bottom: 1px solid var(--ring);
          background: color-mix(in srgb, var(--c) 7%, var(--card-solid)); }
 .phead .blob { width: 44px; height: 38px; margin: 0; flex: none; }
@@ -244,7 +245,7 @@ a { color: #8fb8f0; text-decoration: none; } a:hover { text-decoration: underlin
   .agents { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .brand h1 { font-size: 30px; }
   .logo { width: 50px; height: 50px; }
-  .tasks { display: none; }
+  header .tasks { display: none; }
   .big { font-size: 24px; }
   #chart, #log { height: 260px; }
   .stats3 { grid-template-columns: 1fr; }
@@ -269,10 +270,6 @@ a { color: #8fb8f0; text-decoration: none; } a:hover { text-decoration: underlin
       <span class="label" id="modeLabel">TRADING MODE</span>
     </div>
     <span class="spacer"></span>
-    <span class="live" id="ready" title=""><i></i><span id="readyText">…</span></span>
-    <span class="tasks" id="sol" title="Tendance de SOL : les memecoins Solana suivent SOL. AUDIT mesure si les PASS chutent plus quand SOL baisse."></span>
-    <span class="tasks" id="dial" title="Cadran de régime : BTC au-dessus de sa moyenne 200 jours, ETH au-dessus de sa 200 jours, SOL au-dessus de sa 50 jours. Enregistré avec chaque verdict memecoin : TREND mesure si les memecoins perdent quand il est rouge."></span>
-    <span class="tasks" id="learnChip" title="Le modèle d'apprentissage : il s'entraîne sur chaque token jugé (suivi 6 h). Une fois FIABLE, il peut acheter ce qu'une règle souple a refusé, et refuser un PASS qu'il voit perdant."></span>
     <span class="tasks" id="tasks"></span>
     <span class="live" id="live"><i></i><span id="liveText">…</span></span>
   </header>
@@ -280,7 +277,7 @@ a { color: #8fb8f0; text-decoration: none; } a:hover { text-decoration: underlin
   <section class="tiles">
     <div class="card"><div class="label">Balance</div><div class="big" id="balance">–</div><div class="sub" id="balanceSub"></div></div>
     <div class="card accent" id="pnlCard"><div class="label">Total P&amp;L</div><div class="big" id="pnl">–</div><div class="sub" id="pnlSub"></div></div>
-    <div class="card"><div class="label">Positions</div><div class="big" id="posCount">–</div><div class="sub" id="posSub"></div></div>
+    <div class="card" id="trendTile" role="button" tabindex="0" title="ouvrir TREND"><div class="label">Tendance</div><div class="big" id="trendBig">–</div><div class="sub" id="trendSub"></div></div>
     <div class="card winrate">
       <svg width="64" height="64" viewBox="0 0 64 64" id="donut" role="img"></svg>
       <div><div class="label">Win rate</div><div class="wl"><span class="up" id="wins">0W</span><br><span class="down" id="losses">0L</span></div></div>
@@ -291,23 +288,12 @@ a { color: #8fb8f0; text-decoration: none; } a:hover { text-decoration: underlin
     <div class="card">
       <div class="cardhead">
         <span class="label">Balance history</span>
-        <span class="ranges" id="ranges">
-          <button type="button" data-r="live" title="les 15 dernières minutes, point par point">LIVE</button><button type="button" data-r="1h">1H</button><button type="button" data-r="24h">24H</button>
-          <button type="button" data-r="7j">7J</button><button type="button" data-r="tout">TOUT</button>
-        </span>
-        <span class="ranges" id="books" aria-label="portefeuille affiché">
-          <button type="button" data-b="memes" aria-pressed="true">MEMES</button><button type="button" data-b="tendance">TENDANCE</button><button type="button" data-b="total">TOTAL</button>
-        </span>
         <span class="clock" id="clock"></span>
       </div>
       <div id="chart"></div>
     </div>
     <div class="card">
       <div class="cardhead"><span class="label">Activity log</span><span class="clock" id="logCount"></span></div>
-      <form id="checkForm" class="checkform" autocomplete="off">
-        <input id="checkInput" type="text" spellcheck="false" placeholder="coller un CA Solana : GARDE le vérifie" aria-label="Adresse de contrat à vérifier">
-        <button type="submit">Check</button>
-      </form>
       <div id="log"></div>
     </div>
   </section>
@@ -320,19 +306,6 @@ a { color: #8fb8f0; text-decoration: none; } a:hover { text-decoration: underlin
 
   <section class="agents" id="agents"></section>
  </div>
- <div class="details">
-  <div class="hint">cliquez sur un agent pour voir ce qu'il fait</div>
-  <section class="card">
-    <h2 class="section">TENDANCE : BTC, ETH, SOL, QQQ, SPY (règle des 200 jours, paper séparé)</h2>
-    <div class="stats3" id="trendStats"></div>
-    <div class="scroll"><table id="trendAssets"></table></div>
-    <p class="note" id="trendNote"></p>
-  </section>
-  <section class="card">
-    <h2 class="section">Positions ouvertes</h2>
-    <div class="scroll"><table id="open"></table></div>
-  </section>
- </div>
 </main>
 <dialog id="panel" aria-labelledby="pname">
   <div class="phead">
@@ -344,6 +317,20 @@ a { color: #8fb8f0; text-decoration: none; } a:hover { text-decoration: underlin
   <div class="pbody">
     <section><h3>Ce qu'il fait</h3><ul class="does" id="pdoes"></ul></section>
     <section><h3>En ce moment</h3><div class="now" id="pnow"></div></section>
+    <section class="pane" data-agent="VIGIE" hidden><h3>Positions ouvertes · <span id="posCount">–</span></h3>
+      <div class="sub" id="posSub" style="margin:-4px 0 8px"></div>
+      <div class="scroll"><table id="open"></table></div></section>
+    <section class="pane" data-agent="GARDE" hidden><h3>Vérifier un token</h3>
+      <form id="checkForm" class="checkform" autocomplete="off">
+        <input id="checkInput" type="text" spellcheck="false" placeholder="coller un CA (Solana ou 0x…) : GARDE le vérifie" aria-label="Adresse de contrat à vérifier">
+        <button type="submit">Check</button>
+      </form></section>
+    <section class="pane" data-agent="TREND" hidden><h3>BTC, ETH, SOL, QQQ, SPY · règle des 200 jours, paper séparé</h3>
+      <div class="chips"><span class="tasks" id="dial" title="Cadran de régime : BTC au-dessus de sa moyenne 200 jours, ETH au-dessus de sa 200 jours, SOL au-dessus de sa 50 jours."></span>
+        <span class="tasks" id="sol"></span></div>
+      <div class="stats3" id="trendStats"></div>
+      <div class="scroll"><table id="trendAssets"></table></div>
+      <p class="note" id="trendNote"></p></section>
     <section class="pane" data-agent="SCOUT" hidden><h3>Sources</h3><div class="srcs" id="scoutSources"></div></section>
     <section class="pane" data-agent="SCOUT" hidden><h3>Dernier passage : où meurent les tokens</h3>
       <div class="now" id="funnelHead"></div>
@@ -372,6 +359,8 @@ a { color: #8fb8f0; text-decoration: none; } a:hover { text-decoration: underlin
       <div class="scroll"><table id="trendBt"></table></div><p class="note" id="trendBtNote"></p></section>
     <section class="pane" data-agent="TREND" hidden><h3>Derniers ordres</h3><div class="scroll"><table id="trendFills"></table></div></section>
     <section class="pane" data-agent="AUDIT" hidden><h3>Prêt pour l'argent réel ?</h3>
+      <div class="chips"><span class="live" id="ready"><i></i><span id="readyText">…</span></span>
+        <span class="tasks" id="learnChip" title="Le modèle d'apprentissage : il s'entraîne sur chaque token jugé (suivi 6 h). Une fois FIABLE, il peut acheter ce qu'une règle souple a refusé."></span></div>
       <div class="stats3" id="edgeStats"></div><p class="note" id="edgeNote"></p>
     </section>
     <section class="pane" data-agent="AUDIT" hidden><h3>Peut-on en vivre ?</h3>
@@ -568,7 +557,7 @@ function drawChart() {
 // ---------- activity log ----------
 const KIND_TAGS = { scan: ["SCAN", "#7fd4c8"], kill: ["RISK", "#f2a272"], pass: ["PASS", "#a99af0"], buy: ["EXEC", "#8cb4f0"],
   sell: ["FILL", "#6fd6b0"], audit: ["AUDIT", "#f08aa8"], report: ["RAPPORT", "#8ccbf0"], error: ["ERR", "#ef6f6f"], info: ["DESK", "#9a93a0"], x: ["X", "#f2cf7a"] };
-function eventLine(e) {
+function eventLine(e, withTime = false) {
   const row = el("div", { class: "ev" });
   const isMega = e.kind === "sell" && e.pct >= S.mega_pct;
   const [name, color] = isMega ? ["MEGA", "var(--mega)"] : (KIND_TAGS[e.kind] || [e.kind.toUpperCase(), "var(--muted)"]);
@@ -576,7 +565,7 @@ function eventLine(e) {
   tag.style.color = color;
   row.append(tag, el("span", { class: "txt", title: `${e.agent} · ${e.text}` }, e.text));
   if (e.kind === "sell" && e.pnl != null) row.append(el("span", { class: "amt " + (isMega ? "mega" : sign(e.pnl)) }, usd(e.pnl)));
-  else row.append(el("span", { class: "clock" }, new Date(e.t * 1000).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })));
+  else if (withTime) row.append(el("span", { class: "clock" }, new Date(e.t * 1000).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })));
   return row;
 }
 function drawLog(newIds) {
@@ -595,9 +584,8 @@ function drawAgents() {
     const card = el("div", { class: "agent" + (active ? " active" : "") + (a.status === "error" ? " err" : ""),
                              role: "button", tabindex: "0", "data-name": a.name, "aria-label": `${a.name} : ${a.role}, ouvrir le détail` });
     card.style.setProperty("--c", AGENT_COLORS[a.name]);
-    card.append(el("div", { class: "blob", "aria-hidden": "true" }), el("div", { class: "name" }, a.name),
-      el("div", { class: "msg" }, a.status === "error" ? "⚠ " + a.msg : a.msg),
-      el("div", { class: "when" }, a.name === "ECHO" ? (a.last ? "dernière lecture " + a.last.slice(11) : "") : ago(a.t)));
+    card.title = `${a.role} · ${a.status === "error" ? "⚠ " : ""}${a.msg || ""}`;
+    card.append(el("div", { class: "blob", "aria-hidden": "true" }), el("div", { class: "name" }, a.name));
     return card;
   }));
 }
@@ -688,7 +676,7 @@ function drawPanel() {
     ["stracker", `Solana Tracker · ${S.stracker_today || 0}/${S.stracker_cap || 75} auj.`, K.stracker ? null : "clé manquante"]]);
   if (a.name === "AUDIT") $("plumeReport").textContent = S.last_report || "Pas encore de rapport : le premier arrive à " + (S.report_at || "21:30") + ".";
   const evs = S.events.filter(e => e.agent === a.name).slice(0, 8);
-  $("pevents").replaceChildren(...(evs.length ? evs.map(eventLine) : [el("div", { class: "empty" }, "Rien dans le journal récent.")]));
+  $("pevents").replaceChildren(...(evs.length ? evs.map(e => eventLine(e, true)) : [el("div", { class: "empty" }, "Rien dans le journal récent.")]));
 }
 const FACT_LABELS = { source: "source", lane: "voie", liq_usd: "liquidité $", age_min: "âge (min)", chg_1h: "1 h %",
   avg_trade: "trade moyen $", stage: "étape", reason: "raison", score: "note", flags: "signaux faibles", tier: "mise",
@@ -727,7 +715,8 @@ $("agents").addEventListener("keydown", (e) => {
   const c = e.target.closest(".agent");
   if (c && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); openPanel(c.dataset.name); }
 });
-$("ready").addEventListener("click", () => openPanel("AUDIT"));
+$("trendTile").addEventListener("click", () => openPanel("TREND"));
+$("trendTile").addEventListener("keydown", (e) => { if (e.key === "Enter") openPanel("TREND"); });
 $("pclose").addEventListener("click", () => $("panel").close());
 $("panel").addEventListener("click", (e) => { if (e.target === $("panel")) $("panel").close(); });   // click outside
 
@@ -971,8 +960,14 @@ function drawTop() {
   $("dial").className = "tasks " + (dl ? (dl.value >= 0.5 ? "up" : "down") : "");
   if (dl) $("dial").title = $("dial").title.split(" · ")[0] + " · " + Object.entries(dl.parts).map(([k, v]) => `${k} ${v ? "oui" : "non"}`).join(" · ");
   $("balance").textContent = plain(S.balance);
-  const TE = (S.trend || {}).equity;
-  $("balanceSub").textContent = `started at ${plain(S.bankroll)}` + (TE != null ? ` · TENDANCE ${plain(TE)} · total ${plain(S.balance + TE)} / ${plain(S.bankroll + (S.trend.bankroll || 1000))}` : "");
+  $("balanceSub").textContent = `started at ${plain(S.bankroll)}` + (S.open.length ? ` · ${S.open.length} position${S.open.length > 1 ? "s" : ""}` : "");
+  const TT = S.trend || {}, TE = TT.equity;
+  $("trendBig").textContent = TE == null ? "–" : plain(TE);
+  $("trendBig").className = "big";
+  const held = (TT.assets || []).filter(a => a.usd).map(a => a.asset);
+  $("trendSub").textContent = TE == null ? "BTC ETH SOL QQQ SPY · prix en lecture" :
+    `${pct((TE / TT.bankroll - 1) * 100)} · ${held.length ? held.join(" ") : "cash"}`;
+  $("trendSub").className = "sub " + (TE == null ? "" : sign(TE - TT.bankroll));
   $("pnl").textContent = usd(S.pnl); $("pnl").className = "big " + sign(S.pnl);
   $("pnlCard").classList.toggle("neg", S.pnl < 0);
   $("pnlSub").textContent = `${pct(S.pnl / S.bankroll * 100)} · réalisé ${usd(S.realized)} · latent ${usd(S.unrealized)}`;
@@ -1075,21 +1070,8 @@ async function load() {
   lastEventId = Math.max(lastEventId, ...S.events.map(e => e.id), 0);
   drawLog(firstLoad ? new Set() : newIds);
   firstLoad = false;
-  for (const x of $("ranges").children) x.setAttribute("aria-pressed", x.dataset.r === S.range ? "true" : "false");
   render();
 }
-$("books").addEventListener("click", (e) => {
-  const b = e.target.closest("button"); if (!b) return;
-  book = b.dataset.b;
-  for (const x of $("books").children) x.setAttribute("aria-pressed", x === b ? "true" : "false");
-  load();
-});
-$("ranges").addEventListener("click", (e) => {
-  const b = e.target.closest("button"); if (!b) return;
-  range = b.dataset.r;
-  for (const x of $("ranges").children) x.setAttribute("aria-pressed", x === b ? "true" : "false");
-  load();
-});
 setInterval(() => {   // the clock and the live edge of the chart move every second
   if (S) $("clock").textContent = new Date().toLocaleTimeString("fr-FR") + " / " + S.range.toUpperCase();
   if (S) { drawChart(); drawAgents(); drawPanel(); }
