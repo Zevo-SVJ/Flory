@@ -2135,8 +2135,38 @@ class IncidentAttribution(Base):
         paths.append(W, {"t": now - 30, "price": 2.8, "liq": 20000})
         book.sell(W, 1.0, 2.8, "trailing_stop")
         r = incidents.analyze("note", "test", 600, 9.0, 1100, now, 3.0)
-        self.assertEqual(r["cause"], "une position")
+        self.assertEqual(r["cause"], "gains rendus")
         self.assertIn("WICK", r["detail"])
-        self.assertIn("redescendu de son plus haut", r["detail"])
+        self.assertIn("stop suiveur", r["detail"])
+        self.assertTrue(r["normal"])
         self.assertLess(r["moves"][0]["usd"], 0)                  # its part of the fall
         self.assertGreater(r["moves"][0]["pnl"], 0)               # yet a winning trade
+
+    def test_an_hour_of_gains_handed_back_is_no_incident(self):
+        """Oct 20: -$37.79 in an hour, nearly all of it winners handing back unbanked gains: an analysis, no pause."""
+        import incidents, paths
+        for f in (incidents.LOG, incidents.STATE, incidents.URGENT, config.EQUITY):
+            if os.path.exists(f):
+                os.remove(f)
+        self.addCleanup(lambda: [os.remove(f) for f in (incidents.LOG, incidents.STATE, incidents.URGENT, config.EQUITY) if os.path.exists(f)])
+        now = time.time()
+        W = "Give111111111111111111111111111111111111111"
+        book.open_position(W, "GIVE", 1.0, 20000, usd=25)               # entry ~1.0
+        paths.append(W, {"t": now - 3000, "price": 3.0, "liq": 20000})
+        paths.append(W, {"t": now - 20, "price": 1.5, "liq": 20000})   # still above entry: all gains handed back
+        mk = os.path.join(config.DATA, "marks.json")
+        self.addCleanup(lambda: os.path.exists(mk) and os.remove(mk))
+        with open(mk, "w") as f:
+            f.write('{"t": %d, "marks": {"%s": 1.5}}' % (now, W))
+        incidents.tick(now - 120)                                       # first run: marks
+        import random
+        rng = random.Random(5)
+        vals = [1000 + rng.uniform(-1, 1) for _ in range(4000)] + [1070 - i for i in range(0, 40)]
+        with open(config.EQUITY, "w") as f:
+            f.write("t,balance,realized,unrealized,open\n")
+            for i, v in enumerate(vals):
+                f.write(f"{now - (len(vals) - 1 - i) * 20},{v},0,0,0\n")
+        out = incidents.tick(now)
+        self.assertEqual([r["level"] for r in out], ["note"])
+        self.assertEqual(out[0]["cause"], "gains rendus")
+        self.assertEqual(incidents.paused(), 0)

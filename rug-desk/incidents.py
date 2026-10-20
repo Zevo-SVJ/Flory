@@ -133,39 +133,50 @@ def _entry_facts(mint: str) -> dict:
             "source": src}
 
 
-def analyze(level: str, why: str, window: float, drop: float, peak: float, now: float, sigma: float) -> dict:
-    """Who made the balance fall, and why. Reads files only, plus SOL's cached trend."""
-    import book, paths, market, pending
-    t0 = now - window
-    try:
-        marks = _read(os.path.join(DATA, "marks.json"), {}).get("marks", {})
-    except Exception:
-        marks = {}
-    contrib = []
+def window_moves(t0: float) -> list[dict]:
+    """Who moved the balance since t0: every open position and every sale, in $ over the window.
+    giveback: the part of a fall that happened above the entry price, a winner handing back gains it had not
+    banked yet (a trailing stop's normal cost), as opposed to money lost on what was staked"""
+    import book, paths
+    marks = _read(os.path.join(DATA, "marks.json"), {}).get("marks", {})
+    out = []
     for m, p in book.load().items():
         hist = paths.load(m, since=t0)
         px = marks.get(m) or (hist[-1]["price"] if hist else None)
-        if hist and px:
-            contrib.append({"symbol": p["symbol"], "mint": m, "usd": round(p["qty"] * (px - hist[0]["price"]), 2),
-                            "pct": round((px / hist[0]["price"] - 1) * 100, 1)})
-    closes = _closes_since(t0)
-
-    def window_move(c):
-        """A sale's part of the fall: what the sold tokens were worth when the window opened, against what they
-        sold for. a winner that gave back from its peak before its trailing stop sold shows here as a loss, which
-        is what it did to the balance, though its own pnl is a profit (Wick, Oct 20: +$17.80 sold, -$30 from peak)"""
+        if hist and px and hist[0]["price"] > 0:
+            s0, e = hist[0]["price"], p["entry"]
+            out.append({"symbol": p["symbol"], "mint": m, "usd": round(p["qty"] * (px - s0), 2),
+                        "pct": round((px / s0 - 1) * 100, 1),
+                        "giveback": round(max(0.0, p["qty"] * (max(s0, e) - max(px, e))), 2)})
+    for c in _closes_since(t0):
         hist = paths.load(c["mint"], since=t0)
         sale_t = time.mktime(time.strptime(c["time"], "%Y-%m-%d %H:%M")) + 59
         at_sale = [h for h in hist if h["t"] <= sale_t and h["price"] > 0]
-        if not hist or not at_sale or hist[0]["price"] <= 0:
-            return float(c["pnl"])
-        usd = float(c["usd"] or 0)
-        return usd * (1 - hist[0]["price"] / at_sale[-1]["price"])
-    realized = [{"symbol": c["symbol"], "mint": c["mint"], "usd": round(window_move(c), 2), "pnl": round(float(c["pnl"]), 2),
-                 "reason": c["reason"], "sold": True} for c in closes]
+        pnl = float(c["pnl"])
+        if hist and at_sale and hist[0]["price"] > 0:
+            # what the sold tokens were worth when the window opened, against what they sold for (Wick, Oct 20:
+            # +$17.80 sold by its trailing stop, after giving back ~$30 from its peak inside the hour)
+            usd = float(c["usd"] or 0) * (1 - hist[0]["price"] / at_sale[-1]["price"])
+        else:
+            usd = pnl
+        out.append({"symbol": c["symbol"], "mint": c["mint"], "usd": round(usd, 2), "pnl": round(pnl, 2),
+                    "reason": c["reason"], "sold": True,
+                    "giveback": round(-usd, 2) if usd < 0 and pnl > 0 else 0.0})   # sold above entry: all above it
+    return out
+
+
+def analyze(level: str, why: str, window: float, drop: float, peak: float, now: float, sigma: float) -> dict:
+    """Who made the balance fall, and why. Reads files only, plus SOL's cached trend."""
+    import market, pending
+    t0 = now - window
+    allm = window_moves(t0)
+    contrib = [m for m in allm if not m.get("sold")]
+    realized = [m for m in allm if m.get("sold")]
     rugs = [c for c in realized if c["reason"] in RUG_EXITS]
     moves = sorted(contrib + realized, key=lambda c: c["usd"])
     lost = -sum(c["usd"] for c in moves if c["usd"] < 0) or 1e-9
+    giveback = sum(c["giveback"] for c in moves)
+    givers = [c for c in moves if c["giveback"] > 0]
     down = [c for c in contrib if c["pct"] <= -10]
     regime = market.sol_regime() or {}
     try:
@@ -176,6 +187,11 @@ def analyze(level: str, why: str, window: float, drop: float, peak: float, now: 
     if rugs:
         cause = "rug"
         detail = "sortie " + ", ".join(f"${r['symbol']} ({r['reason']}, {r['pnl']:+.2f} $)" for r in rugs)
+    elif givers and giveback >= 0.7 * lost:
+        cause = "gains rendus"
+        detail = (f"{', '.join('$' + c['symbol'] for c in givers[:3])} ont rendu {giveback:.2f} $ de gains pas encore encaissés depuis "
+                  f"leur sommet" + (" avant que leur stop suiveur ne vende" if any(c.get("sold") for c in givers) else "")
+                  + " : les trades restent gagnants, c'est le coût normal de laisser courir un gagnant")
     elif contrib and len(down) >= max(2, 0.6 * len(contrib)) and ((regime.get("sol_1h") or 0) <= -2 or (dial is not None and dial < 0.5)):
         cause = "marché"
         detail = f"{len(down)}/{len(contrib)} positions en baisse avec le marché (SOL 1 h {regime.get('sol_1h')} %, cadran {dial})"
@@ -197,10 +213,10 @@ def analyze(level: str, why: str, window: float, drop: float, peak: float, now: 
         detail = f"{len(down)} positions à -10 % ou pire" + (", même chaîne : " + ", ".join(f"{k} {v}" for k, v in chains_down.items() if v >= 2)
                                                          if any(v >= 2 for v in chains_down.values()) else "")
     expected = expected_hour()
-    normal = level == "note" and not rugs and drop <= max(2 * expected, 2 * sigma)
+    normal = level == "note" and not rugs and (drop <= max(2 * expected, 2 * sigma) or cause == "gains rendus")
     rec = {"t": now, "time": time.strftime("%Y-%m-%d %H:%M", time.localtime(now)), "level": level, "why": why,
            "window_min": round(window / 60), "drop": round(drop, 2), "peak": round(peak, 2), "sigma": round(sigma, 2),
-           "expected_1h": round(expected, 2), "cause": cause, "detail": detail, "moves": moves[:6],
+           "expected_1h": round(expected, 2), "giveback": round(giveback, 2), "real_loss": round(max(0.0, drop - giveback), 2), "cause": cause, "detail": detail, "moves": moves[:6],
            "sol_1h": regime.get("sol_1h"), "dial": dial, "echo_gap_min": pending.echo_gap_min(), "normal": normal,
            "lessons": {r["mint"]: _entry_facts(r["mint"]) for r in rugs}}
     rec["text"] = describe(rec)
@@ -211,7 +227,8 @@ def describe(r: dict) -> str:
     head = (f"-{r['drop']:.2f} $ en {r['window_min']} min (le bruit habituel : ±{r['sigma']:.2f} $ par 10 min"
             + (f", les positions bougent de ±{r['expected_1h']:.2f} $ par heure)" if r["expected_1h"] else ")"))
     if r["level"] == "note":
-        tail = ("perte normale pour des memecoins, aucune règle n'a cassé : les sorties de VIGIE font leur travail, rien ne change"
+        tail = ("prévu, rien ne change" if r["cause"] == "gains rendus" else
+                "perte normale pour des memecoins, aucune règle n'a cassé : les sorties de VIGIE font leur travail, rien ne change"
                 if r["normal"] else "plus que d'habitude : surveillé, rien ne change tant que ce n'est pas un incident")
         return f"ANALYSE · {head} · cause : {r['cause']}, {r['detail']} · {tail}"
     act = f"pause de {PAUSE_MIN} min sur les achats, ECHO relit toutes les positions sur X"
@@ -267,7 +284,13 @@ def tick(now: float | None = None) -> list[dict]:
     if bad:
         level, why, window = "incident", "sortie : " + ", ".join(f"${t['symbol']} {t['reason']}" for t in bad), 3600
     elif d60 >= incident_bar and now - st.get("last_incident", 0) > 3600:
-        level, why, window = "incident", f"baisse d'une heure au-delà de {incident_bar:.2f} $", 3600
+        # only money lost on what was staked counts toward an incident: a winner handing back gains it had not
+        # banked is a trailing stop at work (Oct 20: -$37.79 in an hour, nearly all Wick's and 笑傲江湖's gains)
+        real = d60 - sum(m["giveback"] for m in window_moves(now - 3600))
+        if real >= incident_bar:
+            level, why, window = "incident", f"baisse d'une heure au-delà de {incident_bar:.2f} $, dont {real:.2f} $ de vraie perte", 3600
+        elif now - st.get("last_note", 0) > NOTE_EVERY_S:
+            level, why, window = "note", f"baisse d'une heure faite surtout de gains rendus ({d60 - real:.2f} $ sur {d60:.2f} $)", 3600
     elif d10 >= max(NOTE_SIGMA * sigma, NOTE_FLOOR_USD) and now - st.get("last_note", 0) > NOTE_EVERY_S \
             and now - st.get("last_incident", 0) > NOTE_EVERY_S:
         level, why, window = "note", f"baisse de 10 min au-delà de {max(NOTE_SIGMA * sigma, NOTE_FLOOR_USD):.2f} $", 600
