@@ -1760,6 +1760,28 @@ class Trend(Base):
         r = majors.backtest_one({"BTC": {"bars": self.bars(noise)}}, ["BTC"])
         self.assertNotEqual(r["verdict"], "DATA VALIDATED", r)
 
+    def test_a_late_asset_joins_the_book_instead_of_cutting_the_history(self):
+        import majors
+        btc = [100 * 1.001 ** i for i in range(1200)]
+        sol = [10 * 1.001 ** i for i in range(400)]
+        data = {"BTC": {"bars": self.bars(btc)}, "SOL": {"bars": self.bars(sol)}}
+        r = majors.backtest_one(data, ["BTC", "SOL"])
+        self.assertEqual(r["days"], 1001)                     # from BTC's 200th close, not SOL's
+        series, days = majors._series(data, ["BTC", "SOL"])
+        held = majors.simulate(series, days, 0, len(days), "hold")
+        self.assertGreaterEqual(held["trades"], 3)            # BTC, then SOL joins (and BTC is trimmed)
+
+    def test_the_whole_crypto_history_is_read_once(self):
+        import majors
+        calls = []
+        def fetch(n, deep):
+            calls.append((n, deep))
+            return self.bars([100.0] * 250, majors.ASSETS[n]["kind"] == "crypto"), "coinbase" if n in ("BTC", "ETH", "SOL") else "yahoo"
+        with mock.patch.object(majors, "_fetch", fetch), mock.patch.object(majors, "REFRESH_S", 0):
+            majors.refresh(); majors.refresh()
+        self.assertEqual([d for n, d in calls if n == "BTC"], [True, False])
+        self.assertEqual([d for n, d in calls if n == "QQQ"], [False, False])
+
     def test_tick_trades_only_when_the_set_changes(self):
         import majors
         rising = [100 * 1.002 ** i for i in range(260)]

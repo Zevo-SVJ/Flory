@@ -38,7 +38,7 @@ BANKROLL = 1000.0
 SMA_DAYS = 200
 BAND_IN, BAND_OUT = 1.01, 0.97
 COST_PCT = {"crypto": 0.40, "etf": 0.05}     # per side: a Kraken Pro taker fee; an ETF's spread and slippage
-CRYPTO_DAYS = 1500                            # history fetched once, then topped up
+CRYPTO_DAYS = 4000                            # all of it, once (BTC 2015, ETH 2016, SOL 2021), then topped up
 REFRESH_S = 900                               # candles re-read every 15 min: the last one is the live price
 BACKTEST_S = 24 * 3600
 DIAL = (("BTC", 200), ("ETH", 200), ("SOL", 50))
@@ -86,6 +86,7 @@ def _coinbase(sym: str, days: int) -> list[list[float]]:
         for row in rows:
             out[float(row[0])] = float(row[4])
         end, days = start, days - n
+        time.sleep(0.2)                                   # public limit: 10 calls a second
     if not out:
         raise ValueError("Coinbase: aucune bougie")
     return [[t, out[t]] for t in sorted(out)]
@@ -130,11 +131,11 @@ def _stooq(sym: str) -> list[list[float]]:
     return out[-2600:]
 
 
-def _fetch(name: str, have: int) -> tuple[list[list[float]], str]:
+def _fetch(name: str, deep: bool) -> tuple[list[list[float]], str]:
     a = ASSETS[name]
     errors = []
     if a["kind"] == "crypto":
-        tries = (("coinbase", lambda: _coinbase(a["cb"], CRYPTO_DAYS if have < SMA_DAYS else 300)),
+        tries = (("coinbase", lambda: _coinbase(a["cb"], CRYPTO_DAYS if deep else 290)),
                  ("kraken", lambda: _kraken(a["kr"])))
     else:
         tries = (("yahoo", lambda: _yahoo(a["yf"])), ("stooq", lambda: _stooq(a["stooq"])))
@@ -167,14 +168,16 @@ def refresh(force: bool = False) -> dict:
         cur = data.get(name) or {}
         if not force and time.time() - cur.get("t", 0) < REFRESH_S:
             continue
+        deep = ASSETS[name]["kind"] == "crypto" and cur.get("depth") != CRYPTO_DAYS   # the whole history, once
         try:
-            bars, src = _fetch(name, len(cur.get("bars") or []))
+            bars, src = _fetch(name, deep)
         except Exception as e:
             errors[name] = str(e)[:200]
             continue
         merged = {b[0]: b[1] for b in cur.get("bars") or []}
         merged.update({b[0]: b[1] for b in bars})
-        data[name] = {"t": time.time(), "src": src, "bars": [[t, merged[t]] for t in sorted(merged)]}
+        data[name] = {"t": time.time(), "src": src, "bars": [[t, merged[t]] for t in sorted(merged)],
+                      "depth": CRYPTO_DAYS if deep and src == "coinbase" else cur.get("depth")}
     data["errors"] = errors
     data["checked"] = time.time()
     _write(PRICES, data)
@@ -298,14 +301,13 @@ def _move(cash: float, qty: dict, px: dict, want: set) -> tuple[float, list]:
 def simulate(series: dict, days: list[str], start: int, end: int, mode: str = "trend") -> dict:
     """One run of the book over days[start:end]. series: {asset: {day: (close, signal)}}, forward-filled.
     mode "trend": the 200-day rule, equal weight among assets in, the signal of close d traded at close d+1.
-    mode "hold": equal weight at the start, never traded again (the benchmark)."""
+    mode "hold": the benchmark, always in every asset that exists, equal weight, same timing and costs.
+    an asset joins the day it has 200 closes (SOL in 2022, BTC in 2015): the book is never longer than the data."""
     names = list(series)
     cash, qty, curve, costs, trades, exposed, want = BANKROLL, {}, [], 0.0, 0, 0, None
     for i in range(start, end):
         d = days[i]
-        px = {n: series[n][d][0] for n in names}
-        if mode == "hold" and i == start:
-            want = set(names)
+        px = {n: series[n][d][0] for n in names if d in series[n]}
         if want is not None:                              # yesterday's signal, filled at today's close
             cash, done = _move(cash, qty, px, want)
             costs += sum(f[3] for f in done)
@@ -313,10 +315,10 @@ def simulate(series: dict, days: list[str], start: int, end: int, mode: str = "t
             want = None
         curve.append(cash + sum(q * px[n] for n, q in qty.items()))
         exposed += bool(qty)
-        if mode == "trend":
-            now_in = {n for n in names if series[n][d][1]}
-            if now_in != set(qty):
-                want = now_in
+        live = {n for n in px if series[n][d][1] is not None}
+        now_in = live if mode == "hold" else {n for n in live if series[n][d][1]}
+        if now_in != set(qty):
+            want = now_in
     return {"curve": curve, "costs": round(costs, 2), "trades": trades, "exposed": exposed / max(1, end - start)}
 
 
@@ -355,7 +357,7 @@ def verdict(full: dict, halves: list[dict]) -> tuple[str, str]:
 
 def _series(data: dict, names: list[str]) -> tuple[dict, list[str]]:
     """Common calendar (the union of the assets' trading days), each asset's close and signal carried
-    forward over the days it does not trade, from the first day every asset has a signal."""
+    forward over the days it does not trade, from the first day any asset has a signal."""
     raw = {}
     for n in names:
         bars = complete(n, (data.get(n) or {}).get("bars") or [])
@@ -366,8 +368,10 @@ def _series(data: dict, names: list[str]) -> tuple[dict, list[str]]:
             prev[n] = raw[n].get(d, prev[n])
             if prev[n] is not None:
                 out[n][d] = prev[n]
-    days = [d for d in sorted(out[names[0]]) if all(d in out[n] and out[n][d][1] is not None for n in names)]
-    return {n: {d: out[n][d] for d in days} for n in names}, days
+    all_days = sorted({d for n in names for d in out[n]})
+    first = next((d for d in all_days if any(d in out[n] and out[n][d][1] is not None for n in names)), None)
+    days = [d for d in all_days if first and d >= first]
+    return {n: {d: out[n][d] for d in days if d in out[n]} for n in names}, days
 
 
 def _years(days: list[str]) -> float:
