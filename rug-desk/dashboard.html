@@ -272,6 +272,7 @@ a { color: #8fb8f0; text-decoration: none; } a:hover { text-decoration: underlin
     <span class="live" id="ready" title=""><i></i><span id="readyText">…</span></span>
     <span class="tasks" id="sol" title="Tendance de SOL : les memecoins Solana suivent SOL. AUDIT mesure si les PASS chutent plus quand SOL baisse."></span>
     <span class="tasks" id="dial" title="Cadran de régime : BTC au-dessus de sa moyenne 200 jours, ETH au-dessus de sa 200 jours, SOL au-dessus de sa 50 jours. Enregistré avec chaque verdict memecoin : TREND mesure si les memecoins perdent quand il est rouge."></span>
+    <span class="tasks" id="learnChip" title="Le modèle d'apprentissage : il s'entraîne sur chaque token jugé (suivi 6 h). Une fois FIABLE, il peut acheter ce qu'une règle souple a refusé, et refuser un PASS qu'il voit perdant."></span>
     <span class="tasks" id="tasks"></span>
     <span class="live" id="live"><i></i><span id="liveText">…</span></span>
   </header>
@@ -961,6 +962,9 @@ function drawTop() {
   const sol = S.sol || {};
   $("sol").textContent = sol.sol_24h == null ? "" : `SOL 24H ${pct(sol.sol_24h)} · 1H ${pct(sol.sol_1h)}`;
   $("sol").className = "tasks " + sign(sol.sol_24h || 0);
+  const LC = S.learn || {};
+  $("learnChip").textContent = LC.trusted ? "MODÈLE FIABLE" : `MODÈLE ${LC.n || 0}/${LC.min || 110} LEÇONS`;
+  $("learnChip").className = "tasks " + (LC.trusted ? "up" : "");
   const dl = (S.trend || {}).dial;
   $("dial").textContent = dl ? `CADRAN ${Object.values(dl.parts).filter(Boolean).length}/${Object.keys(dl.parts).length}` : "";
   $("dial").className = "tasks " + (dl ? (dl.value >= 0.5 ? "up" : "down") : "");

@@ -1927,3 +1927,29 @@ class Sources20(Base):
         self.assertEqual([v for _, v in tot], [900 + 1000, 900 + 1010, 880 + 1010])
         self.assertEqual(dashboard.book_curve("tendance", 900, now), [[now - 50, 1010.0]])
         self.assertEqual(dashboard.state("live", "total")["range_s"], 900)
+
+
+class ModelRescues(Base):
+    """Option B (Oct 20): the trusted model may buy what a pool-stage soft rule refused, never a hard kill."""
+    def run_with(self, trusted, exp, kill="copycat"):
+        import market, learn
+        with mock.patch.object(market, "copycat", lambda m, mint: kill), \
+                mock.patch.object(learn, "load", lambda: {"trusted": trusted}), \
+                mock.patch.object(learn, "expected", lambda row: exp if trusted else None):
+            return self.verdict()
+
+    def test_untrusted_model_changes_nothing(self):
+        v = self.run_with(False, None)
+        self.assertEqual((v["verdict"], v["stage"], v["reason"]), ("SKIP", "pool", "copycat"))
+
+    def test_trusted_model_rescues_only_when_it_expects_a_profit(self):
+        v = self.run_with(True, 12.0)
+        self.assertEqual(v["verdict"], "PASS", v)
+        self.assertEqual(v["override"], "copycat")
+        v = self.run_with(True, 1.0)
+        self.assertEqual((v["verdict"], v["reason"]), ("SKIP", "copycat"))
+        self.assertEqual(v["expected"], 1.0)
+
+    def test_a_rug_factory_is_never_held(self):
+        v = self.run_with(True, 50.0, kill="serial_farm")
+        self.assertEqual((v["verdict"], v["reason"]), ("SKIP", "serial_farm"))

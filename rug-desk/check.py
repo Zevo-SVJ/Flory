@@ -76,11 +76,22 @@ def chains_split(mint: str) -> str:
 
 def _expected(seen: dict, reason: str) -> float | None:
     """learn.py's predicted net % per trade for this token, None until the model is trusted."""
-    import learn
+    import learn, majors
     try:
-        return learn.expected({**seen, **(market.sol_regime() or {}), "reason": reason})
+        return learn.expected({**seen, **(market.sol_regime() or {}), "dial": majors.dial_value(), "reason": reason})
     except Exception:
         return None
+
+
+def _trusted() -> bool:
+    import learn
+    return bool(learn.load().get("trusted"))
+
+
+# pool-stage soft kills the trusted model may overrule. it needs the whole token to judge (holders, score,
+# RugCheck), so the kill is held while the other checks run, and applied at the end unless the model
+# expects a profit. serial_farm (a rug factory) and every hard kill are never held
+DEFERRABLE = ("below_graduation", "copycat")
 
 
 def _model_override(reason: str, seen: dict) -> bool:
@@ -108,6 +119,7 @@ def check(mint: str) -> dict:
     except Exception as e:
         return {"stage": "pool", "verdict": "SKIP", "reason": f"dexscreener failed: {e}"}
     mm = m or {}
+    held = None                                                  # a pool soft kill waiting for the model
     liq = mm.get("liq_usd") or 0
     seen = {"chain": chains_split(mint), "vol_liq": round((mm.get("vol_1h") or 0) / liq, 3) if liq else None,
             "avg_trade": round(mm.get("avg_trade_1h") or 0, 1) if m else None,
@@ -125,9 +137,13 @@ def check(mint: str) -> dict:
         import grads                                             # first-hour dump has not been absorbed
         p0 = grads.birth_price(mint)
         if p0 and m.get("price_native") and m["price_native"] < FACTS["min_vs_graduation"] * p0:
-            return {"stage": "pool", "verdict": "SKIP", "reason": "below_graduation", "symbol": m.get("symbol"), **seen}
+            if not _trusted():
+                return {"stage": "pool", "verdict": "SKIP", "reason": "below_graduation", "symbol": m.get("symbol"), **seen}
+            held = "below_graduation"
     if (k := market.copycat(m, mint)) and k not in waived:       # a rug factory's name, or a bigger owner
-        return {"stage": "pool", "verdict": "SKIP", "reason": k, "symbol": m.get("symbol"), **seen}
+        if k not in DEFERRABLE or not _trusted():
+            return {"stage": "pool", "verdict": "SKIP", "reason": k, "symbol": m.get("symbol"), **seen}
+        held = held or k
 
     # the pool as it is on chain right now. DexScreener can lag a pool by minutes: a token already dumped
     # can still show its old liquidity there, and get bought at a price that no longer exists
@@ -178,7 +194,13 @@ def check(mint: str) -> dict:
             return {"stage": "deep", "verdict": "SKIP", "reason": deep["kill"], "symbol": sym, **seen,
                     "score": sc["score"]}
     usd, tier, sig = size.ticket({"score": sc["score"]}, m, token)
-    exp = _expected(seen, "")                  # learn.py's view of a full pass: a loss expected -> not bought
+    if held:                                   # the pool soft kill held above: applied unless the model expects a profit
+        exp = _expected(seen, held)
+        if exp is None or exp < __import__("learn").OVERRIDE_PCT:
+            return {"stage": "pool", "verdict": "SKIP", "reason": held, "symbol": sym, **seen,
+                    **({"expected": round(exp, 1)} if exp is not None else {})}
+        seen["override"] = held
+    exp = _expected(seen, held or "")          # learn.py's view of a full pass: a loss expected -> not bought
     if exp is not None:
         seen["expected"] = round(exp, 1)
     return {**v, **seen, "ticket": usd, "tier": tier, "signals": sig, "symbol": sym, "price": m["price"], "liq_usd": m["liq_usd"], "url": m["url"],
