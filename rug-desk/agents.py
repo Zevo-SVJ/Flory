@@ -10,6 +10,9 @@
 #   (GARDE also answers on Telegram, tgbot.py, read-only, when TELEGRAM_BOT_TOKEN is in .env)
 #   AUDIT  every 30 min       the slow loop: re-prices verdicts, learns wallets, writes the reports, and
 #                              every 6 h starts the cumulative backtest in a child process
+#          and every minute it grades any fall of the balance against the noise, finds the cause and
+#          answers in proportion: a cooling-off, ECHO re-reading every position, smaller tickets in a drawdown
+#          (incidents.py). never a bigger bet to win a loss back
 #   TREND  every 5 min        the second book (majors.py): BTC ETH SOL QQQ SPY on the 200-day rule, its own
 #                              $1,000 in paper, and the regime dial every memecoin verdict is logged with
 # one writer at a time on the book (book.LOCK) and on the event log (events._LOCK).
@@ -296,6 +299,9 @@ def auditor():
             emit("AUDIT", "info", msg)
             post("AUTO-AMÉLIORATION · " + msg + " · re-testé dans 48 h, annulé s'il déçoit")
         for m in revs.get("AUDIT", {}).get("mistakes", []):
+            if m in _said:                     # a recurring pattern stays in the review, said once
+                continue
+            _said.add(m)
             emit("AUDIT", "info", m)
             post("AUTO-AMÉLIORATION · " + m)
     bt = backtest_kick()
@@ -393,6 +399,16 @@ def trend():
 _trend_errs = set()
 
 
+def incident_watch():
+    """AUDIT's minute watch on the balance (incidents.py): a fall graded against the noise, its cause found,
+    an answer in proportion. files only, so it never holds up the loop."""
+    import incidents
+    for r in incidents.tick():
+        emit("AUDIT", "incident" if r["level"] == "incident" else "analyse", r["text"], cause=r["cause"], drop=r["drop"])
+        if r["level"] == "incident":
+            post(r["text"])
+
+
 def run_job(name: str, job, every: float | None):
     """One turn of one agent: its status before and after, its errors counted, never fatal."""
     set_agent(name, status="work", msg="au travail…")
@@ -427,6 +443,8 @@ def vigie_loop(stop: threading.Event):
 
 
 _main_beat = {"t": 0.0}
+_incident_t = {"t": 0.0}
+_said = set()
 
 
 def start_vigie(stop: threading.Event) -> threading.Thread:
@@ -492,6 +510,12 @@ def main():
             inbox()
         except Exception as e:
             emit("GARDE", "error", f"dashboard check failed: {e}")
+        if time.time() - _incident_t["t"] >= 60:
+            _incident_t["t"] = time.time()
+            try:
+                incident_watch()
+            except Exception as e:
+                emit("AUDIT", "error", f"veille du solde en panne : {str(e)[:160]}")
         beat()
         last = time.time()
         time.sleep(1)

@@ -42,7 +42,8 @@ def ticket(v: dict, m: dict, t: dict | None = None) -> tuple[float, str, list[st
     """(usd, tier, signals). Never more than the pool can take, never more than the free cash."""
     sig = signals(v, m, t)
     tier = "max" if len(sig) >= 4 else "strong" if len(sig) >= 2 else "base"
-    equity = PAPER_BANKROLL_USD + book.realized()
+    import incidents                                         # every 10% of drawdown cuts the tickets by 20%
+    equity = (PAPER_BANKROLL_USD + book.realized()) * incidents.prudence()["factor"]
     usd = equity * SIZING[tier] / 100
     usd = min(usd, (m.get("liq_usd") or 0) * FACTS["max_ticket_share"], book.cash())
     return round(max(usd, min(TICKET_USD, book.cash())), 2), tier, sig

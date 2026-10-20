@@ -295,10 +295,19 @@ def run_all(balance: float | None) -> dict:
             out[name] = {"did": [], "mistakes": [], "change": f"revue impossible : {str(e)[:120]}"}
     judged = coach.evaluate({"exit_profile": _test_exit, "echo_skip_sells": _test_echo, "meme_dial_gate": _test_gate})
     tripped = coach.circuit(balance) if balance is not None else []
+    import incidents
+    inc = incidents.recent(0, 7)
+    pats = incidents.patterns()
+    by_cause = {}
+    for r in inc:
+        by_cause[r["cause"]] = by_cause.get(r["cause"], 0) + 1
     out["AUDIT"] = {"did": [f"{len(coach.journal())} changements au journal, "
-                            f"{sum(1 for e in coach.journal() if e['status'] == 'active')} en test"],
+                            f"{sum(1 for e in coach.journal() if e['status'] == 'active')} en test",
+                            f"baisses analysées en 7 j : {len(inc)} ({sum(1 for r in inc if r['level'] == 'incident')} incident(s))"
+                            + (" · causes : " + ", ".join(f"{k} {v}" for k, v in by_cause.items()) if by_cause else "")],
                     "mistakes": [f"annulé : {e['agent']} « {e['key']} » ({e.get('undone_why') or 'disjoncteur'})"
-                                 for e in judged + tripped if e["status"] == "rolled_back" or e in tripped],
+                                 for e in judged + tripped if e["status"] == "rolled_back" or e in tripped]
+                                + [f"motif récurrent : {p}" for p in pats],
                     "change": "; ".join(f"confirmé : {e['agent']} « {e['key']} » → {e['new']}"
                                         for e in judged if e["status"] == "confirmed") or "rien à juger pour l'instant"}
     coach.save_reviews(out)

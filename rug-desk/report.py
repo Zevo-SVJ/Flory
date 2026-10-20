@@ -180,6 +180,16 @@ def status(hours: float = 1) -> str:
                             + (f" · cadran {sum(d['parts'].values())}/{len(d['parts'])}" if d else ""))
     except Exception:
         pass
+    try:
+        import incidents
+        I = incidents.status()
+        last = [r for r in I["recent"] if time.time() - r["t"] < hours * 3600]
+        if last or I["factor"] < 1 or I["paused_s"]:
+            lines.insert(3, f"Baisses : {len(last)} analysée(s)" + (f", dernière : {last[-1]['cause']} (-{last[-1]['drop']:.2f} $)" if last else "")
+                         + (f" · achats en pause {I['paused_s'] // 60} min" if I["paused_s"] else "")
+                         + (f" · mises x{I['factor']} ({I['dd_pct']} % sous le plus haut)" if I["factor"] < 1 else ""))
+    except Exception:
+        pass
     import learn
     L = learn.load()
     if L:

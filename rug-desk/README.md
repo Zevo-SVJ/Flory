@@ -309,6 +309,20 @@ memecoins passed in a red regime clearly lose (40 cases, beyond noise, both halv
 self-review makes the meme desk stand down under a dial of 0.5, re-tested after 48 h like every change.
 VIGIE's review also tests a "volume fade" exit (5-min volume under 25% of its hour average).
 
+## When the balance falls (Oct 20)
+
+AUDIT watches the balance every minute (incidents.py). A fall is compared with the balance's own usual
+10-min moves and with what the open positions should move in an hour given their volatility.
+- an ANALYSE (past 2x the noise and $5 in 10 min): the cause in one line, nothing changes. five memecoins
+  held at once move a few dollars an hour, and reacting to that is how revenge trading starts
+- an INCIDENT (past 3x the noise and 3% of the bankroll in an hour, a rug exit, or a ticket lost): no new
+  entry for 30 min, ECHO re-reads every open position on X at once, VIGIE sells what shares wallets or a
+  funder with a rug, and the entry's facts are kept as a lesson
+- in a drawdown, every 10% of the bankroll lost from the peak cuts the tickets by 20% (the Turtle rule,
+  three steps at most); they grow back with the balance. never a bigger ticket to win a loss back
+- traits shared by 3 rugs in 7 days and rare among the other buys are reported; rules change only through
+  the guarded learners (shadow book, model, coach)
+
 ## Real money
 
 `edge.py` is the go-live gate, on the dashboard header and in every evening report. Real money only when:

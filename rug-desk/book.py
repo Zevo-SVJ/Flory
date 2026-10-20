@@ -110,6 +110,8 @@ def guard(mint: str) -> str | None:
     day = time.strftime("%Y-%m-%d")
     book = load()
     if today_pnl() <= -DAILY_LOSS_HALT_USD:                      return "halted_daily_loss"
+    import incidents
+    if incidents.paused():                                       return "incident_pause"
     if mint in book:                                             return "already_open"
     if len(book) >= MAX_OPEN:                                    return "max_open"
     if cash(book) < TICKET_USD:                                  return "no_cash"

@@ -20,6 +20,8 @@ selling, a rug accusation, the crowd moving to a copy) travels on X minutes befo
 `data/x_watch.csv` lists every open position: `held_min` (how long the desk has held it), `pct` (its
 result now), `last_x_min` (minutes since your last read), `due` (`oui` = read it now), `last_verdict`,
 the X links and `contexte` (what the code saw at the buy). Read every `due = oui` row, worst `pct` first.
+After an incident (a rug, or a fall of the balance well past its usual noise), AUDIT marks every open
+position `due = oui` at once: read them all in this pass, the desk is waiting on you.
 
 Open the `x_by_ca` and `x_by_ticker` links (latest posts) and look at **what changed since your last read**:
 

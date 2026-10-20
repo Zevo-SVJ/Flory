@@ -291,8 +291,16 @@ def state(range_key: str = "auto", series: str = "memes") -> dict:
         "backtest": (bt := backtest_state()), "bilan": edge.bilan(bt["card"]), "tgbot": tgbot.stats(), "shadow": shadow_state(), "learn": learn_state(),
         "reviews": __import__("coach").reviews(), "journal": __import__("coach").journal(last=20),
         "by_chain": edge.split(lambda t: __import__("chains").split(t["mint"])[0]),
-        "trend": trend_state(),
+        "trend": trend_state(), "incidents": incidents_state(),
     }
+
+
+def incidents_state() -> dict:
+    try:
+        import incidents
+        return incidents.status()
+    except Exception as e:
+        return {"error": str(e)[:160]}
 
 
 def trend_state() -> dict:

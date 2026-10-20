@@ -83,9 +83,14 @@ def write_watch(done: dict):
             marks = json.load(f).get("marks", {})
     except (OSError, ValueError):
         marks = {}
+    import incidents
+    u = incidents.urgent()
+    since_urgent = (time.time() - u["t"]) / 60 if u.get("t") else None
     rows = []
     for m, pos in book.load().items():
         last = last_read_min(m, done)
+        if since_urgent is not None and m in u.get("mints", []) and last is not None and last > since_urgent:
+            last = None                        # read before the incident: due now
         px = marks.get(m)
         chain, addr = chains.split(m)
         rows.append([m, pos["symbol"], chain, round((time.time() - pos["opened"]) / 60),

@@ -395,6 +395,10 @@ a { color: #8fb8f0; text-decoration: none; } a:hover { text-decoration: underlin
       <div id="selfReview"></div>
       <p class="note">Un agent ne change un réglage que sur au moins 40 cas, au-delà du bruit, sur les deux moitiés des données, un changement par jour au plus, re-testé 48 h après et annulé s'il déçoit.</p>
     </section>
+    <section class="pane" data-agent="AUDIT" hidden><h3>Quand le solde baisse : analyse et réponse</h3>
+      <div class="stats3" id="incStats"></div>
+      <div class="scroll"><table id="incTable"></table></div>
+      <p class="note" id="incNote"></p></section>
     <section class="pane" data-agent="AUDIT" hidden><h3>Journal des changements automatiques</h3>
       <div class="scroll"><table id="journal"></table></div>
     </section>
@@ -556,7 +560,8 @@ function drawChart() {
 
 // ---------- activity log ----------
 const KIND_TAGS = { scan: ["SCAN", "#7fd4c8"], kill: ["RISK", "#f2a272"], pass: ["PASS", "#a99af0"], buy: ["EXEC", "#8cb4f0"],
-  sell: ["FILL", "#6fd6b0"], audit: ["AUDIT", "#f08aa8"], report: ["RAPPORT", "#8ccbf0"], error: ["ERR", "#ef6f6f"], info: ["DESK", "#9a93a0"], x: ["X", "#f2cf7a"] };
+  sell: ["FILL", "#6fd6b0"], audit: ["AUDIT", "#f08aa8"], report: ["RAPPORT", "#8ccbf0"], error: ["ERR", "#ef6f6f"], info: ["DESK", "#9a93a0"], x: ["X", "#f2cf7a"],
+  analyse: ["ANALYSE", "#8ccbf0"], incident: ["INCIDENT", "#ef6f6f"] };
 function eventLine(e, withTime = false) {
   const row = el("div", { class: "ev" });
   const isMega = e.kind === "sell" && e.pct >= S.mega_pct;
@@ -613,7 +618,8 @@ const DOES = {
           "Règle : on détient un actif tant que sa clôture est au-dessus de sa moyenne 200 jours (entrée à +1 %, sortie à −3 %, pour ne pas trader à chaque croisement). Les actifs « dedans » se partagent le portefeuille à parts égales, le reste est en cash. Pas de levier.",
           "Toutes les 5 min : prix (Coinbase ou Kraken, Yahoo ou Stooq), signal, ordres si l'ensemble des actifs dedans change. Backtest refait chaque jour, coûts compris, verdict DATA VALIDATED, TRADE-OFF ou NO EDGE.",
           "Calcule le cadran de régime pour les memecoins : s'ils perdent clairement quand il est rouge, il les met en retrait (sous garde-fous, annulé s'il déçoit)."],
-  AUDIT: ["Re-prix chaque verdict 6 h après : le filtre a-t-il tué des rugs ou des gagnants ?",
+  AUDIT: ["Surveille le solde chaque minute : une baisse est comparée au bruit habituel. Une baisse ordinaire est expliquée en une ligne, sans rien changer ; un incident (rug, ou baisse anormale) déclenche une pause des achats de 30 min, une relecture X de toutes les positions et la vente de ce qui est lié à un rug.",
+          "Re-prix chaque verdict 6 h après : le filtre a-t-il tué des rugs ou des gagnants ?",
           "Apprend les wallets gagnants et ceux des rugs, met les devs qui rug sur liste noire.",
           "Décide si le desk est prêt pour l'argent réel : 200 trades et un gain moyen positif avec 95 % de confiance. Rejoue toutes les 6 h de nouvelles graduations et les tokens momentum (backtest cumulatif).",
           "Écrit le rapport du soir et le brief du matin à partir des fichiers du desk, rien de mémoire."],
@@ -782,7 +788,23 @@ function drawTrend() {
     (T.fills || []).map(f => [f.time, f.asset, f.side, plain(+f.usd), (+f.price).toLocaleString("fr-FR", { maximumFractionDigits: 2 }), f.why]),
     "Aucun ordre pour l'instant.");
 }
+function drawIncidents() {
+  const I = S.incidents || {}, st = $("incStats"); st.replaceChildren();
+  [["Tickets", I.factor == null ? "–" : (I.factor < 1 ? "×" + I.factor : "normaux"), I.dd_pct ? `${I.dd_pct} % sous le plus haut` : "au plus haut"],
+   ["Achats", I.paused_s ? "en pause" : "ouverts", I.paused_s ? `encore ${Math.ceil(I.paused_s / 60)} min (après un incident)` : "aucun incident récent"],
+   ["Analyses", String((I.recent || []).length), "les dernières, ci-dessous"]]
+    .forEach(([l, v, sub]) => { const c = el("div", { class: "card" }); c.append(el("div", { class: "label" }, l), el("div", { class: "big" }, v), el("div", { class: "sub" }, sub)); st.append(c); });
+  table("incTable", [["Quand"], ["Niveau"], ["Baisse", 1], ["Cause"], ["Ce qu'il en ressort"]],
+    (I.recent || []).slice().reverse().map(r => [r.time.slice(5), span(r.level === "incident" ? "down" : "", r.level === "incident" ? "INCIDENT" : "analyse"),
+      "-" + plain(r.drop), r.cause, el("span", { class: "why" }, r.detail + (r.normal ? " · perte normale" : ""))]),
+    "Aucune baisse notable depuis le reset.");
+  $("incNote").textContent = ((I.patterns || []).length ? "Motif récurrent : " + I.patterns.join(" · ") + ". " : "") +
+    "Une baisse est comparée au bruit habituel du solde et à ce que les positions bougent normalement en une heure. Une analyse ne change rien. " +
+    "Un incident (3× le bruit et 3 % de la banque en 1 h, ou un rug) met les achats en pause 30 min et fait relire toutes les positions sur X. " +
+    "En baisse prolongée, chaque 10 % perdu depuis le plus haut réduit les mises de 20 % (règle des Turtles), puis elles remontent avec le solde. Jamais de mise plus grosse pour se refaire.";
+}
 function drawPanels() {
+  drawIncidents();
   drawTrend();
   table("open", [["Token"], ["Entrée", 1], ["Prix", 1], ["Variation", 1], ["Plus haut", 1], ["Reste", 1], ["Depuis", 1], ["PnL latent", 1]],
     S.open.map(p => [tokenCell(p.mint, p.symbol),
@@ -963,7 +985,9 @@ function drawTop() {
   $("dial").className = "tasks " + (dl ? (dl.value >= 0.5 ? "up" : "down") : "");
   if (dl) $("dial").title = $("dial").title.split(" · ")[0] + " · " + Object.entries(dl.parts).map(([k, v]) => `${k} ${v ? "oui" : "non"}`).join(" · ");
   $("balance").textContent = plain(S.balance);
-  $("balanceSub").textContent = `started at ${plain(S.bankroll)}` + (S.open.length ? ` · ${S.open.length} position${S.open.length > 1 ? "s" : ""}` : "");
+  const IN = S.incidents || {};
+  $("balanceSub").textContent = `started at ${plain(S.bankroll)}` + (S.open.length ? ` · ${S.open.length} position${S.open.length > 1 ? "s" : ""}` : "")
+    + (IN.paused_s ? ` · achats en pause ${Math.ceil(IN.paused_s / 60)} min` : "") + (IN.factor < 1 ? ` · mises ×${IN.factor}` : "");
   const TT = S.trend || {}, TE = TT.equity;
   $("trendBig").textContent = TE == null ? "–" : plain(TE);
   $("trendBig").className = "big";

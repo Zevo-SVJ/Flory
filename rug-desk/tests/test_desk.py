@@ -2030,3 +2030,92 @@ class BalanceRestart(Base):
         book.sell("Mint222222222222222222222222222222222222222", 1.0, 1.2, "take")  # a new trade counts
         self.assertGreater(book.realized(), 0)
         self.assertEqual(dashboard.state()["wins"], 1)
+
+
+class Incidents(Base):
+    """Oct 20: a fall of the balance is graded against the noise; only a real incident changes anything."""
+    def setUp(self):
+        super().setUp()
+        import incidents
+        self.clean()
+        self.addCleanup(self.clean)
+
+    def clean(self):
+        import incidents
+        for f in (incidents.LOG, incidents.STATE, incidents.URGENT, config.EQUITY, book.RESET):
+            if os.path.exists(f):
+                os.remove(f)
+
+    def equity(self, values, step=20, end=None):
+        end = end or time.time()
+        with open(config.EQUITY, "w") as f:
+            f.write("t,balance,realized,unrealized,open\n")
+            for i, v in enumerate(values):
+                f.write(f"{end - (len(values) - 1 - i) * step},{v},0,0,0\n")
+
+    def wiggle(self, n=4000, amp=1.5):
+        import random
+        rng = random.Random(3)
+        return [1000 + amp * rng.uniform(-1, 1) for _ in range(n)]
+
+    def test_noise_is_not_an_incident(self):
+        import incidents
+        self.equity(self.wiggle())
+        incidents.tick()                                   # first run: sets its marks
+        self.assertEqual(incidents.tick(), [])
+        self.assertEqual(incidents.paused(), 0)
+
+    def test_a_small_drop_is_explained_and_changes_nothing(self):
+        import incidents
+        self.equity(self.wiggle() + [1004, 1003, 1001, 999, 998])    # -$6 in under 10 min, like Oct 20
+        incidents.tick(); os.remove(incidents.LOG) if os.path.exists(incidents.LOG) else None
+        st = incidents._read(incidents.STATE, {}); st.pop("last_note", None); incidents._write(incidents.STATE, st)
+        out = incidents.tick()
+        self.assertEqual([r["level"] for r in out], ["note"])
+        self.assertIn("ANALYSE", out[0]["text"])
+        self.assertEqual(incidents.paused(), 0)                 # no pause, no change
+        self.assertIsNone(book.guard(MINT))
+
+    def test_a_big_fall_is_an_incident_with_a_pause(self):
+        import incidents
+        incidents.tick()
+        self.equity(self.wiggle() + [1000 - 2 * i for i in range(1, 40)])   # -$78 in 13 min
+        out = incidents.tick()
+        self.assertEqual(out[0]["level"], "incident")
+        self.assertGreater(incidents.paused(), 25 * 60)
+        self.assertEqual(book.guard(MINT), "incident_pause")
+        self.assertIn("jamais de mise plus grosse", out[0]["text"])
+
+    def test_a_rug_exit_is_an_incident_and_echo_rereads(self):
+        import incidents, pending
+        self.equity(self.wiggle())
+        incidents.tick()
+        book.open_position(MINT, "RUG", 1.0, 20000, usd=25)
+        book.open_position("Mint333333333333333333333333333333333333333", "OTHER", 1.0, 20000, usd=25)
+        book.sell(MINT, 1.0, 0.02, "liquidity_pulled")
+        out = incidents.tick()
+        self.assertEqual((out[0]["level"], out[0]["cause"]), ("incident", "rug"))
+        self.assertIn(MINT, out[0]["lessons"])
+        self.assertIn("Mint333333333333333333333333333333333333333", incidents.urgent()["mints"])
+        with open(pending.X_READS, "w") as f:                  # read 5 min BEFORE the incident: due again
+            f.write("time,mint,symbol,verdict,raison\n" + time.strftime("%Y-%m-%d %H:%M", time.localtime(time.time() - 300))
+                    + ",Mint333333333333333333333333333333333333333,OTHER,BUY,ok\n")
+        self.addCleanup(lambda: os.path.exists(pending.X_READS) and os.remove(pending.X_READS))
+        pending.write_watch(pending.reads())
+        with open(pending.X_WATCH, newline="") as f:
+            self.assertEqual(next(csv.DictReader(f))["due"], "oui")
+
+    def test_drawdown_cuts_tickets_never_raises_them(self):
+        import incidents
+        self.equity([1000, 1050, 1040])
+        self.assertEqual(incidents.prudence()["factor"], 1.0)    # 1 % under the peak: nothing
+        self.equity([1000, 1050, 940])                           # 11 % under the peak
+        self.assertEqual(incidents.prudence()["factor"], 0.8)
+        self.equity([1000, 1050, 600])                           # 45 %: three steps at most
+        self.assertEqual(incidents.prudence()["factor"], 0.512)
+        import size
+        self.equity([1000, 1000])                                # back at the peak: full tickets
+        with mock.patch.object(incidents, "prudence", lambda: {"factor": 0.8}):
+            small = size.ticket({"score": 60}, {"liq_usd": 1e6, "symbol": "X"})[0]
+        big = size.ticket({"score": 60}, {"liq_usd": 1e6, "symbol": "X"})[0]
+        self.assertLess(small, big)
