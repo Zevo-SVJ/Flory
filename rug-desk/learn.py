@@ -20,7 +20,7 @@ CLIP = (-100.0, 200.0)       # a +2,000% moonshot would otherwise be half the mo
 MIN_TRAIN, MIN_TEST, MIN_PICKS = 80, 30, 8
 LIFT_PCT = 3.0               # its picks must beat the average token by this much on unseen data
 OVERRIDE_PCT = 5.0           # a soft kill is overridden only above this predicted net % per trade
-RETRAIN_S = 6 * 3600
+RETRAIN_S = 2 * 3600       # every 2 h: a new lesson matures every few minutes while the market runs
 
 FLAGS = ["bot_volume", "few_holders", "very_young", "concentrated", "no_socials", "one_sided", "quiet",
          "late", "liq_edge", "smart_money"]
