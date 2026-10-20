@@ -34,7 +34,9 @@ WORDS = {"score": "la note", "log_liq": "un pool plus profond", "log_age": "un t
          "log_mcap_liq": "une capitalisation gonflée face au pool", "socials": "des réseaux sociaux",
          "sol_1h": "SOL en hausse sur 1 h", "sol_24h": "SOL en hausse sur 24 h", "organic": "le score organique Jupiter",
          "cluster_pct": "un cluster financé", "fresh_pct": "des wallets neufs", "evm": "une chaîne EVM",
-         "momentum": "le couloir momentum", "dial": "le cadran de régime (BTC, ETH, SOL au-dessus de leurs moyennes)"}
+         "momentum": "le couloir momentum", "dial": "le cadran de régime (BTC, ETH, SOL au-dessus de leurs moyennes)",
+         "rc_score": "un score de risque RugCheck plus haut", "rc_danger": "un risque « danger » de plus chez RugCheck",
+         "rc_lp_locked": "plus de pool verrouillé selon RugCheck"}
 
 
 def _f(v):
@@ -63,7 +65,8 @@ def features(r: dict) -> dict:
            "sol_1h": _f(r.get("sol_1h")), "sol_24h": _f(r.get("sol_24h")), "organic": _f(r.get("organic")),
            "cluster_pct": _f(r.get("cluster_pct")), "fresh_pct": _f(r.get("fresh_pct")),
            "evm": 1.0 if (r.get("chain") or "solana") != "solana" else 0.0,
-           "momentum": 1.0 if r.get("lane") == "momentum" else 0.0, "dial": _f(r.get("dial"))}
+           "momentum": 1.0 if r.get("lane") == "momentum" else 0.0, "dial": _f(r.get("dial")),
+           "rc_score": _f(r.get("rc_score")), "rc_danger": _f(r.get("rc_danger")), "rc_lp_locked": _f(r.get("rc_lp_locked"))}
     out.update({f"flag:{f}": 1.0 if f in flags else 0.0 for f in FLAGS})
     out.update({f"kill:{k}": 1.0 if reason == k else 0.0 for k in SOFT})
     return out

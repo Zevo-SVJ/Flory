@@ -21,7 +21,8 @@ FIELDS = ["time", "mint", "symbol", "stage", "verdict", "confidence", "reason", 
           "snipers_pct", "factory_wallets", "lane",
           # what learn.py learns from: the token as GARDE saw it at the verdict
           "chain", "vol_liq", "avg_trade", "chg_1h", "chg_5m", "buy_ratio", "mcap_liq", "socials",
-          "top10", "max_wallet", "holders", "expected", "override", "dial"]
+          "top10", "max_wallet", "holders", "expected", "override", "dial",
+          "rc_score", "rc_danger", "rc_lp_locked"]
 
 
 def _migrate():
@@ -151,6 +152,9 @@ def check(mint: str) -> dict:
         return {"stage": "facts", "verdict": "SKIP", "reason": f"facts failed: {e}",
                 "symbol": m["symbol"], **seen}
     seen["dev"] = token.get("dev")
+    if not evm:                          # RugCheck's view, logged for learn.py, never a kill by itself
+        import rugcheck
+        seen.update(rugcheck.fetch(mint) or {})
     seen.update(top10=token.get("top10_pct"), max_wallet=token.get("max_wallet_pct"), holders=token.get("holders"))
     try:                                 # the score of every token that got this far, killed or not: learn.py compares all
         sc0 = score(m, token)

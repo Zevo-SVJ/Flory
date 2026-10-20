@@ -7,7 +7,7 @@
 import csv, json, os, time
 import requests
 from config import LOG, SCHEDULE, FACTS
-import check, market, grads, sources, chains, evmnew
+import check, market, grads, sources, chains, evmnew, gt
 from market import market_kill
 
 SOURCES = ["token-profiles/latest/v1", "token-boosts/latest/v1", "token-boosts/top/v1",
@@ -98,7 +98,7 @@ def gt_trending() -> list[str]:
     out = []
     try:
         for d in ("5m", "1h"):
-            r = requests.get(GT, params={"duration": d, "page": 1}, headers={"accept": "application/json"}, timeout=15)
+            r = gt.get(GT, params={"duration": d, "page": 1})          # the shared budget (gt.py)
             r.raise_for_status()
             for p in r.json().get("data") or []:
                 rel = p.get("relationships") or {}

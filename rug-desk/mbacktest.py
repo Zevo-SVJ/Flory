@@ -13,7 +13,7 @@
 import json, os, random, statistics, time
 import requests
 from config import DATA, EXIT, MOMENTUM, FACTS, PAPER_COSTS
-import exits
+import exits, gt
 
 SEEN = os.path.join(DATA, "momentum_seen.jsonl")
 ROWS = os.path.join(DATA, "mbacktest_rows.jsonl")
@@ -24,7 +24,7 @@ HOLD_S = 6 * 3600
 LOOKBACK_S = 24 * 3600         # chg_24h and vol_24h need the day before
 EVERY_S = 6 * 3600             # one sighting per token per 6 h
 TICKET = 40.0
-GAP_S = 3.0                    # between GeckoTerminal calls: the free API allows about 30 a minute
+GAP_S = 0.0                    # pacing is gt.py's job now: one budget for the desk and this child
 
 
 def _jsonl(path: str) -> list[dict]:
@@ -73,13 +73,12 @@ def candles(pair: str, end: float, net: str = "solana") -> list[tuple]:
     """5-min candles (t, open, high, low, close, volume $) ending at `end`, oldest first."""
     n = int((LOOKBACK_S + ENTRY_WINDOW_S + HOLD_S) / CANDLE_S) + 4
     for attempt in range(3):
-        r = requests.get(OHLCV.format(net, pair), params={"aggregate": 5, "limit": min(1000, n),
-                                                      "before_timestamp": int(end), "currency": "usd"},
-                         headers={"accept": "application/json"}, timeout=20)
+        r = gt.get(OHLCV.format(net, pair), params={"aggregate": 5, "limit": min(1000, n),
+                                                "before_timestamp": int(end), "currency": "usd"},
+                   background=True, timeout=20)  # what SCOUT leaves of the budget, never more (gt.py)
         if r.status_code == 404:          # GeckoTerminal does not index this pool
             return []
-        if r.status_code == 429:
-            time.sleep(30 * (attempt + 1))
+        if r.status_code == 429:          # gt.py has stopped everyone for a minute: the next slot waits for it
             continue
         r.raise_for_status()
         rows = ((r.json().get("data") or {}).get("attributes") or {}).get("ohlcv_list") or []

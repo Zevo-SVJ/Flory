@@ -5,7 +5,7 @@
 import json, os, time
 import requests
 from config import DATA, FACTS
-import atomic, chains
+import atomic, chains, gt
 
 STATE = os.path.join(DATA, "evm_new.json")
 NEW = "https://api.geckoterminal.com/api/v2/networks/new_pools"
@@ -35,7 +35,7 @@ def fetch() -> int:
     s, new = load(), 0
     try:
         for page in range(1, PAGES + 1):
-            r = requests.get(NEW, params={"page": page}, headers={"accept": "application/json"}, timeout=15)
+            r = gt.get(NEW, params={"page": page})                     # the shared budget (gt.py)
             r.raise_for_status()
             for p in r.json().get("data") or []:
                 rel = p.get("relationships") or {}

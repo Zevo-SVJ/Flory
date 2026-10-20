@@ -1877,3 +1877,53 @@ class Trend(Base):
         st = dashboard.trend_state()
         self.assertEqual([a["asset"] for a in st["assets"] if a["usd"]], ["BTC"])
         self.assertIn("TREND", [a[0] for a in dashboard.AGENTS])
+
+
+class Sources20(Base):
+    """GeckoTerminal's shared budget, RugCheck's second opinion, the chart's three books."""
+    def test_geckoterminal_budget_keeps_room_for_scout(self):
+        import gt
+        if os.path.exists(gt.FILE):
+            os.remove(gt.FILE)
+        self.addCleanup(lambda: os.path.exists(gt.FILE) and os.remove(gt.FILE))
+        with mock.patch.object(gt, "BUDGET", 3), mock.patch.object(gt, "BACKGROUND", 1):
+            self.assertTrue(gt._slot(True, 0))             # the backtest takes its share...
+            self.assertFalse(gt._slot(True, 0))            # ...and no more
+            self.assertTrue(gt._slot(False, 0))            # SCOUT still has room
+            self.assertTrue(gt._slot(False, 0))
+            self.assertFalse(gt._slot(False, 0))           # the wall, for everyone
+        os.remove(gt.FILE)
+        gt.cool(60)                                        # a 429: nobody calls for a minute
+        self.assertFalse(gt._slot(False, 0))
+        self.assertTrue(gt.state()["cooling"])
+
+    def test_rugcheck_is_read_never_a_kill(self):
+        import rugcheck
+        ok = Resp({"score_normalised": 72, "lpLockedPct": 0,
+                   "risks": [{"name": "Mutable metadata", "level": "warn"}, {"name": "Top holder", "level": "danger"}]})
+        with mock.patch("requests.get", lambda *a, **k: ok):
+            self.assertEqual(rugcheck.fetch(MINT), {"rc_score": 72, "rc_danger": 1, "rc_lp_locked": 0})
+        with mock.patch("requests.get", lambda *a, **k: Resp({}, 401)):
+            self.assertIsNone(rugcheck.fetch(MINT))
+        with mock.patch.object(rugcheck, "fetch", lambda m: {"rc_score": 99, "rc_danger": 5, "rc_lp_locked": 0}):
+            v = self.verdict()
+        self.assertEqual(v["verdict"], "PASS", v)          # logged, not a kill
+        self.assertEqual(v["rc_score"], 99)
+        import learn
+        self.assertEqual(learn.features(v)["rc_danger"], 5)
+
+    def test_chart_books_add_up(self):
+        import dashboard, majors
+        for f in (config.EQUITY, majors.EQUITY):
+            if os.path.exists(f):
+                os.remove(f)
+        self.addCleanup(lambda: [os.remove(f) for f in (config.EQUITY, majors.EQUITY) if os.path.exists(f)])
+        now = time.time()
+        with open(config.EQUITY, "w") as f:
+            f.write("t,balance,realized,unrealized,open\n" + f"{now - 100},900,0,0,0\n{now - 10},880,0,0,0\n")
+        with open(majors.EQUITY, "w") as f:
+            f.write("t,equity,cash,dial\n" + f"{now - 50},1010,0,0.67\n")
+        tot = dashboard.book_curve("total", None, now)
+        self.assertEqual([v for _, v in tot], [900 + 1000, 900 + 1010, 880 + 1010])
+        self.assertEqual(dashboard.book_curve("tendance", 900, now), [[now - 50, 1010.0]])
+        self.assertEqual(dashboard.state("live", "total")["range_s"], 900)

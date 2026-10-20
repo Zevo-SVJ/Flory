@@ -16,7 +16,8 @@ HEARTBEAT = os.path.join(DATA, "heartbeat.json")
 MARKS = os.path.join(DATA, "marks.json")
 INBOX = os.path.join(DATA, "inbox.txt")
 SOLANA_ADDRESS = re.compile(r"^[1-9A-HJ-NP-Za-km-z]{32,44}$")
-RANGES = {"1h": 3600, "24h": 86400, "7j": 7 * 86400, "tout": None}
+RANGES = {"live": 900, "1h": 3600, "24h": 86400, "7j": 7 * 86400, "tout": None}   # live: the last 15 min, VIGIE's 20 s ticks
+BOOKS = ("memes", "tendance", "total")
 
 AGENTS = [   # fixed order = fixed color slot on the page
     ("VIGIE", "surveille les positions", "prix toutes les 20 s, stops, prises de profit"),
@@ -43,12 +44,12 @@ def _json(path: str, default):
         return default
 
 
-def curve(range_s: int | None, now: float) -> list[list[float]]:
+def curve(range_s: int | None, now: float, path: str = EQUITY) -> list[list[float]]:
     """Balance points [t, balance], thinned to ~400 so a week of 20-second ticks stays light."""
     pts, before = [], None
     start = None if range_s is None else now - range_s
-    if os.path.exists(EQUITY):
-        with open(EQUITY) as f:
+    if os.path.exists(path):
+        with open(path) as f:
             next(f, None)
             for line in f:
                 t, bal = line.split(",")[:2]
@@ -63,6 +64,25 @@ def curve(range_s: int | None, now: float) -> list[list[float]]:
         step = len(pts) / 399
         pts = [pts[int(i * step)] for i in range(399)] + [pts[-1]]
     return pts
+
+
+def book_curve(book: str, range_s: int | None, now: float) -> list[list[float]]:
+    """The chart's series: the memecoin book, TENDANCE's book (majors.py), or both added up."""
+    import majors
+    if book == "tendance":
+        return curve(range_s, now, majors.EQUITY)
+    memes = curve(range_s, now)
+    if book != "total":
+        return memes
+    trend = curve(range_s, now, majors.EQUITY)
+    out, i, j, m, tr = [], 0, 0, PAPER_BANKROLL_USD, majors.BANKROLL
+    for t in sorted({p[0] for p in memes} | {p[0] for p in trend}):
+        while i < len(memes) and memes[i][0] <= t:
+            m = memes[i][1]; i += 1
+        while j < len(trend) and trend[j][0] <= t:
+            tr = trend[j][1]; j += 1
+        out.append([t, m + tr])
+    return out
 
 
 def first_point() -> float | None:
@@ -165,7 +185,7 @@ def backtest_state() -> dict:
             "momentum_error": st.get("momentum_error"), "every_h": SCHEDULE["backtest_every_h"]}
 
 
-def state(range_key: str = "auto") -> dict:
+def state(range_key: str = "auto", series: str = "memes") -> dict:
     now = time.time()
     first = first_point()
     auto = range_key not in RANGES
@@ -250,7 +270,8 @@ def state(range_key: str = "auto") -> dict:
         "pnl": balance - PAPER_BANKROLL_USD, "today": book.today_pnl(), "loss_limit": DAILY_LOSS_HALT_USD,
         "cash": book.cash(positions), "marks_age": now - marks.get("t", 0),
         "wins": wins, "losses": len(closed) - wins, "mega_pct": MEGA_PROFIT_PCT,
-        "curve": curve(range_s, now), "range": range_key, "range_s": range_s, "auto": auto,
+        "curve": book_curve(series if series in BOOKS else "memes", range_s, now), "range": range_key, "range_s": range_s, "auto": auto,
+        "book": series if series in BOOKS else "memes",
         "megas": megas(None if range_s is None else now - range_s),
         "events": events.recent(40), "tasks": events.count(),
         "agents": agents, "open": sorted(open_rows, key=lambda r: -(r["pct"] or -1e9)),
@@ -285,8 +306,8 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         url = urlparse(self.path)
         if url.path == "/api/state":
-            rng = parse_qs(url.query).get("range", ["auto"])[0]
-            body, kind = json.dumps(state(rng)).encode(), "application/json"
+            q = parse_qs(url.query)
+            body, kind = json.dumps(state(q.get("range", ["auto"])[0], q.get("book", ["memes"])[0])).encode(), "application/json"
         elif url.path == "/api/dossier":
             import dossier
             mint = parse_qs(url.query).get("mint", [""])[0]
