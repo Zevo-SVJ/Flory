@@ -13,6 +13,9 @@ MOMENTUM_DROP_PCT = 25     # down this much between the PASS and ECHO's BUY -> n
 PENDING = os.path.join(DATA, "pending.json")
 X_QUEUE = os.path.join(DATA, "x_queue.csv")
 X_READS = os.path.join(DATA, "x_reads.csv")
+X_WATCH = os.path.join(DATA, "x_watch.csv")
+RECHECK_MIN = 15           # an open position is read again on X every 15 min: news, accusations, attention fading
+SILENT_ALARM_MIN = 30      # positions open and no X read for this long: ECHO's loop is down, the desk says so
 
 
 def load() -> dict:
@@ -59,6 +62,54 @@ def write_queue(p: dict, done: dict):
                         round((time.time() - v["since"]) / 60), f"https://x.com/search?q={m}&f=live",
                         f"https://x.com/search?q=%24{v['symbol']}&f=live", dossier.brief(m)])
     os.replace(tmp, X_QUEUE)
+
+
+def last_read_min(mint: str, done: dict) -> float | None:
+    x = done.get(mint)
+    if not x or not x.get("time"):
+        return None
+    try:
+        return (time.time() - time.mktime(time.strptime(x["time"], "%Y-%m-%d %H:%M"))) / 60
+    except ValueError:
+        return None
+
+
+def write_watch(done: dict):
+    """ECHO's standing watch: every open position, with how long since X was last read for it.
+    due = never read, or read more than RECHECK_MIN ago. ECHO re-reads those first (ECHO.md)."""
+    import chains
+    try:
+        with open(os.path.join(DATA, "marks.json")) as f:
+            marks = json.load(f).get("marks", {})
+    except (OSError, ValueError):
+        marks = {}
+    rows = []
+    for m, pos in book.load().items():
+        last = last_read_min(m, done)
+        px = marks.get(m)
+        chain, addr = chains.split(m)
+        rows.append([m, pos["symbol"], chain, round((time.time() - pos["opened"]) / 60),
+                     f"{(px / pos['entry'] - 1) * 100:+.0f}" if px else "",
+                     "" if last is None else round(last), "oui" if last is None or last >= RECHECK_MIN else "non",
+                     (done.get(m) or {}).get("verdict", ""),
+                     f"https://x.com/search?q={addr}&f=live", f"https://x.com/search?q=%24{pos['symbol']}&f=live",
+                     chains.link(m), dossier.brief(m)])
+    rows.sort(key=lambda r: (r[6] != "oui", -(r[5] if r[5] != "" else 10**6)))
+    os.makedirs(DATA, exist_ok=True)
+    tmp = atomic.tmp(X_WATCH)
+    with open(tmp, "w", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(["mint", "symbol", "chain", "held_min", "pct", "last_x_min", "due", "last_verdict",
+                    "x_by_ca", "x_by_ticker", "chart", "contexte"])
+        w.writerows(rows)
+    os.replace(tmp, X_WATCH)
+
+
+def echo_gap_min(done: dict | None = None) -> float | None:
+    """Minutes since ECHO last wrote anything, None if it never did."""
+    done = reads() if done is None else done
+    ages = [a for a in (last_read_min(m, done) for m in done) if a is not None]
+    return min(ages) if ages else None
 
 
 SELL_ON = ("SCAM",)       # ECHO verdicts that close an open position. SKIP is recorded and measured only,
@@ -160,6 +211,7 @@ def decide() -> list[dict]:
                         "reason": "x_timeout"})
     save(p)
     write_queue(p, done)
+    write_watch(done)
     # any open position ECHO read as SCAM, whenever that read came: out at the pool's price of this moment
     for mint, pos in book.load().items():
         x = done.get(mint)

@@ -1969,3 +1969,41 @@ class PageScript(unittest.TestCase):
             f.write(js)
         r = subprocess.run([node, "--check", path], capture_output=True, text=True)
         self.assertEqual(r.returncode, 0, r.stderr[-400:])
+
+
+class EchoWatch(Base):
+    """ECHO re-reads every open position on X every 15 min, and the desk says when ECHO's loop is down."""
+    def setUp(self):
+        super().setUp()
+        import pending
+        for f in (pending.X_READS, pending.X_WATCH):
+            if os.path.exists(f):
+                os.remove(f)
+        self.addCleanup(lambda: [os.remove(f) for f in (pending.X_READS, pending.X_WATCH) if os.path.exists(f)])
+
+    def test_watch_lists_open_positions_and_what_is_due(self):
+        import pending
+        book.open_position(MINT, "TEST", 1.0, 20000, usd=25)
+        pending.write_watch(pending.reads())
+        with open(pending.X_WATCH, newline="") as f:
+            rows = list(csv.DictReader(f))
+        self.assertEqual((rows[0]["mint"], rows[0]["due"]), (MINT, "oui"))            # never read: due
+        with open(pending.X_READS, "w") as f:
+            f.write("time,mint,symbol,verdict,raison\n" + time.strftime("%Y-%m-%d %H:%M") + f",{MINT},TEST,BUY,rien de neuf\n")
+        pending.write_watch(pending.reads())
+        with open(pending.X_WATCH, newline="") as f:
+            self.assertEqual(next(csv.DictReader(f))["due"], "non")                    # just read: not due
+        self.assertLess(pending.echo_gap_min(), 2)
+
+    def test_alarm_when_echo_is_silent_with_positions_open(self):
+        import agents
+        book.open_position(MINT, "TEST", 1.0, 20000, usd=25)
+        agents._echo_alarm["t"] = 0
+        said = []
+        with mock.patch.object(agents, "emit", lambda *a, **k: said.append(a)), \
+                mock.patch.object(agents, "post", lambda t: said.append(t)), \
+                mock.patch.object(agents.pending, "decide", lambda: []):
+            agents.gate()
+            agents.gate()                                                             # once an hour, not every 30 s
+        self.assertEqual(len(said), 2)
+        self.assertIn("ECHO ne lit plus X", said[0][2])

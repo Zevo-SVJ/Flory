@@ -236,8 +236,18 @@ def gate():
             on_rug(e["mint"], e["symbol"], e["reason"])
         if e["kind"] == "buy":
             post(e["text"])
+    gap = pending.echo_gap_min()
+    if book.load() and (gap is None or gap > pending.SILENT_ALARM_MIN) and time.time() - _echo_alarm["t"] > 3600:
+        _echo_alarm["t"] = time.time()                  # said once an hour, on the page and on Telegram
+        text = ("ECHO ne lit plus X" + (f" depuis {gap:.0f} min" if gap else "") + f" alors que {len(book.load())} position(s) "
+                "sont ouvertes : sa boucle est arrêtée. relance-la (ECHO.md, « Lancer la boucle »)")
+        emit("ECHO", "error", text)
+        post("ALERTE · " + text)
     n = len(pending.load())
     return f"{n} PASS en attente de X" if n else "attend les leads de SCOUT"
+
+
+_echo_alarm = {"t": 0.0}
 
 
 def auditor():
