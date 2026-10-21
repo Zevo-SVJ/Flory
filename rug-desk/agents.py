@@ -404,8 +404,9 @@ def incident_watch():
     an answer in proportion. files only, so it never holds up the loop."""
     import incidents
     for r in incidents.tick():
-        emit("AUDIT", "incident" if r["level"] == "incident" else "analyse", r["text"], cause=r["cause"], drop=r["drop"])
-        if r["level"] == "incident":
+        kind = {"incident": "incident", "prudence": "incident", "info": "info"}.get(r["level"], "analyse")
+        emit("AUDIT", kind, r["text"], cause=r.get("cause"), drop=r.get("drop"))
+        if r["level"] in ("incident", "prudence", "info"):
             post(r["text"])
 
 

@@ -37,6 +37,11 @@ NOTE_EVERY_S = 30 * 60
 RUG_EXITS = ("liquidity_pulled", "pool_gone", "x_scam", "contagion")
 DD_STEP_PCT, DD_CUT, DD_STEPS = 10.0, 0.8, 3
 PATTERN_N, PATTERN_DAYS = 3, 7
+# the long slide: a balance that bleeds a little every hour never trips the 10-min or the 1-h bars
+# (Oct 21: $1,190 -> $1,140 between 17:40 and 20:20, two losing exits and the rest latent, no line at all)
+DD_NOTE_USD, DD_NOTE_STEP = 30.0, 15.0   # 3% of the bankroll under the day's peak: analysed since the peak, again every $15 lower
+DD_PRUDENT_USD = 50.0                    # 5%: the desk turns prudent until it has won back half the drop (24 h at most)
+PRUDENT_FACTOR, PRUDENT_MIN_SCORE, PRUDENT_MAX_S = 0.8, 65, 24 * 3600
 
 
 def _read(path, default):
@@ -237,19 +242,70 @@ def analyze(level: str, why: str, window: float, drop: float, peak: float, now: 
 
 
 def describe(r: dict) -> str:
-    head = (f"-{r['drop']:.2f} $ en {r['window_min']} min (le bruit habituel : ±{r['sigma']:.2f} $ par 10 min"
+    span = f"depuis le plus haut de {r['since']}" if r.get("since") else f"en {r['window_min']} min"
+    head = (f"-{r['drop']:.2f} $ {span} (le bruit habituel : ±{r['sigma']:.2f} $ par 10 min"
             + (f", les positions bougent de ±{r['expected_1h']:.2f} $ par heure)" if r["expected_1h"] else ")"))
     if r["level"] == "note":
         tail = ("prévu, rien ne change" if r["cause"] == "gains rendus" else
                 "perte normale pour des memecoins, aucune règle n'a cassé : les sorties de VIGIE font leur travail, rien ne change"
                 if r["normal"] else "plus que d'habitude : surveillé, rien ne change tant que ce n'est pas un incident")
         return f"ANALYSE · {head} · cause : {r['cause']}, {r['detail']} · {tail}"
+    if r["level"] == "prudence":
+        return (f"PRUDENCE · {head} · cause : {r['cause']}, {r['detail']} · réponse : mises x{PRUDENT_FACTOR}, seulement les "
+                f"tokens notés {PRUDENT_MIN_SCORE} ou plus, ECHO relit toutes les positions sur X, jusqu'à avoir regagné la "
+                f"moitié de la baisse (24 h au plus) · jamais de mise plus grosse pour se refaire")
     act = f"pause de {PAUSE_MIN} min sur les achats, ECHO relit toutes les positions sur X"
     if r["cause"] in ("rug", "scam repéré"):
         act += ", VIGIE vend ce qui partage des wallets ou un financeur avec le rug, dev et financeur sur liste noire"
     if r.get("echo_gap_min") is not None and r["echo_gap_min"] > 30:
         act += f" · ATTENTION : ECHO n'a rien lu depuis {r['echo_gap_min']:.0f} min"
     return f"INCIDENT · {head} · cause : {r['cause']}, {r['detail']} · réponse : {act} · jamais de mise plus grosse pour se refaire"
+
+
+def _drawdown(st: dict, pts: list, now: float, sigma: float, written: bool = False) -> list[dict]:
+    """The slide from the day's peak, whatever its speed: analysed past DD_NOTE_USD and at every further step,
+    and past DD_PRUDENT_USD the desk turns prudent (smaller tickets, better setups only, ECHO re-reads every
+    position) until it has won back half the drop. never bigger, never looser: no revenge trading."""
+    import book
+    day = [p for p in pts if p[0] >= now - 86400]
+    if not day:
+        return []
+    t_pk, pk = max(day, key=lambda x: x[1])
+    cur = day[-1][1]
+    dd = pk - cur
+    out = []
+    pr = st.get("prudent")
+    if pr:
+        pr["low"] = min(pr["low"], cur)
+        if cur >= pr["peak"] - (pr["peak"] - pr["low"]) / 2 or now - pr["t"] > PRUDENT_MAX_S:
+            st.pop("prudent")
+            out.append({"level": "info", "cause": "", "drop": 0.0, "text":
+                        f"PRUDENCE levée · le solde a regagné la moitié de sa baisse ({cur:.2f} $, plus bas {pr['low']:.2f} $)"
+                        if now - pr["t"] <= PRUDENT_MAX_S else "PRUDENCE levée · 24 h écoulées"})
+    lvl = int((dd - DD_NOTE_USD) // DD_NOTE_STEP) + 1 if dd >= DD_NOTE_USD else 0
+    if lvl == 0:
+        st["dd_level"] = 0
+        return out
+    if lvl <= st.get("dd_level", 0):
+        return out
+    st["dd_level"] = lvl
+    # gains handed back from a peak are no loss on what was staked (a trailing stop at work): they never turn the
+    # desk prudent
+    real = dd - sum(m["giveback"] for m in window_moves(t_pk))
+    turn = real >= DD_PRUDENT_USD and not st.get("prudent")
+    if written and not turn:
+        return out                       # this minute's analysis already covers it
+    rec = analyze("prudence" if turn else "note", f"baisse de {dd:.2f} $ depuis le plus haut de la journée",
+                  max(600.0, now - t_pk), dd, pk, now, sigma)
+    rec["since"] = time.strftime("%H:%M", time.localtime(t_pk))
+    if turn:
+        st["prudent"] = {"t": now, "peak": pk, "low": cur}
+        _write(URGENT, {"t": now, "mints": list(book.load())})
+    rec["text"] = describe(rec)
+    with open(LOG, "a") as f:
+        f.write(json.dumps(rec) + "\n")
+    out.append(rec)
+    return out
 
 
 # ---------------------------------------------------------------- the answer
@@ -261,7 +317,16 @@ def prudence() -> dict:
     peak = max(PAPER_BANKROLL_USD, max(b for _, b in pts))
     dd = max(0.0, (peak - pts[-1][1]) / PAPER_BANKROLL_USD * 100)
     steps = min(DD_STEPS, int(dd // DD_STEP_PCT))
-    return {"factor": round(DD_CUT ** steps, 3), "dd_pct": round(dd, 1), "peak": round(peak, 2), "steps": steps}
+    prudent = _read(STATE, {}).get("prudent")
+    factor = DD_CUT ** steps * (PRUDENT_FACTOR if prudent else 1.0)
+    return {"factor": round(factor, 3), "dd_pct": round(dd, 1), "peak": round(peak, 2), "steps": steps,
+            "prudent": prudent}
+
+
+def strict_score() -> int | None:
+    """While prudent, only the better setups are bought: a score of PRUDENT_MIN_SCORE or more. after losses the
+    pull is to take more and worse trades to win it back; this is the opposite (the "A setups only" rule)."""
+    return PRUDENT_MIN_SCORE if _read(STATE, {}).get("prudent") else None
 
 
 def paused() -> float:
@@ -323,6 +388,11 @@ def tick(now: float | None = None) -> list[dict]:
                          + f" · bruit ±{sigma:.2f} $ / 10 min → {verdict}"}
     else:
         st["reading"] = {"t": now, "text": f"sur 1 h : stable (moins de 3 $ sous le plus haut) · bruit ±{sigma:.2f} $ / 10 min"}
+    day = [p for p in pts if p[0] >= now - 86400]
+    if day:
+        t_pk, pk = max(day, key=lambda x: x[1])
+        st["reading"]["text"] += (f" · sur la journée : {pk - day[-1][1]:.2f} $ sous le plus haut de "
+                                  f"{time.strftime('%H:%M', time.localtime(t_pk))} (analyse à {DD_NOTE_USD:.0f} $, prudence à {DD_PRUDENT_USD:.0f} $)")
     if level:
         drop, peak = (d60, p60) if window == 3600 else (d10, p10)
         rec = analyze(level, why, window, drop, peak, now, sigma)
@@ -333,6 +403,7 @@ def tick(now: float | None = None) -> list[dict]:
         with open(LOG, "a") as f:
             f.write(json.dumps(rec) + "\n")
         out.append(rec)
+    out += _drawdown(st, pts, now, sigma, written=bool(level))
     _write(STATE, st)
     return out
 
@@ -382,5 +453,5 @@ def patterns() -> list[str]:
 
 def status() -> dict:
     p = prudence()
-    return {**p, "paused_s": round(paused()), "recent": recent(8), "patterns": patterns(),
+    return {**p, "paused_s": round(paused()), "recent": recent(8), "patterns": patterns(), "strict_score": strict_score(),
             "reading": _read(STATE, {}).get("reading")}

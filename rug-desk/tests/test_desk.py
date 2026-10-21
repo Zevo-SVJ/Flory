@@ -2220,3 +2220,56 @@ class IncidentWording(Base):
         self.assertEqual(r["cause"], "scam repéré")
         self.assertIn("vendu à temps", r["detail"])
         self.assertIn("VIGIE vend ce qui partage", r["text"])
+
+
+class LongSlide(Base):
+    """Oct 21: $1,190 -> $1,140 over three hours, no bar crossed, no line. the slide from the day's peak is
+    analysed, past $50 of real loss the desk turns prudent, and it stops being prudent once half is won back."""
+    def setUp(self):
+        super().setUp()
+        import incidents
+        self.files = (incidents.LOG, incidents.STATE, incidents.URGENT, config.EQUITY)
+        for f in self.files:
+            if os.path.exists(f):
+                os.remove(f)
+        self.addCleanup(lambda: [os.remove(f) for f in self.files if os.path.exists(f)])
+
+    def write(self, vals, now):
+        with open(config.EQUITY, "w") as f:
+            f.write("t,balance,realized,unrealized,open\n")
+            for i, v in enumerate(vals):
+                f.write(f"{now - (len(vals) - 1 - i) * 20},{v},0,0,0\n")
+
+    def test_slide_prudence_and_recovery(self):
+        import incidents, random
+        rng = random.Random(4)
+        now = time.time()
+        base = [1150 + rng.uniform(-0.5, 0.5) for _ in range(2000)] + [1190.0]
+        slide = [1190 - 0.08 * i for i in range(1, 640)]                   # -$51 over 3.5 h, $14 an hour
+        self.write(base + slide, now)
+        incidents.tick(now - 60)
+        st = incidents._read(incidents.STATE, {}); st["dd_level"] = 0; st.pop("prudent", None); incidents._write(incidents.STATE, st)
+        out = incidents.tick(now)
+        self.assertEqual([r["level"] for r in out], ["prudence"])
+        self.assertIn("depuis le plus haut de", out[0]["text"])
+        self.assertIn("seulement les tokens notés 65", out[0]["text"])
+        self.assertEqual(incidents.strict_score(), 65)
+        self.assertEqual(incidents.prudence()["factor"], 0.8)
+        self.assertEqual(incidents.paused(), 0)                              # prudence is no pause
+        self.write(base + slide + [1150 + i for i in range(1, 25)], now + 600)   # back to $1,174: half won back
+        out = incidents.tick(now + 600)
+        self.assertIn("PRUDENCE levée", " ".join(r["text"] for r in out))
+        self.assertIsNone(incidents.strict_score())
+
+    def test_prudence_buys_only_the_better_setups(self):
+        import incidents
+        incidents._write(incidents.STATE, {"prudent": {"t": time.time(), "peak": 1190, "low": 1140}})
+        self.addCleanup(setattr, check, "ECHO_MODE", check.ECHO_MODE)
+        check.ECHO_MODE = "observe"
+        with net(), mock.patch.object(incidents, "PRUDENT_MIN_SCORE", 80):    # the test token scores 73
+            v = check.run(MINT)
+        self.assertIn("prudence", v["action"])
+        self.assertNotIn(MINT, book.load())
+        with net():                                                           # 73 >= 65: bought, smaller
+            v = check.run(MINT)
+        self.assertIn("PAPER BUY", v["action"])

@@ -318,6 +318,9 @@ AUDIT watches the balance every minute (incidents.py). A fall is compared with t
 - an INCIDENT (past 3x the noise and 3% of the bankroll in an hour, a rug exit, or a ticket lost): no new
   entry for 30 min, ECHO re-reads every open position on X at once, VIGIE sells what shares wallets or a
   funder with a rug, and the entry's facts are kept as a lesson
+- a slow slide from the day's peak is analysed from $30 (and every $15 lower). past $50 of real loss (gains
+  handed back from a peak don't count) the desk turns prudent: tickets x0.8, only tokens scored 65+, ECHO
+  re-reads every position, until half the drop is won back (24 h at most)
 - in a drawdown, every 10% of the bankroll lost from the peak cuts the tickets by 20% (the Turtle rule,
   three steps at most); they grow back with the balance. never a bigger ticket to win a loss back
 - traits shared by 3 rugs in 7 days and rare among the other buys are reported; rules change only through

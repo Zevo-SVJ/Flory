@@ -275,6 +275,11 @@ def run(mint: str) -> dict:
     if enter and gate is not None and v.get("dial") is not None and v["dial"] < gate:
         v["action"] = f"not bought: regime dial {v['dial']:.2f} < {gate} (memecoins stand down)"
         return v
+    import incidents                     # prudent after a slide: only the better setups (incidents.py)
+    bar = incidents.strict_score()
+    if enter and bar and (v.get("score") or 0) < bar:
+        v["action"] = f"not bought: prudence after a drawdown, score {v.get('score')} < {bar}"
+        return v
     import shadow
     if enter and (v.get("score") or 0) < MIN_SCORE and "low_score" not in shadow.waived() \
             and not (v.get("expected") is not None and v["expected"] >= __import__("learn").OVERRIDE_PCT):

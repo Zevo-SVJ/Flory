@@ -803,7 +803,8 @@ function drawIncidents() {
   $("incNote").textContent = ((I.patterns || []).length ? "Motif récurrent : " + I.patterns.join(" · ") + ". " : "") +
     "Une baisse est comparée au bruit habituel du solde et à ce que les positions bougent normalement en une heure. Une analyse ne change rien. " +
     "Un incident (3× le bruit et 3 % de la banque en 1 h, ou un rug) met les achats en pause 30 min et fait relire toutes les positions sur X. " +
-    "En baisse prolongée, chaque 10 % perdu depuis le plus haut réduit les mises de 20 % (règle des Turtles), puis elles remontent avec le solde. Jamais de mise plus grosse pour se refaire.";
+    "Une glissade lente depuis le plus haut de la journée est analysée dès 30 $ (puis tous les 15 $). À 50 $ de vraie perte, le desk passe en prudence : mises ×0.8, seulement les tokens notés 65 ou plus, relecture X de toutes les positions, jusqu'à avoir regagné la moitié de la baisse. " +
+    "En baisse prolongée, chaque 10 % perdu depuis le plus haut réduit aussi les mises de 20 % (règle des Turtles). Jamais de mise plus grosse pour se refaire.";
 }
 function drawPanels() {
   drawIncidents();
@@ -989,7 +990,8 @@ function drawTop() {
   $("balance").textContent = plain(S.balance);
   const IN = S.incidents || {};
   $("balanceSub").textContent = `started at ${plain(S.bankroll)}` + (S.open.length ? ` · ${S.open.length} position${S.open.length > 1 ? "s" : ""}` : "")
-    + (IN.paused_s ? ` · achats en pause ${Math.ceil(IN.paused_s / 60)} min` : "") + (IN.factor < 1 ? ` · mises ×${IN.factor}` : "");
+    + (IN.paused_s ? ` · achats en pause ${Math.ceil(IN.paused_s / 60)} min` : "") + (IN.factor < 1 ? ` · mises ×${IN.factor}` : "")
+    + (IN.strict_score ? ` · prudence : notes ${IN.strict_score}+` : "");
   const TT = S.trend || {}, TE = TT.equity;
   $("trendBig").textContent = TE == null ? "–" : plain(TE);
   $("trendBig").className = "big";

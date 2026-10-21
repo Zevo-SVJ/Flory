@@ -30,7 +30,7 @@ def note(mint: str, v: dict) -> bool:
     Returns True if the token is now followed."""
     reason = v.get("reason") or ""
     if v.get("verdict") in ("PASS", "BUY") and str(v.get("action", "")).startswith("not bought") \
-            and "regime dial" not in v["action"]:
+            and "regime dial" not in v["action"] and "prudence" not in v["action"]:
         reason = "model_veto" if "model" in v["action"] else "low_score"      # passed every check, not bought
         v = {**v, "verdict": "SKIP", "stage": "score", "reason": reason}
     elif v.get("verdict") in ("PASS", "BUY"):
