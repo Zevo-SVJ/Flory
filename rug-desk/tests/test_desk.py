@@ -1,6 +1,6 @@
 # tests/test_desk.py
 # offline tests: every API is faked, so this runs anywhere.  python -m unittest discover tests
-import csv, os, sys, tempfile, threading, time, unittest
+import csv, json, os, sys, tempfile, threading, time, unittest
 from unittest import mock
 
 os.environ["RUG_DESK_DATA"] = tempfile.mkdtemp()
@@ -2291,3 +2291,22 @@ class ReplayRealism(unittest.TestCase):
         import config
         pnl = exitlab.simulate(path, dict(config.EXIT))
         self.assertLess(pnl, 200)                                          # not $80M on a $25 ticket
+
+
+class IncidentMemory(Base):
+    def test_one_token_is_one_lesson_and_an_old_scam_is_not_the_cause(self):
+        import incidents
+        for f in (incidents.LOG, incidents.STATE):
+            if os.path.exists(f):
+                os.remove(f)
+        self.addCleanup(lambda: [os.remove(f) for f in (incidents.LOG,) if os.path.exists(f)])
+        facts = {"chain": "robinhood", "lane": "early", "source": "tendance GeckoTerminal", "flags": "", "score": "70"}
+        with open(incidents.LOG, "w") as f:
+            for _ in range(3):                                    # the same Pepina in three analyses
+                f.write(json.dumps({"t": time.time(), "lessons": {"PepinaMint": facts}}) + "\n")
+        self.assertEqual(incidents.patterns(), [])               # one token: no pattern
+        P = "Pepi222222222222222222222222222222222222222"
+        book.open_position(P, "Pepina", 1.0, 20000, usd=25)
+        book.sell(P, 1.0, 0.95, "x_scam")
+        r = incidents.analyze("note", "test", 6 * 3600, 60, 1190, time.time() + 2 * 3600, 3.0)   # 2 h later
+        self.assertNotEqual(r["cause"], "scam repéré")

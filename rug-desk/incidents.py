@@ -171,7 +171,7 @@ def window_moves(t0: float) -> list[dict]:
         else:
             usd = pnl
         out.append({"symbol": c["symbol"], "mint": c["mint"], "usd": round(usd, 2), "pnl": round(pnl, 2),
-                    "reason": c["reason"], "sold": True,
+                    "reason": c["reason"], "sold": True, "t": sale_t - 59,
                     "giveback": round(-usd, 2) if usd < 0 and pnl > 0 else 0.0})   # sold above entry: all above it
     return out
 
@@ -183,7 +183,9 @@ def analyze(level: str, why: str, window: float, drop: float, peak: float, now: 
     allm = window_moves(t0)
     contrib = [m for m in allm if not m.get("sold")]
     realized = [m for m in allm if m.get("sold")]
-    rugs = [c for c in realized if c["reason"] in RUG_EXITS]
+    # a rug or a scam sale is the cause only while it is fresh (the last hour). a slide measured from a morning
+    # peak would otherwise name the same old sale again and again (Pepina at 17:09, still "the cause" at 23:40)
+    rugs = [c for c in realized if c["reason"] in RUG_EXITS and c.get("t", now) >= now - 3600]
     moves = sorted(contrib + realized, key=lambda c: c["usd"])
     lost = -sum(c["usd"] for c in moves if c["usd"] < 0) or 1e-9
     giveback = sum(c["giveback"] for c in moves)
@@ -423,7 +425,9 @@ def recent(n: int = 10, days: float | None = None) -> list[dict]:
 
 def patterns() -> list[str]:
     """Traits shared by PATTERN_N or more rugs of the last PATTERN_DAYS days, and rare among the other buys."""
-    lessons = [l for r in recent(0, PATTERN_DAYS) for l in (r.get("lessons") or {}).values()]
+    # one lesson per token, however many analyses named it: the "3 rugs out of 3 on Robinhood" of Oct 21 was
+    # Pepina counted three times
+    lessons = list({m: l for r in recent(0, PATTERN_DAYS) for m, l in (r.get("lessons") or {}).items()}.values())
     if len(lessons) < PATTERN_N:
         return []
     import book
