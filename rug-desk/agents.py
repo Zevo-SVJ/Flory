@@ -63,7 +63,7 @@ def vigie():
              pct=round(e["pct"], 1), reason=e["reason"], closed=e.get("closed"))
         if e["reason"] in RUG_EXITS:
             on_rug(e["mint"], e["symbol"], e["reason"])
-        post(e["text"])
+        post(copy_sell(e) + "\n" + e["text"])
     log_equity(marks)
     tmp = atomic.tmp(MARKS)        # live prices for the dashboard, so it never calls an API itself
     with open(tmp, "w") as f:
@@ -75,6 +75,23 @@ def vigie():
 
 RUG_EXITS = ("liquidity_pulled", "pool_gone", "x_scam")     # x_skip is a doubt, not a rug
 CONTAGION_SHARED = 5          # open positions sharing this many holder wallets with a rug are sold
+
+
+def copy_buy(mint: str, sym: str, lane=None) -> str:
+    """The line a human copies by hand into a wallet or a trading bot: chain, CA, link."""
+    import chains
+    chain, addr = chains.split(mint)
+    return f"ACHAT À COPIER · {chain}" + (f" · voie {lane}" if lane else "") + f" · ${sym}\nCA: {addr}\n{chains.link(mint)}"
+
+
+def copy_sell(e: dict) -> str:
+    """Sells are said as a share of what is still held, the unit a wallet or a bot sells in."""
+    import chains
+    chain, addr = chains.split(e["mint"])
+    share = 1.0 if e.get("closed") else e.get("share") or 1.0
+    part = "TOUT" if share >= 0.999 else f"{share * 100:.0f} % de ce qui reste"
+    pct = f" à {e['pct']:+.0f} %" if e.get("pct") is not None else ""
+    return f"VENTE À COPIER · {chain} · ${e['symbol']} · vends {part}{pct} ({e.get('reason')})\nCA: {addr}"
 
 
 def on_rug(mint: str, symbol: str, reason: str):
@@ -105,9 +122,10 @@ def on_rug(mint: str, symbol: str, reason: str):
             continue
         pnl = book.sell(other, 1.0, price, "contagion", (m or {}).get("liq_usd"))
         why = f"{shared} holders en commun" if shared >= CONTAGION_SHARED else "même financeur"
-        emit("VIGIE", "sell", f"{pos['symbol']}: sold on contagion from ${symbol} ({why}), pnl ${pnl:+.2f}",
-             symbol=pos["symbol"], mint=other, pnl=round(pnl, 2), pct=round((price / pos["entry"] - 1) * 100, 1),
-             reason="contagion", closed=True)
+        e = emit("VIGIE", "sell", f"{pos['symbol']}: sold on contagion from ${symbol} ({why}), pnl ${pnl:+.2f}",
+                 symbol=pos["symbol"], mint=other, pnl=round(pnl, 2), pct=round((price / pos["entry"] - 1) * 100, 1),
+                 reason="contagion", closed=True)
+        post(copy_sell(e) + "\n" + e["text"])
         import dossier
         dossier.add(other, "VIGIE", "vente", reason="contagion", source=f"${symbol} ({why})", pnl=round(pnl, 2))
 
@@ -198,7 +216,8 @@ def garde(mint: str):
             followed = shadow.note(mint, v)
             emit("GARDE", "kill", f"${sym} {action}" + (" · suivi 6 h en fantôme" if followed else ""),
                  symbol=sym, mint=mint, reason="low_score")
-        post(f"{v['verdict']} {sym} {v.get('url', '')}\nX by CA: {v.get('x_ca')}\n"
+        head = copy_buy(mint, sym, v.get("lane")) + "\n" if action.startswith("PAPER BUY") else ""
+        post(head + f"{v['verdict']} {sym} {v.get('url', '')}\nX by CA: {v.get('x_ca')}\n"
              f"X by ticker: {v.get('x_ticker')}\n{v.get('action', '')}")
     set_agent("GARDE", status="idle", msg=f"${sym}: {v['verdict']} {reason[:60]}",
               runs=(load_runs("GARDE") + 1))
@@ -238,7 +257,9 @@ def gate():
         if e["kind"] == "sell" and e.get("reason") in RUG_EXITS:
             on_rug(e["mint"], e["symbol"], e["reason"])
         if e["kind"] == "buy":
-            post(e["text"])
+            post(copy_buy(e["mint"], e["symbol"], e.get("lane")) + "\n" + e["text"])
+        elif e["kind"] == "sell":                      # an ECHO SCAM sale: a copier must sell too
+            post(copy_sell(e) + "\n" + e["text"])
     gap = pending.echo_gap_min()
     if book.load() and (gap is None or gap > pending.SILENT_ALARM_MIN) and time.time() - _echo_alarm["t"] > 3600:
         _echo_alarm["t"] = time.time()                  # said once an hour, on the page and on Telegram

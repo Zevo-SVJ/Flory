@@ -2310,3 +2310,22 @@ class IncidentMemory(Base):
         book.sell(P, 1.0, 0.95, "x_scam")
         r = incidents.analyze("note", "test", 6 * 3600, 60, 1190, time.time() + 2 * 3600, 3.0)   # 2 h later
         self.assertNotEqual(r["cause"], "scam repéré")
+
+
+class CopyAlerts(unittest.TestCase):
+    """the Telegram lines a human copies: chain, CA, and a sale said as a share of what is still held."""
+
+    def test_buy_line(self):
+        import agents
+        t = agents.copy_buy("bsc:0xabc", "WICK", "early")
+        self.assertIn("ACHAT À COPIER · bsc · voie early · $WICK", t)
+        self.assertIn("CA: 0xabc", t)
+        self.assertIn("dexscreener.com/bsc/0xabc", t)
+
+    def test_sell_share_of_what_is_left(self):
+        import agents
+        # the ladder: 50% of the original, then 25% of the original = half of what is left
+        t = agents.copy_sell({"mint": "bsc:0xabc", "symbol": "WICK", "share": 0.5, "pct": 210, "reason": "take_profit_2"})
+        self.assertIn("vends 50 % de ce qui reste à +210 %", t)
+        t = agents.copy_sell({"mint": "So1", "symbol": "X", "closed": True, "share": 0.25, "reason": "x_scam"})
+        self.assertIn("solana · $X · vends TOUT", t)

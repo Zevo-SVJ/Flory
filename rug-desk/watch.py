@@ -91,6 +91,8 @@ def watch() -> tuple[list[dict], dict]:
                 continue
             frac, why = d
             pct = (s["price"] / pos["entry"] - 1) * 100 if s["price"] > 0 else -100
+            held = pos["qty"] / pos["qty0"] if pos.get("qty0") else 1.0
+            share = min(1.0, frac / held) if held > 0 else 1.0     # of what is still held: what a copier sells
             pnl = book.sell(mint, frac, s["price"], why, s.get("liq"))
             closed = mint not in book.load()
             if closed:
@@ -105,7 +107,7 @@ def watch() -> tuple[list[dict], dict]:
             verb = "sold" if PAPER else "SELL NOW in your wallet"
             size = "the rest" if closed else f"{int(frac * 100)}% of the original size"
             out.append({"kind": "sell", "symbol": pos["symbol"], "mint": mint, "pnl": pnl, "pct": pct,
-                        "reason": why, "closed": closed,
+                        "reason": why, "closed": closed, "share": 1.0 if closed else share,
                         "text": f"{pos['symbol']}: {verb} {size} at {pct:+.0f}% ({why}), pnl ${pnl:+.2f}"})
     return out, marks
 
