@@ -136,6 +136,16 @@ def open_position(mint, symbol, price, liq_usd, usd=TICKET_USD, vaults=None, sol
                       "vaults": vaults, "sol0": sol0}     # PumpSwap only: VIGIE reads the pool on chain every tick
         save(book)
         record(mint, symbol, "open", usd, 0, "entry")
+    _live(side="buy", mint=mint, symbol=symbol, price=price)
+
+
+def _live(**order):
+    """The real wallet copies the paper book (live.py, LIVE in .env). off by default; never blocks the book."""
+    try:
+        import live
+        live.submit(order)
+    except Exception as e:
+        print(f"live: {type(e).__name__}: {e}", flush=True)
 
 
 def sell(mint, frac_of_original, price, reason, liq_usd=None) -> float:
@@ -146,6 +156,7 @@ def sell(mint, frac_of_original, price, reason, liq_usd=None) -> float:
             return 0.0
         p = book[mint]
         q = min(p["qty"], p["qty0"] * frac_of_original)
+        share = q / p["qty"] if p["qty"] > 0 else 1.0          # of what is still held: what the real wallet sells
         if COSTS and price > 0:
             price = price * (1 - _cost_pct(q * price, liq_usd or p["liq0"], mint) / 100)
             pnl = q * (price - p["entry"]) - _tx_usd(mint)
@@ -157,7 +168,8 @@ def sell(mint, frac_of_original, price, reason, liq_usd=None) -> float:
         if action == "close":
             del book[mint]
         save(book)
-        return pnl
+    _live(side="sell", mint=mint, share=1.0 if action == "close" else share, reason=reason)
+    return pnl
 
 
 if __name__ == "__main__":

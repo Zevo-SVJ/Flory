@@ -1,1 +1,2 @@
 requests>=2.28
+eth-account>=0.10   # live.py only: signs the real wallet's transactions on the Mac

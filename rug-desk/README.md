@@ -337,3 +337,23 @@ Base rates, so the gate is not optional: ~74% of Solana memecoin buyers end with
 consistently profitable window is the first seconds after launch, which belongs to snipers
 ([Bitquery via Decrypt](https://decrypt.co/337157/solana-dex-traders-decline-meme-coin-scams)), and ~0.4% of
 pump.fun wallets had realized more than $10k ([Dune via Cointelegraph](https://cointelegraph.com/news/pump-fun-crypto-traders-majority-do-not-realize-profits-dune-data)).
+
+### The real wallet (live.py, Oct 21)
+
+Decided before the gate: about 50 EUR, stop at -30%, no approval per trade. The paper desk keeps deciding
+everything; `live.py` copies its **BNB Chain** buys and sells into a dedicated wallet, through KyberSwap.
+- 13 $ per real buy, 20 $ max per transaction, 3 real positions, 8 buys a day, a honeypot.is buy-and-sell
+  simulation before each buy (no answer, no buy). sells follow the paper: the same share of what is left.
+- the wallet worth 30% under its value at the first real buy: no more buys, sells go on, alert.
+- the only transactions ever signed: a swap sent to KyberSwap's router, and an approval of that router for the
+  exact amount sold. nothing can transfer funds elsewhere, whatever ECHO reads on X.
+- `LIVE=dry` quotes every order on the real chain and logs what it would have got (`SIMULÉ` on Telegram);
+  `LIVE=on` sends. real vs paper on the same trades: `python3 live.py status`, and the export.
+
+```
+python3 -m pip install --user eth-account     # once
+python3 live.py new-wallet                    # key into .env, prints the address only
+python3 live.py test                          # RPC, BNB price, KyberSwap, honeypot.is, wallet balance
+echo "LIVE=dry" >> .env                       # 24 h, then LIVE=on in .env, restart
+touch data/STOP                               # no more real buys      python3 live.py sellall: sell everything
+```

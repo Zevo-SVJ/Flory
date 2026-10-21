@@ -18,7 +18,7 @@
 # one writer at a time on the book (book.LOCK) and on the event log (events._LOCK).
 import atomic
 import json, os, threading, time, traceback
-from config import SCHEDULE, PAPER, JUDGE, DATA, EQUITY, PAPER_BANKROLL_USD, TICKET_USD, FACTS
+from config import SCHEDULE, PAPER, JUDGE, DATA, EQUITY, PAPER_BANKROLL_USD, TICKET_USD, FACTS, LIVE
 
 MARKS = os.path.join(DATA, "marks.json")
 INBOX = os.path.join(DATA, "inbox.txt")      # CAs pasted in the dashboard, checked by GARDE
@@ -491,6 +491,12 @@ def main():
     post(f"CLAUDE BOT up. {'PAPER' if PAPER else 'LIVE'} mode, judge={JUDGE}, bankroll ${PAPER_BANKROLL_USD}. "
          f"VIGIE {SCHEDULE['vigie_every_s']}s, SCOUT {SCHEDULE['scout_every_min']}m, "
          f"AUDIT {SCHEDULE['audit_every_min']}m, report {SCHEDULE['report_at']}.")
+    import live                             # the real wallet (live.py): off unless LIVE=dry|on in .env
+    if live.mode() != "off":
+        live.start()
+        post(f"ARGENT RÉEL · mode {live.mode()} · chaînes {', '.join(LIVE['chains'])} · {LIVE['ticket_usd']} $ par achat, "
+             f"{LIVE['max_open']} positions max, arrêt à {LIVE['stop_pct']} %"
+             + (" · rien n'est envoyé (simulation)" if live.mode() == "dry" else ""))
     for problem in sources.probe():         # every outside source answers once, now
         emit("GARDE", "error", f"source en panne au démarrage : {problem[:160]}")
     if (t := health.since_last_run()):

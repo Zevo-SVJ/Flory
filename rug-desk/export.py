@@ -187,6 +187,17 @@ def trend():
         print(f"  {r['name']}: {r['verdict']} · règle {r['trend']} · garder {r['hold']}")
 
 
+def real():
+    import live
+    st = live.summary()
+    print({k: st.get(k) for k in ("mode", "address", "bnb", "equity_usd", "start_usd", "stopped", "stop_file",
+                                  "compare", "error")})
+    for p in st.get("positions") or []:
+        print("  ouvert", p)
+    for r in rows(live.LOG)[-40:]:
+        print("  ", " | ".join(r.get(k, "") for k in live.FIELDS))
+
+
 def health():
     import health as h
     print("pauses 48 h :", [(time.strftime("%m-%d %H:%M", time.localtime(a)), round((b - a) / 60), k) for a, b, k in h.gaps(48)])
@@ -201,6 +212,6 @@ if __name__ == "__main__":
                       ("STATISTIQUES DE DÉCISION", edge_stats), ("TOKENS ÉCARTÉS SUIVIS EN FANTÔME", shadow_book),
                       ("ÉLIMINATIONS", kills), ("MODÈLE", model), ("LABO DE SORTIE", lab),
                       ("AUTO-CRITIQUES ET JOURNAL", reviews), ("BAISSES ET INCIDENTS", incidents), ("ECHO", echo),
-                      ("BACKTEST", backtest_card), ("TENDANCE", trend), ("SANTÉ", health)):
+                      ("BACKTEST", backtest_card), ("TENDANCE", trend), ("ARGENT RÉEL", real), ("SANTÉ", health)):
         section(title)
         safe(fn)

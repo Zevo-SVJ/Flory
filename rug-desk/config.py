@@ -182,6 +182,23 @@ SCHEDULE = {                # used by agents.py: one entry per agent
 # all-time lines of the reports; the go-live gate, the projection and the review count only these
 RULES_SINCE = "2026-10-20 00:00"     # Oct 19 23:45: no sale on an ECHO SKIP, explore tier off, flat tickets
 
+# REAL MONEY (live.py). the paper desk keeps deciding everything; live.py copies its buys and sells on these
+# chains into a dedicated wallet whose key is in .env (LIVE_KEY, made by `python3 live.py new-wallet`).
+# LIVE=off|dry|on in .env: dry quotes every order on the real chain without sending anything.
+# every number below is a hard cap the code checks before signing anything
+LIVE = {
+    "chains": ("bsc",),         # BNB Chain only: the best paper chain (8 trades, +33.7%), gas in cents
+    "ticket_usd": 13,           # one real buy (about 12 EUR), whatever the paper ticket was
+    "max_tx_usd": 20,           # a buy above this is refused: a bug never spends more than this at once
+    "max_open": 3,              # real positions at once; the paper desk keeps all of its own
+    "max_buys_day": 8,          # a loop that buys again and again stops here
+    "stop_pct": -30,            # wallet value 30% under its start: no more buys, sells go on, alert
+    "gas_reserve_usd": 1.0,     # BNB always kept for the sells
+    "slippage_bps": 1000,       # 10% on a buy
+    "sell_slippage_bps": 1500,  # 15% on a sell; 20% (KyberSwap's cap) on the retry and on a rug exit
+    "max_sell_tax_pct": 10,     # honeypot.is: a token taxing sells above this is never bought for real
+}
+
 DATA = os.environ.get("RUG_DESK_DATA") or os.path.join(HERE, "data")
 LOG = os.path.join(DATA, "checks.csv")
 POSITIONS = os.path.join(DATA, "positions.json")

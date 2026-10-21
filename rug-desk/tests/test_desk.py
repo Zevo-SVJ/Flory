@@ -2329,3 +2329,142 @@ class CopyAlerts(unittest.TestCase):
         self.assertIn("vends 50 % de ce qui reste à +210 %", t)
         t = agents.copy_sell({"mint": "So1", "symbol": "X", "closed": True, "share": 0.25, "reason": "x_scam"})
         self.assertIn("solana · $X · vends TOUT", t)
+
+
+class Live(unittest.TestCase):
+    """real money: the paper book's orders, the caps, and the wall around what may ever be signed."""
+    TOKEN = "0x" + "ab" * 20
+    MINT = "bsc:" + TOKEN
+
+    def setUp(self):
+        import live
+        self.live = live
+        for m in ("dry", "on"):
+            if os.path.exists(live._path(m)):
+                os.remove(live._path(m))
+        for p in (live.STOP, live.LOG):
+            if os.path.exists(p):
+                os.remove(p)
+        self.said = []
+        self.patches = [mock.patch.object(live, "say", lambda text, **k: self.said.append(text)),
+                        mock.patch.object(live, "honeypot", lambda t: None),
+                        mock.patch.object(live, "bnb_usd", lambda: 650.0),
+                        mock.patch.object(live, "decimals", lambda t: 18)]
+        for p in self.patches:
+            p.start()
+
+    def tearDown(self):
+        for p in self.patches:
+            p.stop()
+
+    def test_tests_never_trade(self):
+        self.assertEqual(self.live.mode(), "off")      # RUG_DESK_DATA is set: real money is off whatever .env says
+
+    def test_only_the_router_is_ever_paid_or_approved(self):
+        live, cap = self.live, int(20 / 650 * 1e18)
+        live.check_tx(live.ROUTER, cap, "0xdeadbeef", cap)
+        with self.assertRaises(RuntimeError):
+            live.check_tx(live.ROUTER, cap + 1, "0x", cap)                       # above the cap
+        live.check_tx(self.TOKEN, 0, live.APPROVE + live._word(live.ROUTER) + live._word(5), 0)
+        with self.assertRaises(RuntimeError):                                    # approving anyone else
+            live.check_tx(self.TOKEN, 0, live.APPROVE + live._word("0x" + "11" * 20) + live._word(5), 0)
+        with self.assertRaises(RuntimeError):                                    # a transfer(to, amount)
+            live.check_tx(self.TOKEN, 0, "0xa9059cbb" + live._word("0x" + "11" * 20) + live._word(5), 0)
+        with self.assertRaises(RuntimeError):                                    # BNB sent to an address
+            live.check_tx("0x" + "11" * 20, 1, "0x", cap)
+
+    def test_book_sends_buy_and_shares_of_what_is_left(self):
+        orders = []
+        with mock.patch.object(self.live, "submit", orders.append):
+            book.open_position(self.MINT, "WICK", 1.0, 50000, usd=25)
+            book.sell(self.MINT, 0.5, 2.0, "take_profit_100")
+            book.sell(self.MINT, 0.25, 3.0, "take_profit_200")
+            book.sell(self.MINT, 1.0, 2.5, "trailing_stop")
+        self.assertEqual([o["side"] for o in orders], ["buy", "sell", "sell", "sell"])
+        self.assertAlmostEqual(orders[1]["share"], 0.5)
+        self.assertAlmostEqual(orders[2]["share"], 0.5)      # a quarter of the original is half of what is left
+        self.assertEqual(orders[3]["share"], 1.0)
+
+    def test_submit_keeps_to_live_chains(self):
+        live = self.live
+        with mock.patch.object(live, "mode", lambda: "dry"), mock.patch.object(live, "start", lambda: None):
+            n = live._q.qsize()
+            live.submit({"side": "buy", "mint": "base:" + self.TOKEN})
+            live.submit({"side": "buy", "mint": "SoLMint1111"})
+            live.submit({"side": "buy", "mint": "bsc:0xnothex"})
+            self.assertEqual(live._q.qsize(), n)
+            live.submit({"side": "buy", "mint": self.MINT})
+            self.assertEqual(live._q.qsize(), n + 1)
+            live._q.get_nowait()
+
+    def test_dry_round_trip(self):
+        live = self.live
+        routes = [{"amountOut": str(13 * 10 ** 18), "gasUsd": "0.05"},      # 13 $ of BNB -> 13 tokens
+                  {"amountOut": str(int(10 / 650 * 1e18)), "gasUsd": "0.05"},  # half of them -> 10 $ of BNB
+                  {"amountOut": str(int(10 / 650 * 1e18)), "gasUsd": "0.05"}]
+        with mock.patch.object(live, "mode", lambda: "dry"), mock.patch.object(live, "route", lambda *a: routes.pop(0)):
+            live.buy({"mint": self.MINT, "symbol": "WICK", "price": 0.9})
+            pos = live.load()["positions"][self.MINT]
+            self.assertEqual(pos["tokens"], 13 * 10 ** 18)
+            self.assertAlmostEqual(pos["price"], 13.05 / 13)
+            live.sell(self.MINT, 0.5, "take_profit_100")
+            self.assertEqual(live.load()["positions"][self.MINT]["tokens"], 13 * 10 ** 18 // 2)
+            live.sell(self.MINT, 1.0, "trailing_stop")
+            s = live.load()
+            self.assertFalse(s["positions"])
+            self.assertAlmostEqual(s["closed"][0]["usd_out"], 19.9, places=1)
+            self.assertTrue(any("SIMULÉ · vendu tout de $WICK" in t for t in self.said))
+
+    def test_caps_refuse_before_any_network(self):
+        live = self.live
+        s = live.load("dry")
+        s["positions"] = {f"bsc:0x{i:040x}": {} for i in range(3)}
+        self.assertIn("3 positions", live.refuse_buy(s, self.MINT))
+        s["positions"] = {}
+        s["buys"] = [time.time()] * 8
+        self.assertIn("8 achats", live.refuse_buy(s, self.MINT))
+        s["buys"] = []
+        open(live.STOP, "w").close()
+        self.assertIn("STOP", live.refuse_buy(s, self.MINT))
+        os.remove(live.STOP)
+        s["stopped"] = True
+        self.assertIn("arrêt", live.refuse_buy(s, self.MINT))
+
+    def test_real_buy_pays_the_router_within_the_cap(self):
+        live = self.live
+        acct = mock.Mock(address="0x" + "cd" * 20)
+        sent = []
+
+        def send(a, to, value, data, cap):
+            live.check_tx(to, value, data, cap)
+            sent.append((to, value, cap))
+            return "0xhash", True, int(0.0001 * 1e18)
+        balances = iter([0, 12 * 10 ** 18])
+        with mock.patch.object(live, "mode", lambda: "on"), mock.patch.object(live, "account", lambda: acct), \
+                mock.patch.object(live, "bnb_balance", lambda a: int(0.1 * 1e18)), \
+                mock.patch.object(live, "balance_of", lambda t, o: next(balances)), \
+                mock.patch.object(live, "equity", lambda *a: 65.0), \
+                mock.patch.object(live, "route", lambda *a: {"amountOut": "1"}), \
+                mock.patch.object(live, "build", lambda *a: {"routerAddress": live.ROUTER, "data": "0x12"}), \
+                mock.patch.object(live, "send", send):
+            live.buy({"mint": self.MINT, "symbol": "WICK", "price": 1.0})
+        to, value, cap = sent[0]
+        self.assertEqual(to, live.ROUTER)
+        self.assertAlmostEqual(value / 1e18 * 650, 13, places=2)
+        self.assertLessEqual(value, cap)
+        s = live.load("on")
+        self.assertEqual(s["start_usd"], 65.0)
+        self.assertEqual(s["positions"][self.MINT]["tokens"], 12 * 10 ** 18)
+
+    def test_stop_at_minus_30(self):
+        live = self.live
+        s = live.load("on")
+        s["start_usd"] = 60.0
+        live.save(s, "on")
+        acct = mock.Mock(address="0x" + "cd" * 20)
+        with mock.patch.object(live, "mode", lambda: "on"), mock.patch.object(live, "account", lambda: acct), \
+                mock.patch.object(live, "bnb_balance", lambda a: int(40 / 650 * 1e18)):
+            st = live.status()
+        self.assertTrue(st["stopped"])
+        self.assertTrue(live.load("on")["stopped"])
+        self.assertTrue(any("arrêt à -30 %" in t for t in self.said))
