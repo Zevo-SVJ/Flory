@@ -14,8 +14,9 @@ PENDING = os.path.join(DATA, "pending.json")
 X_QUEUE = os.path.join(DATA, "x_queue.csv")
 X_READS = os.path.join(DATA, "x_reads.csv")
 X_WATCH = os.path.join(DATA, "x_watch.csv")
-RECHECK_MIN = 15           # an open position is read again on X every 15 min: news, accusations, attention fading
-SILENT_ALARM_MIN = 30      # positions open and no X read for this long: ECHO's loop is down, the desk says so
+RECHECK_MIN = 45           # an open position is read again on X every 45 min: news, accusations, attention fading.
+                           # every 15 min spent a week of Claude usage in a day and a half (Oct 21)
+SILENT_ALARM_MIN = 90      # positions open and no X read for this long: ECHO's loop is down, the desk says so
 
 
 def load() -> dict:
