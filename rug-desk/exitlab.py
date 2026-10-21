@@ -29,6 +29,10 @@ PROFILES = {
     "no stall exit": {"stall_min": 10**9},
     "arm trail at +20%": {"arm_pct": 20, "lock_after_pct": 20},
     "volume fade 25%": {"fade_ratio": 0.25},
+    # Oct 21 review: the two biggest losers were a -36% stop and a -31% time stop, and 11 of 23 trades left by
+    # the 6 h time stop near flat. the lab tests a tighter stop and a shorter clock on the same paths
+    "stop -25%": {"stop_pct": -25},
+    "time stop 3 h": {"time_stop_hours": 3},
 }
 
 
@@ -48,6 +52,21 @@ def trades_to_replay() -> list[dict]:
     return out
 
 
+def fill(value: float, liq: float | None) -> float:
+    """What a sale worth `value` at the quoted price really pays out of a pool holding `liq` $ (both sides).
+    a constant-product pool pays R*V/(R+V) from its quote reserve R = liq/2: about V while V is small, and never
+    more than the pool holds. without this a drained pool's glitch price was replayed as a fortune: tokens
+    killed for an unlocked LP showed +3,427,854% per trade on Oct 21 (one at +263,944,237%), money no one
+    could have taken out of a pool with nothing left in it. small sales (under 10% of R) are left as quoted:
+    their impact is already in the desk's costs"""
+    if liq is None:
+        return value
+    r = max(0.0, liq) / 2
+    if value <= 0.1 * r:
+        return value
+    return r * value / (r + value) if r > 0 else 0.0
+
+
 def simulate(path: list[dict], params: dict) -> float | None:
     """Replay one exit profile on one recorded path. Returns pnl in $ for one ticket."""
     if len(path) < 2 or path[0]["price"] <= 0:
@@ -56,7 +75,10 @@ def simulate(path: list[dict], params: dict) -> float | None:
     pos = {"entry": entry, "qty0": TICKET_USD / entry, "qty": TICKET_USD / entry, "peak": entry,
            "peak_t": path[0]["t"], "liq0": path[0]["liq"] or 0, "opened": path[0]["t"], "steps": 0}
     pnl = 0.0
+    liq = path[0]["liq"]
     for s in path[1:]:
+        if s.get("liq") is not None:
+            liq = s["liq"]
         if s["price"] > pos["peak"]:
             pos["peak"], pos["peak_t"] = s["price"], s["t"]
         d = exits.decide(pos, s, params)
@@ -64,13 +86,13 @@ def simulate(path: list[dict], params: dict) -> float | None:
             continue
         frac, why = d
         q = min(pos["qty"], pos["qty0"] * frac)
-        pnl += q * (s["price"] - entry)
+        pnl += fill(q * s["price"], liq) - q * entry
         pos["qty"] -= q
         if why.startswith("take_profit"):
             pos["steps"] += 1
         if pos["qty"] <= pos["qty0"] * 1e-6:
             return pnl
-    return pnl + pos["qty"] * (path[-1]["price"] - entry)     # still open at the end of the data: marked
+    return pnl + fill(pos["qty"] * path[-1]["price"], liq) - pos["qty"] * entry   # still open at the end: marked
 
 
 def run() -> dict:

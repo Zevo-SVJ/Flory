@@ -1669,6 +1669,8 @@ class Coach(Base):
             w.writeheader()
             for i in range(n):
                 mint = f"Sh{i:03d}" + "1" * 36
+                if os.path.exists(paths._file(mint)):      # another test's path for the same name: start clean
+                    os.remove(paths._file(mint))
                 w.writerow({"t": t0 + i, "mint": mint, "symbol": f"S{i}", "stage": "pass", "reason": reason,
                             "price": 1.0, "liq": 80000})
                 for k in range(1, 72):
@@ -2273,3 +2275,19 @@ class LongSlide(Base):
         with net():                                                           # 73 >= 65: bought, smaller
             v = check.run(MINT)
         self.assertIn("PAPER BUY", v["action"])
+
+
+class ReplayRealism(unittest.TestCase):
+    def test_a_drained_pool_pays_what_it_holds(self):
+        """Oct 21: an unlocked-LP token replayed at +263,944,237% from a glitch price in an empty pool."""
+        import exitlab
+        self.assertEqual(exitlab.fill(40.0, 80000), 40.0)                 # a normal sale: as quoted
+        self.assertLess(exitlab.fill(10_000_000.0, 50), 25.0)            # $50 of pool: at most what it holds
+        self.assertEqual(exitlab.fill(40.0, 0), 0.0)
+        t = 1_000_000.0
+        path = [{"t": t, "price": 1.0, "liq": 20000}] + \
+               [{"t": t + k * 300, "price": 1.0 + k, "liq": 20000} for k in range(1, 5)] + \
+               [{"t": t + 2000, "price": 2_000_000.0, "liq": 30}]           # LP pulled, price reads x2M
+        import config
+        pnl = exitlab.simulate(path, dict(config.EXIT))
+        self.assertLess(pnl, 200)                                          # not $80M on a $25 ticket

@@ -49,7 +49,9 @@ def audit(limit: int = 60) -> list[dict]:
         for r in rows:
             p0 = float(r["price"])
             m = live.get(r["mint"])
-            p1 = m["price"] if m and m["price"] > 0 else 0.0     # pool gone counts as -100%
+            # pool gone, or too thin to sell into, counts as -100%: a drained pool's price can read x1,000,000
+            # (LUKE, Oct 21: +263,944,237%) and no one could have sold there
+            p1 = m["price"] if m and m["price"] > 0 and (m.get("liq_usd") or 0) >= 1000 else 0.0
             hours = (time.time() - time.mktime(time.strptime(r["time"], "%Y-%m-%d %H:%M"))) / 3600
             row = {"time": time.strftime("%Y-%m-%d %H:%M"), "mint": r["mint"], "symbol": r["symbol"],
                    "stage": r["stage"], "verdict": r["verdict"], "reason": r["reason"], "price0": p0,
@@ -80,7 +82,7 @@ def summary() -> dict:
     out = {k: {"n": len(v), "crashed": sum(1 for r in v if float(r["change_pct"]) <= CRASH_PCT)}
            for k, v in groups.items()}
     # killed tokens that went up a lot: where the filter may be too strict
-    missed = sorted((r for r in groups["killed"] if float(r["change_pct"]) >= 100),
+    missed = sorted((r for r in groups["killed"] if 100 <= float(r["change_pct"]) < 100000),   # past that: a price glitch
                     key=lambda r: -float(r["change_pct"]))[:5]
     out["missed"] = [{"symbol": r["symbol"], "reason": r["reason"], "change_pct": float(r["change_pct"])}
                      for r in missed]
