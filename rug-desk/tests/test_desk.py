@@ -2195,3 +2195,28 @@ class SlowSlide(Base):
         self.assertIn("baisse lente", out[0]["why"])
         self.assertEqual(incidents.paused(), 0)
         self.assertIn("sur 1 h", incidents.status()["reading"]["text"])
+
+
+class IncidentWording(Base):
+    def test_noise_ignores_rare_jumps(self):
+        """Oct 21: two +$25 take-profits made the usual noise ±$9.10; it is ±$1-3 without them."""
+        import incidents, random
+        rng = random.Random(2)
+        pts, b = [], 1000.0
+        for i in range(600):
+            b += rng.uniform(-1.5, 1.5) + (25 if i in (200, 400) else 0)
+            pts.append((i * 600.0, b))
+        self.assertLess(incidents.noise(pts), 2.0)
+
+    def test_a_scam_sold_in_time_is_named_so_and_the_rest_of_the_fall_too(self):
+        import incidents
+        for f in (incidents.LOG, incidents.STATE, config.EQUITY):
+            if os.path.exists(f):
+                os.remove(f)
+        P = "Pepi111111111111111111111111111111111111111"
+        book.open_position(P, "Pepina", 1.0, 20000, usd=25)
+        book.sell(P, 1.0, 0.95, "x_scam")
+        r = incidents.analyze("incident", "test", 3600, 26.3, 1180, time.time(), 3.0)
+        self.assertEqual(r["cause"], "scam repéré")
+        self.assertIn("vendu à temps", r["detail"])
+        self.assertIn("VIGIE vend ce qui partage", r["text"])

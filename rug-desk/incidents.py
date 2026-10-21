@@ -77,7 +77,9 @@ def points(since: float) -> list[tuple[float, float]]:
 
 
 def noise(pts: list[tuple[float, float]]) -> float:
-    """The usual size of a 10-min move of the balance (std of 10-min changes). $5 until there is a day of it."""
+    """The usual size of a 10-min move of the balance, $5 until there is a day of it. robust: 1.4826 x the median
+    absolute deviation, so the rare big jumps (a +200% winner's take-profit) don't count as noise. with a plain
+    std, Wick's and GLOAM's jumps put the "usual" noise at ±$9.10 on Oct 21 and lifted every bar 3x"""
     bins = {}
     for t, b in pts:
         bins[int(t // 600)] = b
@@ -85,7 +87,8 @@ def noise(pts: list[tuple[float, float]]) -> float:
     diffs = [bins[b] - bins[a] for a, b in zip(keys, keys[1:]) if b == a + 1]
     if len(diffs) < 6:
         return 0.005 * PAPER_BANKROLL_USD
-    return max(statistics.pstdev(diffs), 1.0)
+    med = statistics.median(diffs)
+    return max(1.4826 * statistics.median(abs(d - med) for d in diffs), 1.0)
 
 
 def expected_hour() -> float:
@@ -188,8 +191,15 @@ def analyze(level: str, why: str, window: float, drop: float, peak: float, now: 
     except Exception:
         dial = None
     if rugs:
-        cause = "rug"
-        detail = "sortie " + ", ".join(f"${r['symbol']} ({r['reason']}, {r['pnl']:+.2f} $)" for r in rugs)
+        # a pool pulled is a rug that hit the desk; an ECHO SCAM is a scam caught and sold in time (Pepina, Oct 21:
+        # -$1.16). either way the rest of the fall is named: it came from other positions
+        pulled = [r for r in rugs if r["reason"] in ("liquidity_pulled", "pool_gone")]
+        cause = "rug" if pulled else "scam repéré"
+        detail = (("pool vidé : " if pulled else "ECHO a repéré une arnaque, vendu à temps : ")
+                  + ", ".join(f"${r['symbol']} ({r['reason']}, {r['pnl']:+.2f} $)" for r in rugs))
+        rest = [m for m in moves if m["usd"] < 0 and m not in rugs][:3]
+        if rest:
+            detail += " · le reste de la baisse : " + " · ".join(f"${m['symbol']} {m['usd']:+.2f} $" for m in rest)
     elif givers and giveback >= 0.7 * lost:
         cause = "gains rendus"
         detail = (f"{', '.join('$' + c['symbol'] for c in givers[:3])} ont rendu {giveback:.2f} $ de gains pas encore encaissés depuis "
@@ -235,7 +245,7 @@ def describe(r: dict) -> str:
                 if r["normal"] else "plus que d'habitude : surveillé, rien ne change tant que ce n'est pas un incident")
         return f"ANALYSE · {head} · cause : {r['cause']}, {r['detail']} · {tail}"
     act = f"pause de {PAUSE_MIN} min sur les achats, ECHO relit toutes les positions sur X"
-    if r["cause"] == "rug":
+    if r["cause"] in ("rug", "scam repéré"):
         act += ", VIGIE vend ce qui partage des wallets ou un financeur avec le rug, dev et financeur sur liste noire"
     if r.get("echo_gap_min") is not None and r["echo_gap_min"] > 30:
         act += f" · ATTENTION : ECHO n'a rien lu depuis {r['echo_gap_min']:.0f} min"
