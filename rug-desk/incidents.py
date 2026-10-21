@@ -5,7 +5,9 @@
 #
 #   1. measure the noise   the balance's own 10-min moves over the last day, and what the open positions
 #                          should move in an hour given their own volatility (VIGIE's price paths)
-#   2. grade the fall      a NOTE: past 2x the noise and $5 in 10 min. explained in one line, nothing changes
+#   2. grade the fall      the cause of any move is worked out every minute and shown (AUDIT's panel).
+#                          a NOTE: past 2x the noise and $5 in 10 min, or a slow slide past 2x the hour's noise
+#                          and $15. written in the log with its cause, nothing changes
 #                          an INCIDENT: past 3x the noise and 3% of the bankroll in an hour, or a rug exit
 #                          (pool pulled, ECHO's SCAM, contagion), or a whole ticket lost
 #   3. find the cause      a rug (GARDE let it through), the market (most positions down with SOL/the dial),
@@ -27,6 +29,7 @@ LOG = os.path.join(DATA, "incidents.jsonl")
 STATE = os.path.join(DATA, "incident_state.json")
 URGENT = os.path.join(DATA, "x_urgent.json")
 NOTE_SIGMA, NOTE_FLOOR_USD = 2.0, 5.0
+SLOW_FLOOR_USD = 15.0                    # a slow slide over an hour is written up past 2x the hour's noise and $15
 INCIDENT_SIGMA, INCIDENT_PCT = 3.0, 3.0
 TICKET_LOST_PCT = -40.0                  # a close this bad is an incident whatever the balance does
 PAUSE_MIN = 30
@@ -294,6 +297,22 @@ def tick(now: float | None = None) -> list[dict]:
     elif d10 >= max(NOTE_SIGMA * sigma, NOTE_FLOOR_USD) and now - st.get("last_note", 0) > NOTE_EVERY_S \
             and now - st.get("last_incident", 0) > NOTE_EVERY_S:
         level, why, window = "note", f"baisse de 10 min au-delà de {max(NOTE_SIGMA * sigma, NOTE_FLOOR_USD):.2f} $", 600
+    elif d60 >= max(NOTE_SIGMA * sigma * math.sqrt(6), SLOW_FLOOR_USD) and now - st.get("last_note", 0) > NOTE_EVERY_S \
+            and now - st.get("last_incident", 0) > NOTE_EVERY_S:
+        # a slow slide: never 2x the noise in 10 min, but well past it over the hour (Oct 21: -$36 in 40 min, no line)
+        level, why, window = "note", f"baisse lente d'une heure au-delà de {max(NOTE_SIGMA * sigma * math.sqrt(6), SLOW_FLOOR_USD):.2f} $", 3600
+    # the reading, every minute: who moved the balance over the hour and how that compares with the bars.
+    # whether a fall deserves more is decided from its cause, so the cause is always worked out, then shown
+    if d60 >= 3:
+        mv = window_moves(now - 3600)
+        gb = sum(m["giveback"] for m in mv)
+        movers = " · ".join(f"${m['symbol']} {m['usd']:+.2f}" for m in sorted(mv, key=lambda m: m["usd"])[:3] if m["usd"] < 0)
+        verdict = {"incident": "INCIDENT", "note": "analyse écrite au journal"}.get(level or "", "sous les seuils : normal")
+        st["reading"] = {"t": now, "text": f"sur 1 h : -{d60:.2f} $ depuis le plus haut" + (f" · {movers}" if movers else "")
+                         + f" · gains rendus {gb:.2f} $, vraie perte {max(0.0, d60 - gb):.2f} $ (incident à {incident_bar:.2f} $)"
+                         + f" · bruit ±{sigma:.2f} $ / 10 min → {verdict}"}
+    else:
+        st["reading"] = {"t": now, "text": f"sur 1 h : stable (moins de 3 $ sous le plus haut) · bruit ±{sigma:.2f} $ / 10 min"}
     if level:
         drop, peak = (d60, p60) if window == 3600 else (d10, p10)
         rec = analyze(level, why, window, drop, peak, now, sigma)
@@ -353,4 +372,5 @@ def patterns() -> list[str]:
 
 def status() -> dict:
     p = prudence()
-    return {**p, "paused_s": round(paused()), "recent": recent(8), "patterns": patterns()}
+    return {**p, "paused_s": round(paused()), "recent": recent(8), "patterns": patterns(),
+            "reading": _read(STATE, {}).get("reading")}

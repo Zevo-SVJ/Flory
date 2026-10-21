@@ -2170,3 +2170,28 @@ class IncidentAttribution(Base):
         self.assertEqual([r["level"] for r in out], ["note"])
         self.assertEqual(out[0]["cause"], "gains rendus")
         self.assertEqual(incidents.paused(), 0)
+
+
+class SlowSlide(Base):
+    def test_a_slow_slide_is_written_up_and_the_reading_always_says_why(self):
+        """Oct 21: -$36 over 40 min never crossed the 10-min bar and left no line. a slow slide gets its analysis,
+        and the cause of any move is worked out every minute and shown."""
+        import incidents, random
+        for f in (incidents.LOG, incidents.STATE, incidents.URGENT, config.EQUITY):
+            if os.path.exists(f):
+                os.remove(f)
+        self.addCleanup(lambda: [os.remove(f) for f in (incidents.LOG, incidents.STATE, incidents.URGENT, config.EQUITY) if os.path.exists(f)])
+        now = time.time()
+        rng = random.Random(9)
+        vals = [1000 + rng.uniform(-0.6, 0.6) for _ in range(4000)] + [1000 - 0.09 * i for i in range(1, 181)]
+        with open(config.EQUITY, "w") as f:
+            f.write("t,balance,realized,unrealized,open\n")
+            for i, v in enumerate(vals):
+                f.write(f"{now - (len(vals) - 1 - i) * 20},{v},0,0,0\n")
+        incidents.tick(now - 60)
+        st = incidents._read(incidents.STATE, {}); st.pop("last_note", None); incidents._write(incidents.STATE, st)
+        out = incidents.tick(now)
+        self.assertEqual([(r["level"], r["window_min"]) for r in out], [("note", 60)])
+        self.assertIn("baisse lente", out[0]["why"])
+        self.assertEqual(incidents.paused(), 0)
+        self.assertIn("sur 1 h", incidents.status()["reading"]["text"])
