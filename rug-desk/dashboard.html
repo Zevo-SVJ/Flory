@@ -1,0 +1,1130 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Claude Bot</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  color-scheme: dark;
+  --page: #0d090d; --card: rgba(24, 17, 22, 0.70); --card-solid: #181116; --ring: rgba(255,255,255,0.08);
+  --ring-strong: rgba(255,255,255,0.16); --ink: #f3f0f5; --ink-2: #b9b2c0; --muted: #7d7684;
+  --grid: rgba(255,255,255,0.05);
+  --line: #199e70; --line-glow: rgba(46, 214, 156, 0.55); --area-top: rgba(36, 190, 136, 0.30);
+  --up: #3fd39b; --down: #ef6f6f; --mega: #f2c46d; --claude: #d97757;
+  /* agent identity, validated in this order on the card surface (adjacent CVD ≥ 8.4) */
+  --a1: #6fd6b0; --a2: #f08aa8; --a3: #f2cf7a; --a4: #a99af0; --a5: #f2a272; --a6: #8ccbf0;
+  --sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--page); color: var(--ink); font-family: var(--sans); }
+body { min-height: 100vh; overflow-x: hidden;
+  background:
+    radial-gradient(900px 520px at 50% 105%, rgba(150, 66, 96, 0.30), transparent 65%),
+    radial-gradient(800px 500px at 100% 40%, rgba(110, 50, 110, 0.18), transparent 60%),
+    radial-gradient(700px 500px at 0% 0%, rgba(70, 40, 80, 0.20), transparent 60%),
+    var(--page); }
+#stars { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+main { position: relative; z-index: 1; padding: 0 18px 40px; }
+.screen { height: 100vh; min-height: 520px; display: grid; gap: 10px; padding: 14px 0 12px;
+          grid-template-rows: auto auto minmax(160px, 1fr) auto auto; }
+.label { font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-2); }
+.card { background: var(--card); border: 1px solid var(--ring); border-radius: 14px; padding: 12px 16px;
+        backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+
+/* header */
+header { display: flex; align-items: center; gap: 14px; }
+.logo { width: 52px; height: 52px; border-radius: 15px; display: grid; place-items: center;
+        background: radial-gradient(circle at 30% 20%, #ffffff, #e9e4e6 55%, #c9c2c6);
+        box-shadow: inset 0 -3px 6px rgba(0,0,0,.18), 0 8px 24px rgba(0,0,0,.45); }
+.brand h1 { position: relative; display: inline-block; }
+.doodle { position: absolute; right: -24px; top: -6px; }
+.brand h1 { margin: 0; font-size: 36px; font-weight: 800; letter-spacing: -0.03em; line-height: 1; }
+.brand .label { margin-top: 6px; display: block; }
+.spacer { flex: 1; }
+.tasks { font-family: var(--mono); font-size: 12px; color: var(--muted); letter-spacing: .06em; }
+.live { display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; border-radius: 999px;
+        border: 1px solid var(--ring-strong); background: rgba(255,255,255,.03);
+        font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: .08em; }
+.live i { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); }
+.live.on i { background: #3fd39b; box-shadow: 0 0 0 0 rgba(63,211,155,.6); animation: ping 2s infinite; }
+.live.off i { background: var(--down); }
+@keyframes ping { 0% { box-shadow: 0 0 0 0 rgba(63,211,155,.55); } 80%,100% { box-shadow: 0 0 0 10px rgba(63,211,155,0); } }
+
+/* tiles */
+.tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.card, .agent { min-width: 0; }
+/* short windows (a laptop with the browser bar): the four tiles go on one row so the chart keeps room */
+@media (max-height: 760px) and (min-width: 900px) {
+  .tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .tiles .sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .winrate svg { width: 46px; height: 46px; }
+  .screen { gap: 8px; padding: 10px 0 8px; }
+  .logo { width: 44px; height: 44px; } .brand h1 { font-size: 30px; }
+  .blob { width: 38px; height: 33px; margin: 4px auto 4px; }
+  .agent .when { display: none; }
+}
+.big { font-family: var(--mono); font-size: 24px; font-weight: 600; letter-spacing: -0.02em; margin-top: 4px; }
+.sub { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-top: 4px; }
+.accent { position: relative; padding-left: 26px; }
+.accent::before { content: ""; position: absolute; left: 12px; top: 18px; bottom: 18px; width: 3px; border-radius: 3px; background: var(--up); }
+.accent.neg::before { background: var(--down); }
+.up { color: var(--up); } .down { color: var(--down); }
+.winrate { display: flex; align-items: center; gap: 18px; }
+.wl { font-family: var(--mono); font-size: 12px; line-height: 1.7; }
+
+/* chart + log */
+.mainrow { display: grid; grid-template-columns: minmax(0, 1.22fr) minmax(0, 1fr); gap: 10px; min-height: 0; }
+.mainrow > .card { display: flex; flex-direction: column; min-height: 0; }
+.cardhead { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+.clock { font-family: var(--mono); font-size: 11px; color: var(--muted); letter-spacing: .06em; }
+#chart { position: relative; flex: 1; min-height: 0; }
+#chart svg { width: 100%; height: 100%; display: block; overflow: visible; }
+#chart text { font-family: var(--mono); font-size: 10px; fill: var(--muted); }
+.bubble { position: absolute; transform: translate(calc(-100% - 6px), -135%); background: #101d19; border: 1px solid rgba(63,211,155,.45);
+          color: var(--up); font-family: var(--mono); font-size: 18px; font-weight: 600; padding: 4px 10px; border-radius: 8px;
+          white-space: nowrap; pointer-events: none; box-shadow: 0 6px 20px rgba(0,0,0,.35); }
+.bubble.neg { background: #2a1517; border-color: rgba(239,111,111,.35); color: var(--down); }
+.pulse { transform-box: fill-box; transform-origin: center; animation: pulse 1.6s ease-out infinite; }
+@keyframes pulse { 0% { opacity: .7; transform: scale(1); } 100% { opacity: 0; transform: scale(3.2); } }
+#log { font-family: var(--mono); font-size: 12px; line-height: 1.55; flex: 1; min-height: 0; overflow: hidden; position: relative;
+       mask-image: linear-gradient(to bottom, #000 80%, transparent); -webkit-mask-image: linear-gradient(to bottom, #000 80%, transparent); }
+.ev { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: baseline; padding: 3px 0; }
+.ev .tag { font-size: 11px; letter-spacing: .02em; }
+.ev .txt { color: #e6e0e8; font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ev .amt { font-weight: 600; font-size: 11.5px; } .ev .amt.mega { color: var(--mega); }
+.ev.fresh { animation: fresh 1.6s ease-out; }
+@keyframes fresh { from { background: rgba(255,255,255,.07); } to { background: transparent; } }
+
+.checkform { display: flex; gap: 6px; margin: 0 0 8px; }
+.checkform input { flex: 1; min-width: 0; font-family: var(--mono); font-size: 11px; color: var(--ink); background: rgba(255,255,255,.04);
+                   border: 1px solid var(--ring); border-radius: 8px; padding: 6px 9px; outline: none; }
+.checkform input:focus { border-color: rgba(111,214,176,.5); }
+.checkform input.bad { border-color: rgba(239,111,111,.6); }
+.checkform button { font-family: var(--mono); font-size: 11px; letter-spacing: .06em; color: #0f1d18; background: #6fd6b0;
+                    border: 0; border-radius: 8px; padding: 6px 12px; cursor: pointer; font-weight: 600; }
+
+/* daily bar */
+.daily { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 14px; align-items: center; margin: 2px 4px; }
+.track { height: 10px; border-radius: 99px; background: rgba(255,255,255,.07); overflow: hidden; }
+.fill { height: 100%; border-radius: 99px; width: 0; transition: width .6s ease;
+        background: linear-gradient(90deg, #6fd6b0, #f2cf7a); }
+.fill.loss { background: linear-gradient(90deg, #f2c46d, #ef6f6f); }
+.pctlabel { font-family: var(--mono); font-size: 12px; font-weight: 600; }
+
+/* agents */
+.agents { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; }
+.agent { position: relative; text-align: center; padding: 10px 8px 8px; border-radius: 16px; background: var(--card);
+         border: 1px solid var(--ring); transition: border-color .3s, box-shadow .3s, transform .3s; min-width: 0; }
+.agent::before { content: ""; position: absolute; left: 14px; top: 10px; width: 18px; height: 4px; border-radius: 4px; background: var(--c); }
+.agent.active { border-color: color-mix(in srgb, var(--c) 75%, white 5%); background: color-mix(in srgb, var(--c) 9%, var(--card));
+                box-shadow: 0 0 0 1px color-mix(in srgb, var(--c) 40%, transparent), 0 0 30px color-mix(in srgb, var(--c) 22%, transparent); }
+.agent.err { border-color: rgba(239,111,111,.6); }
+.blob { width: 50px; height: 42px; margin: 8px auto 8px; border-radius: 48% 48% 44% 44% / 56% 56% 44% 44%; position: relative;
+        background: radial-gradient(ellipse at 30% 22%, rgba(255,255,255,.85) 0 8%, rgba(255,255,255,.25) 18%, transparent 34%),
+                    radial-gradient(circle at 50% 110%, color-mix(in srgb, var(--c) 70%, #1a0f18), var(--c) 75%);
+        box-shadow: 0 10px 22px color-mix(in srgb, var(--c) 28%, transparent), inset 0 -5px 9px rgba(0,0,0,.14); }
+.blob::before, .blob::after { content: ""; position: absolute; top: 40%; width: 5px; height: 10px; border-radius: 4px; background: #241826;
+        animation: blink 5s infinite; transform: rotate(8deg); }
+.blob::before { left: 34%; } .blob::after { left: 54%; transform: rotate(-4deg); }
+.agent.active .blob { animation: bob 1.1s ease-in-out infinite; }
+.agent.err .blob::before, .agent.err .blob::after { height: 3px; top: 48%; }
+@keyframes bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-5px) scale(1.03, .97); } }
+@keyframes blink { 0%, 92%, 100% { transform: scaleY(1); } 95% { transform: scaleY(.1); } }
+.agent .name { font-family: var(--mono); font-weight: 600; font-size: 13px; letter-spacing: .12em; }
+.agent .role { font-size: 11px; color: var(--ink-2); margin-top: 2px; }
+.agent .msg { font-family: var(--mono); font-size: 10px; color: var(--muted); margin-top: 4px; min-height: 0;
+              overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.agent .when { font-family: var(--mono); font-size: 10px; color: var(--muted); margin-top: 2px; opacity: .8; }
+.chips { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 12px; }
+#trendTile { cursor: pointer; } #trendTile:hover { border-color: var(--ring-strong); }
+.agent { padding: 14px 8px 14px; }
+.agent .blob { margin: 10px auto 12px; }
+.agent:active { transform: scale(.97); }
+
+.agent { cursor: pointer; }
+.agent:hover, .agent:focus-visible { border-color: color-mix(in srgb, var(--c) 55%, var(--ring)); outline: none; }
+
+/* agent panel: everything about one agent, only when asked */
+#panel, #dossier { width: min(980px, calc(100vw - 32px)); max-height: calc(100vh - 48px); padding: 0; border: 1px solid var(--ring-strong);
+         border-radius: 18px; background: var(--card-solid); color: var(--ink); overflow: hidden; }
+#panel[open], #dossier[open] { display: flex; flex-direction: column; animation: rise .32s cubic-bezier(.2, .8, .2, 1); }
+#panel::backdrop, #dossier::backdrop { background: rgba(10,6,12,.55); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+         animation: fadein .25s ease; }
+#panel[open] .phead .blob { animation: hop .6s cubic-bezier(.3, 1.6, .5, 1) .08s both; }
+@keyframes rise { from { opacity: 0; transform: translateY(18px) scale(.97); } to { opacity: 1; transform: none; } }
+@keyframes hop { from { transform: translateY(8px) scale(.7); opacity: 0; } to { transform: none; opacity: 1; } }
+.phead { display: flex; align-items: center; gap: 14px; padding: 16px 20px; border-bottom: 1px solid var(--ring);
+         background: color-mix(in srgb, var(--c) 7%, var(--card-solid)); }
+.phead .blob { width: 44px; height: 38px; margin: 0; flex: none; }
+.phead h2 { margin: 0; font-family: var(--mono); font-size: 16px; letter-spacing: .12em; }
+.phead .role { color: var(--ink-2); font-size: 13px; margin-top: 2px; }
+.phead .state { margin-left: auto; text-align: right; font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.phead .state b { display: inline-block; padding: 2px 8px; border-radius: 6px; font-weight: 600; margin-bottom: 4px; }
+.state .work { background: color-mix(in srgb, var(--c) 25%, transparent); color: var(--ink); }
+.state .idle { background: rgba(255,255,255,.06); color: var(--ink-2); }
+.state .error { background: rgba(239,111,111,.18); color: var(--down); }
+.pclose { border: 0; background: transparent; color: var(--ink-2); font-size: 22px; cursor: pointer; padding: 4px 8px; margin-left: 6px; }
+.pbody { overflow-y: auto; padding: 16px 20px 20px; display: grid; gap: 14px; }
+.pbody h3 { font-family: var(--mono); font-size: 11px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase;
+            color: var(--ink-2); margin: 0 0 8px; }
+.does { margin: 0; padding-left: 18px; color: var(--ink-2); font-size: 13px; line-height: 1.6; }
+.now { font-family: var(--mono); font-size: 12px; color: var(--ink); }
+.pane[hidden] { display: none; }
+.tok { cursor: pointer; color: #8fb8f0; } .tok:hover { text-decoration: underline; }
+.dline { display: grid; grid-template-columns: 52px 64px 110px minmax(0, 1fr); gap: 10px; padding: 6px 0;
+         border-bottom: 1px solid var(--grid); font-family: var(--mono); font-size: 12px; align-items: baseline; }
+.dline .ag { font-weight: 600; letter-spacing: .08em; }
+.dline .facts { color: var(--ink-2); font-family: var(--sans); overflow-wrap: anywhere; }
+@media (max-width: 560px) { .dline { grid-template-columns: 44px 56px minmax(0, 1fr); } .dline .what { display: none; } }
+.srcs { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 8px; }
+.src { border: 1px solid var(--ring); border-radius: 10px; padding: 8px 10px; font-family: var(--mono); font-size: 12px; }
+.src .d { color: var(--muted); font-size: 11px; margin-top: 2px; overflow-wrap: anywhere; }
+/* details below the fold */
+h2.section { font-family: var(--mono); font-size: 11px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase;
+             color: var(--ink-2); margin: 0 0 12px; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 14px; }
+.mt { margin-top: 14px; }
+table { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 12px; font-variant-numeric: tabular-nums; }
+th { text-align: left; font-weight: 500; color: var(--muted); padding: 6px 8px; border-bottom: 1px solid var(--ring); white-space: nowrap; font-size: 11px; }
+td { padding: 8px; border-bottom: 1px solid var(--grid); vertical-align: top; }
+td.num, th.num { text-align: right; white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+.scroll { overflow-x: auto; }
+a { color: #8fb8f0; text-decoration: none; } a:hover { text-decoration: underline; }
+.pill { white-space: nowrap; display: inline-block; padding: 1px 8px; border-radius: 6px; font-size: 11px; border: 1px solid var(--ring-strong); color: var(--ink-2); }
+.why { color: var(--ink-2); font-family: var(--sans); font-size: 12px; max-width: 380px; }
+.empty { color: var(--muted); padding: 18px 0; text-align: center; font-family: var(--mono); font-size: 12px; }
+.stats3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin-bottom: 12px; }
+.stat { border: 1px solid var(--ring); border-radius: 12px; padding: 10px 12px; }
+.stat .v { font-family: var(--mono); font-size: 18px; font-weight: 600; margin-top: 4px; }
+.bars .bar { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; margin-bottom: 10px; font-size: 12px; }
+.bars .bar span:first-child { color: var(--ink-2); }
+.bars .bar span:nth-child(2) { font-family: var(--mono); }
+.bars .t { grid-column: 1 / -1; height: 8px; border-radius: 4px; background: rgba(255,255,255,.05); overflow: hidden; }
+.bars .t i { display: block; height: 100%; border-radius: 4px; background: var(--a1); }
+.note { color: var(--muted); font-size: 12px; margin: 10px 0 0; }
+
+/* tooltip + mega */
+#tip { position: fixed; pointer-events: none; z-index: 20; display: none; background: var(--card-solid); border: 1px solid var(--ring-strong);
+       border-radius: 10px; padding: 8px 10px; font-family: var(--mono); font-size: 11px; box-shadow: 0 8px 24px rgba(0,0,0,.4); }
+#tip strong { display: block; font-size: 14px; color: var(--ink); }
+#tip span { color: var(--ink-2); }
+#mega { position: fixed; inset: 0; z-index: 30; display: none; place-items: center; background: rgba(10,6,12,.45);
+        backdrop-filter: blur(10px) saturate(.8); -webkit-backdrop-filter: blur(10px) saturate(.8); }
+#mega.show { display: grid; animation: fadein .3s ease; }
+#confetti { position: fixed; inset: 0; z-index: 31; pointer-events: none; }
+.megaring { position: relative; z-index: 32; padding: 1.5px; border-radius: 24px;
+            background: conic-gradient(from 200deg, #6fd6b0, #8ccbf0, #a99af0, #f08aa8, #f2cf7a, #6fd6b0);
+            box-shadow: 0 0 34px rgba(111,214,176,.28), 0 0 60px rgba(169,154,240,.22), 0 0 90px rgba(240,138,168,.14);
+            animation: pop .55s cubic-bezier(.2,1.4,.4,1); }
+.megacard { text-align: center; padding: 30px 52px 30px; border-radius: 22.5px; background: #161017; min-width: 276px; }
+.megacard .t1 { color: var(--mega); font-weight: 700; letter-spacing: .02em; font-size: 17px; display: flex; gap: 12px;
+                justify-content: center; align-items: center; }
+.megacard .t1 i { font-style: normal; font-size: 9px; opacity: .9; }
+.megacard .sym { font-family: var(--mono); color: #d9d2dc; margin-top: 26px; font-size: 16px; letter-spacing: .03em; }
+.megacard .pct { color: #6fe0b4; font-size: 50px; font-weight: 800; letter-spacing: -0.02em; margin-top: 14px; line-height: 1; }
+.megacard .usd { font-size: 25px; font-weight: 700; margin-top: 18px; color: #fff; }
+@keyframes pop { from { transform: scale(.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
+
+@media (max-width: 980px), (max-height: 520px) {
+  .screen { height: auto; min-height: 0; grid-template-rows: none; }
+  #chart, #log { flex: none; height: 300px; }
+}
+@media (max-width: 980px) {
+  .mainrow, .grid2 { grid-template-columns: minmax(0, 1fr); }
+  .agents { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 560px) {
+  .tiles { grid-template-columns: 1fr; }
+  .agents { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .brand h1 { font-size: 30px; }
+  .logo { width: 50px; height: 50px; }
+  header .tasks { display: none; }
+  .big { font-size: 24px; }
+  #chart, #log { height: 260px; }
+  .stats3 { grid-template-columns: 1fr; }
+  header { flex-wrap: wrap; gap: 8px; }
+  .cardhead { flex-wrap: wrap; justify-content: flex-start; }
+  .scroll { overflow-x: auto; }
+}
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<canvas id="stars"></canvas>
+<main id="app">
+ <div class="screen">
+  <header>
+    <div class="logo" aria-hidden="true">
+      <svg width="34" height="34" viewBox="-20 -20 40 40" id="spark"></svg>
+    </div>
+    <div class="brand">
+      <h1>Claude Bot<svg class="doodle" width="22" height="22" viewBox="0 0 22 22" aria-hidden="true">
+        <path d="M6 9 L3 3 M11 8 L12 1 M15 11 L21 8" stroke="#e8e2e6" stroke-width="2.2" stroke-linecap="round" fill="none"/></svg></h1>
+      <span class="label" id="modeLabel">TRADING MODE</span>
+    </div>
+    <span class="spacer"></span>
+    <span class="tasks" id="tasks"></span>
+    <span class="live" id="live"><i></i><span id="liveText">…</span></span>
+  </header>
+
+  <section class="tiles">
+    <div class="card"><div class="label">Balance</div><div class="big" id="balance">–</div><div class="sub" id="balanceSub"></div></div>
+    <div class="card accent" id="pnlCard"><div class="label">Total P&amp;L</div><div class="big" id="pnl">–</div><div class="sub" id="pnlSub"></div></div>
+    <div class="card" id="trendTile" role="button" tabindex="0" title="ouvrir TREND"><div class="label">Tendance</div><div class="big" id="trendBig">–</div><div class="sub" id="trendSub"></div></div>
+    <div class="card winrate">
+      <svg width="64" height="64" viewBox="0 0 64 64" id="donut" role="img"></svg>
+      <div><div class="label">Win rate</div><div class="wl"><span class="up" id="wins">0W</span><br><span class="down" id="losses">0L</span></div></div>
+    </div>
+  </section>
+
+  <section class="mainrow">
+    <div class="card">
+      <div class="cardhead">
+        <span class="label">Balance history</span>
+        <span class="clock" id="clock"></span>
+      </div>
+      <div id="chart"></div>
+    </div>
+    <div class="card">
+      <div class="cardhead"><span class="label">Activity log</span><span class="clock" id="logCount"></span></div>
+      <div id="log"></div>
+    </div>
+  </section>
+
+  <section class="daily">
+    <span class="label">Journée</span>
+    <div class="track"><div class="fill" id="dayFill"></div></div>
+    <span class="pctlabel" id="dayLabel">–</span>
+  </section>
+
+  <section class="agents" id="agents"></section>
+ </div>
+</main>
+<dialog id="panel" aria-labelledby="pname">
+  <div class="phead">
+    <div class="blob" aria-hidden="true"></div>
+    <div><h2 id="pname"></h2><div class="role" id="prole"></div></div>
+    <div class="state"><b id="pstate"></b><div id="pwhen"></div></div>
+    <button class="pclose" id="pclose" aria-label="Fermer">×</button>
+  </div>
+  <div class="pbody">
+    <section><h3>Ce qu'il fait</h3><ul class="does" id="pdoes"></ul></section>
+    <section><h3>En ce moment</h3><div class="now" id="pnow"></div></section>
+    <section class="pane" data-agent="VIGIE" hidden><h3>Positions ouvertes · <span id="posCount">–</span></h3>
+      <div class="sub" id="posSub" style="margin:-4px 0 8px"></div>
+      <div class="scroll"><table id="open"></table></div></section>
+    <section class="pane" data-agent="GARDE" hidden><h3>Vérifier un token</h3>
+      <form id="checkForm" class="checkform" autocomplete="off">
+        <input id="checkInput" type="text" spellcheck="false" placeholder="coller un CA (Solana ou 0x…) : GARDE le vérifie" aria-label="Adresse de contrat à vérifier">
+        <button type="submit">Check</button>
+      </form></section>
+    <section class="pane" data-agent="TREND" hidden><h3>BTC, ETH, SOL, QQQ, SPY · règle des 200 jours, paper séparé</h3>
+      <div class="chips"><span class="tasks" id="dial" title="Cadran de régime : BTC au-dessus de sa moyenne 200 jours, ETH au-dessus de sa 200 jours, SOL au-dessus de sa 50 jours."></span>
+        <span class="tasks" id="sol"></span></div>
+      <div class="stats3" id="trendStats"></div>
+      <div class="scroll"><table id="trendAssets"></table></div>
+      <p class="note" id="trendNote"></p></section>
+    <section class="pane" data-agent="SCOUT" hidden><h3>Sources</h3><div class="srcs" id="scoutSources"></div></section>
+    <section class="pane" data-agent="SCOUT" hidden><h3>Dernier passage : où meurent les tokens</h3>
+      <div class="now" id="funnelHead"></div>
+      <div class="grid2" style="margin-top:8px"><div><div class="label">Lancements</div><div class="bars" id="funnelEarly"></div></div>
+      <div><div class="label">Momentum (plus de 72 h)</div><div class="bars" id="funnelMom"></div></div></div>
+    </section>
+    <section class="pane" data-agent="GARDE" hidden><h3>Sources</h3><div class="srcs" id="gardeSources"></div></section>
+    <section class="pane" data-agent="GARDE" hidden><h3>Pourquoi les tokens sont éliminés</h3><div class="bars" id="kills"></div></section>
+    <section class="pane" data-agent="GARDE" hidden><h3>Et si on avait acheté ce que GARDE a écarté ?</h3>
+      <div class="scroll"><table id="shadowTable"></table></div><p class="note" id="shadowNote"></p>
+    </section>
+    <section class="pane" data-agent="GARDE" hidden><h3>Bot Telegram anti-rug</h3><p class="note" id="tgNote"></p></section>
+    <section class="pane" data-agent="ECHO" hidden><h3>La lecture X aide-t-elle ?</h3>
+      <div class="stats3" id="groups"></div>
+      <div class="scroll"><table id="experiment"></table></div>
+      <p class="note">Chaque PASS est acheté tout de suite (papier), puis lu sur X : un SKIP ou un SCAM fait vendre la position. AUDIT re-prix aussi ceux qu'ECHO a écartés.</p>
+    </section>
+    <section class="pane" data-agent="VIGIE" hidden><h3>Labo de sortie : quand vendre ?</h3>
+      <div class="scroll"><table id="lab"></table></div>
+      <p class="note" id="labNote"></p>
+    </section>
+    <section class="pane" data-agent="VIGIE" hidden><h3>Test de vitesse</h3>
+      <div class="stats3" id="speed"></div><p class="note" id="speedNote"></p>
+    </section>
+    <section class="pane" data-agent="TREND" hidden><h3>Backtest : la règle contre « garder », coûts compris</h3>
+      <div class="scroll"><table id="trendBt"></table></div><p class="note" id="trendBtNote"></p></section>
+    <section class="pane" data-agent="TREND" hidden><h3>Derniers ordres</h3><div class="scroll"><table id="trendFills"></table></div></section>
+    <section class="pane" data-agent="AUDIT" hidden><h3>Prêt pour l'argent réel ?</h3>
+      <div class="chips"><span class="live" id="ready"><i></i><span id="readyText">…</span></span>
+        <span class="tasks" id="learnChip" title="Le modèle d'apprentissage : il s'entraîne sur chaque token jugé (suivi 6 h). Une fois FIABLE, il peut acheter ce qu'une règle souple a refusé."></span></div>
+      <div class="stats3" id="edgeStats"></div><p class="note" id="edgeNote"></p>
+    </section>
+    <section class="pane" data-agent="AUDIT" hidden><h3>Peut-on en vivre ?</h3>
+      <div class="stats3" id="livingStats"></div><p class="note" id="livingNote"></p>
+    </section>
+    <section class="pane" data-agent="AUDIT" hidden><h3>Ce que le desk apprend</h3>
+      <div class="stats3" id="learnStats"></div><ul class="note" id="learnLessons" style="margin:6px 0 0 18px;padding:0"></ul>
+      <p class="note" id="learnNote"></p>
+    </section>
+    <section class="pane" data-agent="AUDIT" hidden><h3>Bilan du 26 octobre : papier contre backtest</h3>
+      <div class="stats3" id="bilanStats"></div><p class="note" id="bilanNote"></p>
+    </section>
+    <section class="pane" data-agent="AUDIT" hidden><h3>Backtest cumulatif</h3>
+      <div class="scroll"><table id="btRules"></table></div>
+      <div class="scroll"><table id="btHistory"></table></div>
+      <p class="note" id="btNote"></p>
+    </section>
+    <section class="pane" data-agent="AUDIT" hidden><h3>Le filtre avait-il raison ?</h3>
+      <div class="stats3" id="auditStats"></div><p class="note" id="missed"></p>
+    </section>
+    <section class="pane" data-agent="AUDIT" hidden><h3>Où le desk gagne et perd</h3>
+      <div class="grid2" style="margin-top:0">
+        <div class="scroll"><table id="byHour"></table></div>
+        <div class="scroll"><table id="byAge"></table></div>
+      </div>
+      <div class="scroll"><table id="byTier"></table></div>
+      <div class="scroll"><table id="byChain"></table></div>
+      <p class="note">« explore » : un token qui a passé tous les contrôles anti-rug mais dont la note est sous 55, acheté petit (papier seulement). S'il fait aussi bien que « base », la note ne sert à rien.</p>
+    </section>
+    <section class="pane" data-agent="AUDIT" hidden><h3>Dernier rapport</h3><pre class="now" id="plumeReport" style="white-space:pre-wrap;margin:0"></pre></section>
+    <section><h3>Auto-critique : ce que j'ai fait, mes erreurs, ce que je change</h3>
+      <div id="selfReview"></div>
+      <p class="note">Un agent ne change un réglage que sur au moins 40 cas, au-delà du bruit, sur les deux moitiés des données, un changement par jour au plus, re-testé 48 h après et annulé s'il déçoit.</p>
+    </section>
+    <section class="pane" data-agent="AUDIT" hidden><h3>Quand le solde baisse : analyse et réponse</h3>
+      <div class="now" id="incReading" style="white-space:normal;margin-bottom:10px"></div>
+      <div class="stats3" id="incStats"></div>
+      <div class="scroll"><table id="incTable"></table></div>
+      <p class="note" id="incNote"></p></section>
+    <section class="pane" data-agent="AUDIT" hidden><h3>Journal des changements automatiques</h3>
+      <div class="scroll"><table id="journal"></table></div>
+    </section>
+    <section><h3>Ses dernières actions</h3><div id="pevents"></div></section>
+  </div>
+</dialog>
+<dialog id="dossier" aria-labelledby="dname">
+  <div class="phead">
+    <div><h2 id="dname"></h2><div class="role">le dossier du token : ce que chaque agent a vu, dans l'ordre</div></div>
+    <div class="state"><a id="dlink" target="_blank" rel="noopener noreferrer">DexScreener ↗</a></div>
+    <button class="pclose" id="dclose" aria-label="Fermer">×</button>
+  </div>
+  <div class="pbody"><div id="dbody"></div></div>
+</dialog>
+<div id="tip"></div>
+<div id="mega" role="dialog" aria-live="polite"><div class="megaring"><div class="megacard"><div class="t1"><i>✦</i><span id="megaTitle">MEGA PROFIT</span><i>✦</i></div><div class="sym" id="megaSym"></div><div class="pct" id="megaPct"></div><div class="usd" id="megaUsd"></div></div></div></div>
+<canvas id="confetti"></canvas>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const NS = "http://www.w3.org/2000/svg";
+const AGENT_COLORS = { VIGIE: "var(--a1)", SCOUT: "var(--a2)", GARDE: "var(--a3)", ECHO: "var(--a4)", AUDIT: "var(--a5)", TREND: "var(--a6)", PLUME: "var(--a6)", DESK: "var(--muted)" };
+let S = null, range = "auto", book = "memes", lastEventId = 0, firstLoad = true;   // auto: TOUT until a full day, then 24H
+
+function el(tag, attrs = {}, text) {
+  const e = tag.startsWith("svg:") ? document.createElementNS(NS, tag.slice(4)) : document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+  if (text != null) e.textContent = text;     // every value from the desk goes in as text, never HTML
+  return e;
+}
+const fmt = (v, d = 2) => Math.abs(v).toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
+const signOf = (v, d) => Number(Math.abs(v).toFixed(d)) === 0 ? "" : v > 0 ? "+" : "−";   // no "−0"
+const usd = (v) => signOf(v, 2) + "$" + fmt(v);
+const plain = (v) => "$" + fmt(v);
+const pct = (v, d = 1) => v == null ? "–" : signOf(v, d) + fmt(v, d) + "%";
+const sign = (v) => v > 0.004 ? "up" : v < -0.004 ? "down" : "";
+const ago = (t) => { if (!t) return "jamais"; const s = Math.max(0, Date.now() / 1000 - t); return s < 60 ? `il y a ${Math.round(s)} s` : s < 3600 ? `il y a ${Math.round(s / 60)} min` : `il y a ${(s / 3600).toFixed(1)} h`; };
+
+// ---------- logo: an orange starburst ----------
+(() => {
+  const g = $("spark");
+  for (let i = 0; i < 12; i++) {
+    const a = i * Math.PI / 6, len = i % 2 ? 13 : 17;
+    g.append(el("svg:line", { x1: 0, y1: 0, x2: (Math.cos(a) * len).toFixed(2), y2: (Math.sin(a) * len).toFixed(2),
+      stroke: "var(--claude)", "stroke-width": 4.2, "stroke-linecap": "round" }));
+  }
+})();
+
+// ---------- star field ----------
+(() => {
+  const c = $("stars"), ctx = c.getContext("2d");
+  let stars = [];
+  const size = () => { c.width = innerWidth * devicePixelRatio; c.height = innerHeight * devicePixelRatio;
+    stars = Array.from({ length: 110 }, () => ({ x: Math.random() * c.width, y: Math.random() * c.height, r: Math.random() * 1.1 + .2, p: Math.random() * 6 })); };
+  size(); addEventListener("resize", size);
+  const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  (function draw(t) {
+    ctx.clearRect(0, 0, c.width, c.height);
+    for (const s of stars) { ctx.globalAlpha = .25 + .35 * (still ? .5 : (Math.sin(t / 1400 + s.p) + 1) / 2); ctx.fillStyle = "#fff";
+      ctx.beginPath(); ctx.arc(s.x, s.y, s.r * devicePixelRatio, 0, 7); ctx.fill(); }
+    if (!still) requestAnimationFrame(draw);
+  })(0);
+})();
+
+// ---------- tooltip ----------
+const tip = $("tip");
+function showTip(evt, strong, sub) {
+  tip.replaceChildren(el("strong", {}, strong), el("span", {}, sub));
+  tip.style.display = "block";
+  tip.style.left = Math.min(evt.clientX + 14, innerWidth - tip.offsetWidth - 8) + "px";
+  tip.style.top = (evt.clientY + 14) + "px";
+}
+const hideTip = () => { tip.style.display = "none"; };
+
+// ---------- balance chart: one series, live edge, crosshair ----------
+function drawChart() {
+  const box = $("chart");
+  const W = box.clientWidth, H = box.clientHeight;
+  box.replaceChildren();
+  const now = Date.now() / 1000;
+  const pts = S.curve.slice();
+  const TR = S.trend || {}, tEq = TR.equity ?? TR.bankroll ?? 1000, tBank = TR.bankroll ?? 1000;
+  const [liveVal, base] = S.book === "tendance" ? [tEq, tBank] : S.book === "total" ? [S.balance + tEq, S.bankroll + tBank] : [S.balance, S.bankroll];
+  if (!pts.length) pts.push([now - 60, base]);
+  pts.push([now, liveVal]);                         // the live edge: the line grows every second
+  // the window is the real one: 1h, 24h, 7 days, or everything since the first point
+  const t1 = now, t0 = S.range_s ? now - S.range_s : pts[0][0];
+  const before = pts[0][0] > t0 + 1 ? pts[0][0] : null;     // the desk wasn't logging yet
+  const vals = pts.map(p => p[1]);
+  const vmin = Math.min(...vals), vmax = Math.max(...vals);
+  const padv = Math.max((vmax - vmin) * 0.05, 0.25);
+  const lo = vmin - padv, hi = vmax + padv;
+  const L = 2, R = 12, T = 30, B = 26;
+  const x = (t) => L + (W - L - R) * ((t - t0) / Math.max(1, t1 - t0));
+  const y = (v) => T + (H - T - B) * (1 - (v - lo) / (hi - lo));
+  const svg = el("svg:svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": `Balance ${plain(liveVal)}, de ${plain(vmin)} à ${plain(vmax)}` });
+  const defs = el("svg:defs");
+  const grad = el("svg:linearGradient", { id: "area", x1: 0, y1: 0, x2: 0, y2: 1 });
+  grad.append(el("svg:stop", { offset: "0%", "stop-color": "rgba(63, 211, 155, 0.30)" }),
+              el("svg:stop", { offset: "55%", "stop-color": "rgba(40, 150, 110, 0.10)" }),
+              el("svg:stop", { offset: "100%", "stop-color": "rgba(40, 150, 110, 0)" }));
+  const glow = el("svg:filter", { id: "glow", x: "-5%", y: "-40%", width: "110%", height: "180%" });
+  glow.append(el("svg:feGaussianBlur", { stdDeviation: 2.6, result: "b" }));
+  const merge = el("svg:feMerge"); merge.append(el("svg:feMergeNode", { in: "b" }), el("svg:feMergeNode", { in: "SourceGraphic" })); glow.append(merge);
+  defs.append(grad, glow); svg.append(defs);
+
+  // the reference shows just the top and the bottom of the range, top-left and bottom-left
+  svg.append(el("svg:text", { x: L + 2, y: 14, style: "fill: var(--ink-2)" }, plain(vmax)));
+  svg.append(el("svg:text", { x: L + 2, y: H - 6, style: "fill: var(--ink-2)" }, plain(vmin)));
+  if (before && x(before) - x(t0) > 40) {
+    svg.append(el("svg:line", { x1: x(t0), x2: x(before), y1: y(pts[0][1]), y2: y(pts[0][1]), stroke: "rgba(255,255,255,.16)", "stroke-dasharray": "2 5" }));
+    if (x(before) - x(t0) > 170) svg.append(el("svg:text", { x: (x(t0) + x(before)) / 2, y: y(pts[0][1]) - 8, "text-anchor": "middle" }, "pas encore de données"));
+  }
+
+  let d = `M${x(pts[0][0]).toFixed(1)} ${y(pts[0][1]).toFixed(1)}`;
+  for (let i = 1; i < pts.length; i++) d += ` L${x(pts[i][0]).toFixed(1)} ${y(pts[i][1]).toFixed(1)}`;
+  svg.append(el("svg:path", { d: d + ` L${x(t1).toFixed(1)} ${H} L${x(pts[0][0]).toFixed(1)} ${H} Z`, fill: "url(#area)" }));
+  svg.append(el("svg:path", { d, fill: "none", stroke: "#4fe0aa", "stroke-width": 1.8, "stroke-linejoin": "round", filter: "url(#glow)" }));
+
+  // hover layer sits under the MEGA pills so those stay hoverable too
+  const hit = el("svg:rect", { x: 0, y: 0, width: W, height: H, fill: "transparent" });
+  hit.addEventListener("pointermove", (evt) => {
+    const r = svg.getBoundingClientRect(), t = t0 + ((evt.clientX - r.left) - L) / (W - L - R) * (t1 - t0);
+    if (t < pts[0][0]) { hideTip(); return; }
+    const p = pts.reduce((a, q) => Math.abs(q[0] - t) < Math.abs(a[0] - t) ? q : a);
+    cross.setAttribute("x1", x(p[0])); cross.setAttribute("x2", x(p[0])); cross.setAttribute("visibility", "visible");
+    dot.setAttribute("cx", x(p[0])); dot.setAttribute("cy", y(p[1])); dot.setAttribute("visibility", "visible");
+    showTip(evt, plain(p[1]), new Date(p[0] * 1000).toLocaleString("fr-FR", { weekday: "short", hour: "2-digit", minute: "2-digit" }) + " · " + usd(p[1] - base) + " vs départ");
+  });
+  hit.addEventListener("pointerleave", () => { hideTip(); cross.setAttribute("visibility", "hidden"); dot.setAttribute("visibility", "hidden"); });
+  svg.append(hit);
+
+  // MEGA sales on the curve: a gold dot with a halo and a gold pill, as on the reference
+  for (const m of (S.book === "tendance" ? [] : S.megas)) {
+    if (m.t < t0) continue;
+    const near = pts.reduce((a, p) => Math.abs(p[0] - m.t) < Math.abs(a[0] - m.t) ? p : a);
+    const cx = x(m.t), cy = y(near[1]);
+    svg.append(el("svg:circle", { cx, cy, r: 11, fill: "rgba(242,196,109,.08)", stroke: "rgba(242,196,109,.35)" }));
+    svg.append(el("svg:circle", { cx, cy, r: 4.5, fill: "var(--mega)" }));
+    const pill = el("svg:g");
+    pill.append(el("svg:rect", { x: cx - 50, y: cy - 31, width: 40, height: 18, rx: 4, fill: "#f2d08a" }),
+                el("svg:text", { x: cx - 30, y: cy - 18.5, "text-anchor": "middle", style: "fill: #3a2808; font-weight: 600" }, "MEGA"));
+    pill.addEventListener("pointermove", (evt) => showTip(evt, `$${m.symbol} ${pct(m.pct)}`, `MEGA PROFIT ${usd(m.pnl)}`));
+    pill.addEventListener("pointerleave", hideTip);
+    svg.append(pill);
+  }
+  const ex = x(t1), ey = y(S.balance);
+  svg.append(el("svg:circle", { cx: ex, cy: ey, r: 6, fill: "#4fe0aa", class: "pulse" }));
+  svg.append(el("svg:circle", { cx: ex, cy: ey, r: 5, fill: "#d9fff0", stroke: "#4fe0aa", "stroke-width": 2 }));
+
+  const cross = el("svg:line", { y1: T - 6, y2: H - 4, stroke: "rgba(255,255,255,.18)", visibility: "hidden" });
+  const dot = el("svg:circle", { r: 4, fill: "#4fe0aa", stroke: "var(--card-solid)", "stroke-width": 2, visibility: "hidden", "pointer-events": "none" });
+  svg.prepend(cross); svg.append(dot);
+  box.append(svg);
+  const b = el("div", { class: "bubble" + (liveVal < base ? " neg" : "") }, plain(liveVal));
+  b.style.left = Math.max(120, ex) + "px"; b.style.top = Math.max(48, ey) + "px";
+  box.append(b);
+}
+
+// ---------- activity log ----------
+const KIND_TAGS = { scan: ["SCAN", "#7fd4c8"], kill: ["RISK", "#f2a272"], pass: ["PASS", "#a99af0"], buy: ["EXEC", "#8cb4f0"],
+  sell: ["FILL", "#6fd6b0"], audit: ["AUDIT", "#f08aa8"], report: ["RAPPORT", "#8ccbf0"], error: ["ERR", "#ef6f6f"], info: ["DESK", "#9a93a0"], x: ["X", "#f2cf7a"],
+  analyse: ["ANALYSE", "#8ccbf0"], incident: ["INCIDENT", "#ef6f6f"] };
+function eventLine(e, withTime = false) {
+  const row = el("div", { class: "ev" });
+  const isMega = e.kind === "sell" && e.pct >= S.mega_pct;
+  const [name, color] = isMega ? ["MEGA", "var(--mega)"] : (KIND_TAGS[e.kind] || [e.kind.toUpperCase(), "var(--muted)"]);
+  const tag = el("span", { class: "tag", title: e.agent }, `[${name}]`);
+  tag.style.color = color;
+  row.append(tag, el("span", { class: "txt", title: `${e.agent} · ${e.text}` }, e.text));
+  if (e.kind === "sell" && e.pnl != null) row.append(el("span", { class: "amt " + (isMega ? "mega" : sign(e.pnl)) }, usd(e.pnl)));
+  else if (withTime) row.append(el("span", { class: "clock" }, new Date(e.t * 1000).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })));
+  return row;
+}
+function drawLog(newIds) {
+  const box = $("log");
+  box.replaceChildren(...S.events.map(e => { const r = eventLine(e); if (newIds.has(e.id)) r.classList.add("fresh"); return r; }));
+  if (!S.events.length) box.append(el("div", { class: "empty" }, "Les agents démarrent…"));
+  $("logCount").textContent = `${(S.wins + S.losses).toLocaleString("fr-FR")} RÉSOLUS`;
+}
+
+// ---------- agents ----------
+function drawAgents() {
+  const box = $("agents");
+  const now = Date.now() / 1000;
+  box.replaceChildren(...S.agents.map(a => {
+    const active = a.status === "work" || (a.name !== "ECHO" && a.t && now - a.t < 4 && a.status !== "error");
+    const card = el("div", { class: "agent" + (active ? " active" : "") + (a.status === "error" ? " err" : ""),
+                             role: "button", tabindex: "0", "data-name": a.name, "aria-label": `${a.name} : ${a.role}, ouvrir le détail` });
+    card.style.setProperty("--c", AGENT_COLORS[a.name]);
+    card.title = `${a.role} · ${a.status === "error" ? "⚠ " : ""}${a.msg || ""}`;
+    card.append(el("div", { class: "blob", "aria-hidden": "true" }), el("div", { class: "name" }, a.name));
+    return card;
+  }));
+}
+
+// ---------- agent panel: what one agent does, live, only when clicked ----------
+const DOES = {
+  VIGIE: ["Surveille chaque position toutes les 20 s, prix lu directement dans le pool sur la chaîne (pas de retard DexScreener).",
+          "Vend selon les règles : liquidité retirée, stop −35 %, paliers à +100 % et +200 %, verrou de gain, stop suiveur, dump, stagnation, stop de temps.",
+          "Sur un rug : met sur liste noire le dev, le financeur du cluster et tous les wallets holders."],
+  SCOUT: ["Toutes les 3 min : chaque graduation pump.fun lue sur la chaîne, les tendances GeckoTerminal (5 min, 1 h), le top organique de Jupiter, les listes DexScreener.",
+          "Deux voies : lancements (moins de 72 h) et momentum (tokens établis qui bougent vraiment).",
+          "Écarte d'emblée les pools morts, les fausses capitalisations et les volumes de bots."],
+  GARDE: ["Pool : liquidité, âge, fausse capitalisation, volume mort, micro-trades de bots.",
+          "Nom : usine à rugs (nom recyclé), copie d'un ticker plus gros. Chaîne : le pool réel doit confirmer DexScreener.",
+          "Contrat et holders : mint et freeze fermés, pièges Token-2022, LP brûlé, part du dev, top 10, baleines, bundles, fermes de wallets identiques.",
+          "Lecture approfondie : wallets d'usine connus, Jupiter (suspect, dev en série, volume organique), qui a financé les holders, Solana Tracker (bundlers, insiders, snipers).",
+          "Puis une note sur 100 et la taille de la mise."],
+  ECHO:  ["Tourne en boucle toutes les 20 min (Claude dans Chrome, voir ECHO.md) et lit X. Une passe sans rien à lire s'arrête tout de suite, sans ouvrir le navigateur : le quota Claude de la semaine est le budget.",
+          "La veille d'abord : chaque position ouverte est relue toutes les 45 min, 3 par passe au plus. Accusations de rug avec preuve, dev qui vend ou disparaît, nouvelle CA poussée, callers qui lâchent, attention qui s'effondre.",
+          "Puis chaque nouveau PASS : comptes réels ou bots, narrative (originale ou copie, fraîche ou tardive), dev, compte du projet, callers.",
+          "Répond BUY, SKIP ou SCAM. Un SCAM (avec preuve) fait vendre tout de suite ; un SKIP est noté et mesuré.",
+          "Toutes les 2 h, relève les narratives naissantes sur X : SCOUT cherche ces mots en premier.",
+          "Si des positions sont ouvertes et qu'ECHO n'a rien lu depuis 90 min, le desk donne l'alerte (page et Telegram)."],
+  TREND: ["Un second portefeuille paper de 1 000 $, à part des memecoins : BTC, ETH, SOL (crypto, 7 j/7) et QQQ, SPY (Nasdaq 100, S&P 500).",
+          "Règle : on détient un actif tant que sa clôture est au-dessus de sa moyenne 200 jours (entrée à +1 %, sortie à −3 %, pour ne pas trader à chaque croisement). Les actifs « dedans » se partagent le portefeuille à parts égales, le reste est en cash. Pas de levier.",
+          "Toutes les 5 min : prix (Coinbase ou Kraken, Yahoo ou Stooq), signal, ordres si l'ensemble des actifs dedans change. Backtest refait chaque jour, coûts compris, verdict DATA VALIDATED, TRADE-OFF ou NO EDGE.",
+          "Calcule le cadran de régime pour les memecoins : s'ils perdent clairement quand il est rouge, il les met en retrait (sous garde-fous, annulé s'il déçoit)."],
+  AUDIT: ["Surveille le solde chaque minute : une baisse est comparée au bruit habituel. Une baisse ordinaire est expliquée en une ligne, sans rien changer ; un incident (rug, ou baisse anormale) déclenche une pause des achats de 30 min, une relecture X de toutes les positions et la vente de ce qui est lié à un rug.",
+          "Re-prix chaque verdict 6 h après : le filtre a-t-il tué des rugs ou des gagnants ?",
+          "Apprend les wallets gagnants et ceux des rugs, met les devs qui rug sur liste noire.",
+          "Décide si le desk est prêt pour l'argent réel : 200 trades et un gain moyen positif avec 95 % de confiance. Rejoue toutes les 6 h de nouvelles graduations et les tokens momentum (backtest cumulatif).",
+          "Écrit le rapport du soir et le brief du matin à partir des fichiers du desk, rien de mémoire."],
+};
+const STATE_TXT = { work: "en action", idle: "en attente", error: "erreur" };
+let current = null;
+function srcCards(box, names) {
+  box.replaceChildren(...names.map(([key, label, missing]) => {
+    const s = (S.sources || {})[key], c = el("div", { class: "src" });
+    const mark = missing ? "✗" : !s ? "…" : s.ok ? "✓" : "✗";
+    const line = el("div", {}, `${label} ${mark}`);
+    line.style.color = mark === "✓" ? "var(--up)" : mark === "✗" ? "var(--down)" : "var(--ink-2)";
+    c.append(line, el("div", { class: "d" }, missing || (s ? `${s.detail || ""} · ${ago(s.t)}` : "pas encore appelé")));
+    return c;
+  }));
+}
+function drawPanel() {
+  const P = $("panel");
+  if (!current || !P.open || !S) return;
+  const a = S.agents.find(x => x.name === current); if (!a) return;
+  const R = (S.reviews || {})[current], sr = $("selfReview"); sr.replaceChildren();
+  if (R) {
+    [["Ce que j'ai fait", R.did], ["Mes erreurs", R.mistakes], ["Ce que je change", R.change ? [R.change] : []]].forEach(([h, xs]) => {
+      if (!xs || !xs.length) return;
+      sr.append(el("div", { class: "label", style: "margin-top:8px" }, h), ...xs.map(t => el("div", { class: "now", style: "white-space:normal" }, t)));
+    });
+    sr.append(el("div", { class: "sub", style: "margin-top:6px" }, "revue du " + new Date(S.reviews.t * 1000).toLocaleString("fr-FR", { weekday: "short", hour: "2-digit", minute: "2-digit" })));
+  } else sr.append(el("div", { class: "empty" }, "Première auto-critique au prochain passage d'AUDIT (toutes les 6 h)."));
+  table("journal", [["Quand"], ["Agent"], ["Réglage"], ["Avant → après"], ["Preuve"], ["Statut"]],
+    (S.journal || []).slice().reverse().map(e => [new Date(e.t * 1000).toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }),
+      e.agent, e.key, `${JSON.stringify(e.old)} → ${JSON.stringify(e.new)}`, e.why || "",
+      el("span", { class: "pill", title: e.undone_why || "" }, { active: "en test 48 h", confirmed: "confirmé", rolled_back: "annulé" }[e.status] || e.status)]),
+    "Aucun changement pour l'instant : aucun agent n'a encore assez de preuves.");
+  P.style.setProperty("--c", AGENT_COLORS[a.name]);
+  $("pname").textContent = a.name; $("prole").textContent = a.role;
+  const st = $("pstate"); st.className = a.status || "idle"; st.textContent = STATE_TXT[a.status] || a.status;
+  $("pwhen").textContent = a.name === "ECHO" ? (a.last ? "dernière lecture " + a.last.slice(11) : "") : "dernier passage " + ago(a.t);
+  $("pdoes").replaceChildren(...(DOES[a.name] || []).map(t => el("li", {}, t)));
+  $("pnow").textContent = (a.status === "error" ? "⚠ " : "") + (a.msg || "–");
+  for (const p of document.querySelectorAll("#panel .pane")) p.hidden = p.dataset.agent !== a.name;
+  const K = S.keys || {};
+  if (a.name === "SCOUT") {
+    srcCards($("scoutSources"), [["geckoterminal", "GeckoTerminal"], ["jupiter_top", "Jupiter top organique"]]);
+    const F = a.funnel || {};
+    $("funnelHead").textContent = F.leads == null ? "Pas encore de passage depuis la mise à jour." :
+      `${F.leads} tokens examinés : ${F.graduates} graduations pump.fun, ${F.evm_new || 0} nouveaux pools EVM, ${F.trending} en tendance (GeckoTerminal), ${F.jupiter_top} top organique (Jupiter), ${F.feeds_and_search} listes DexScreener.`
+      + (F.chains ? " Par chaîne : " + Object.entries(F.chains).sort((x, y) => y[1] - x[1]).map(([c, n]) => `${c} ${n}`).join(" · ") + "." : "");
+    const bars = (id, obj) => {
+      const rows = Object.entries(obj || {}).sort((x, y) => y[1] - x[1]), max = Math.max(1, ...rows.map(r => r[1]));
+      $(id).replaceChildren(...(rows.length ? rows.map(([k, n]) => {
+        const row = el("div", { class: "bar" }), t = el("div", { class: "t" }), i = el("i");
+        i.style.width = (n / max * 100) + "%"; if (k === "→ GARDE") i.style.background = "var(--up)";
+        t.append(i); row.append(el("span", {}, k === "→ GARDE" ? "passent à GARDE" : killLabel(k)), el("span", {}, String(n)), t);
+        return row;
+      }) : [el("div", { class: "empty" }, "aucun")]));
+    };
+    bars("funnelEarly", F.early); bars("funnelMom", F.momentum);
+  }
+  if (a.name === "GARDE") srcCards($("gardeSources"), [
+    ["helius_das", "Helius (holders)", K.helius ? null : "RPC public : liste des holders limitée"],
+    ["jupiter", "Jupiter"],
+    ["rugcheck", "RugCheck (second avis, noté)"],
+    ["stracker", `Solana Tracker · ${S.stracker_today || 0}/${S.stracker_cap || 75} auj.`, K.stracker ? null : "clé manquante"]]);
+  if (a.name === "AUDIT") $("plumeReport").textContent = S.last_report || "Pas encore de rapport : le premier arrive à " + (S.report_at || "21:30") + ".";
+  const evs = S.events.filter(e => e.agent === a.name).slice(0, 8);
+  $("pevents").replaceChildren(...(evs.length ? evs.map(e => eventLine(e, true)) : [el("div", { class: "empty" }, "Rien dans le journal récent.")]));
+}
+const FACT_LABELS = { source: "source", lane: "voie", liq_usd: "liquidité $", age_min: "âge (min)", chg_1h: "1 h %",
+  avg_trade: "trade moyen $", stage: "étape", reason: "raison", score: "note", flags: "signaux faibles", tier: "mise",
+  signals: "signaux", ticket: "ticket $", usd: "mise $", price: "prix", organic: "organique", organic_vol: "volume organique %",
+  dev_mints: "lancements du dev", cluster_pct: "cluster %", fresh_pct: "wallets neufs %", bundlers_pct: "bundlers %",
+  insiders_pct: "insiders %", snipers_pct: "snipers %", factory_wallets: "wallets d'usine", raison: "raison",
+  pct: "variation %", pnl: "PnL $", closed: "clôturé", change_pct: "variation 6 h %", hours: "heures", verdict: "verdict" };
+function tokenCell(mint, symbol) {
+  const s = el("span", { class: "tok", role: "button", tabindex: "0", title: "ouvrir le dossier" }, "$" + (symbol || mint.slice(0, 6)));
+  s.addEventListener("click", () => openDossier(mint, symbol));
+  s.addEventListener("keydown", (e) => { if (e.key === "Enter") openDossier(mint, symbol); });
+  return s;
+}
+async function openDossier(mint, symbol) {
+  $("dname").textContent = "$" + (symbol || mint.slice(0, 6));
+  $("dlink").href = mint.includes(":") ? `https://dexscreener.com/${mint.split(":")[0]}/${mint.split(":")[1]}` : `https://dexscreener.com/solana/${mint}`;
+  $("dbody").replaceChildren(el("div", { class: "empty" }, "chargement…"));
+  $("dossier").showModal();
+  const d = await fetch("/api/dossier?mint=" + encodeURIComponent(mint)).then(r => r.json()).catch(() => ({ entries: [] }));
+  const rows = (d.entries || []).map(e => {
+    const facts = Object.entries(e).filter(([k]) => !["t", "agent", "what", "symbol"].includes(k))
+      .map(([k, v]) => `${FACT_LABELS[k] || k} : ${Array.isArray(v) ? v.join(", ") : v}`).join(" · ");
+    const ag = el("span", { class: "ag" }, e.agent); ag.style.color = AGENT_COLORS[e.agent] || "var(--ink-2)";
+    const r = el("div", { class: "dline" });
+    r.append(el("span", { class: "clock" }, new Date(e.t * 1000).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })),
+             ag, el("span", { class: "what" }, e.what), el("span", { class: "facts" }, facts));
+    return r;
+  });
+  $("dbody").replaceChildren(...(rows.length ? rows : [el("div", { class: "empty" }, "Pas encore de dossier pour ce token (il date d'avant cette version).")]));
+}
+$("dclose").addEventListener("click", () => $("dossier").close());
+$("dossier").addEventListener("click", (e) => { if (e.target === $("dossier")) $("dossier").close(); });
+function openPanel(name) { current = name; $("panel").showModal(); drawPanel(); }
+$("agents").addEventListener("click", (e) => { const c = e.target.closest(".agent"); if (c) openPanel(c.dataset.name); });
+$("agents").addEventListener("keydown", (e) => {
+  const c = e.target.closest(".agent");
+  if (c && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); openPanel(c.dataset.name); }
+});
+$("trendTile").addEventListener("click", () => openPanel("TREND"));
+$("trendTile").addEventListener("keydown", (e) => { if (e.key === "Enter") openPanel("TREND"); });
+$("pclose").addEventListener("click", () => $("panel").close());
+$("panel").addEventListener("click", (e) => { if (e.target === $("panel")) $("panel").close(); });   // click outside
+
+// ---------- tables & panels ----------
+function table(id, head, rows, empty) {
+  const t = $(id); t.replaceChildren();
+  const thead = el("thead"), tr = el("tr");
+  head.forEach(([h, n]) => tr.append(el("th", n ? { class: "num" } : {}, h)));
+  thead.append(tr); t.append(thead);
+  const body = el("tbody");
+  if (!rows.length) { const r = el("tr"); r.append(el("td", { colspan: head.length, class: "empty" }, empty)); body.append(r); }
+  rows.forEach(cells => { const r = el("tr"); cells.forEach((c, i) => { const td = el("td", head[i][1] ? { class: "num" } : {}); if (c instanceof Node) td.append(c); else td.textContent = c ?? "–"; r.append(td); }); body.append(r); });
+  t.append(body);
+}
+const span = (cls, text) => el("span", { class: cls }, text);
+const link = (href, text) => el("a", { href, target: "_blank", rel: "noopener noreferrer" }, text);
+const KILLS = { thin_pool: "Pool trop petit", too_fresh: "Trop récent", too_old: "Trop vieux", no_pool: "Pas de pool",
+  nobody_can_sell: "Honeypot (aucune vente)", mint_open: "Mint authority ouverte", freeze_open: "Freeze authority ouverte",
+  lp_unverified: "LP non vérifiable", lp_unlocked: "LP non brûlé", no_holders: "Holders indisponibles",
+  dev_holds: "Le dev garde > 5 %", dev_rugged_before: "Dev déjà sur la liste noire", copycat: "Copie d'un ticker plus gros", dev_unknown: "Dev introuvable", top10_heavy: "Top 10 > 30 %", whale: "Un wallet > 5 %", bundle_same_sol: "Bundle : même solde SOL",
+  bundle_ladder: "Bundle : sacs identiques", "source en panne": "Source en panne", low_score: "Note trop basse",
+  fake_cap: "Fausse capitalisation", dead_volume: "Volume mort", micro_trades: "Volume de bots (micro-trades)",
+  serial_farm: "Usine à rugs (nom recyclé)", holder_farm: "Ferme de wallets identiques", stale_data: "Données périmées",
+  ticket_too_big: "Pool trop petit pour la mise", no_momentum: "Pas de momentum", below_graduation: "Sous son prix de graduation", overextended: "Bougie verticale (trop tard)", jup_sus: "Jupiter : suspect", serial_dev: "Dev lanceur en série",
+  inorganic_volume: "Volume non organique (Jupiter)", low_organic: "Score organique bas", rug_funder: "Financé par un rugger connu",
+  funded_cluster: "Cluster financé par un même wallet", fresh_wallets: "Holders = wallets neufs", st_rugged: "Déjà rug (Solana Tracker)",
+  factory_wallets: "Wallets d'usine à rugs connus", fees_eat_ticket: "Frais de réseau trop lourds (Ethereum)", x_scam_before: "Déjà lu SCAM sur X", bundled: "Bundlers > 15 %", insiders: "Insiders > 15 %", snipers: "Snipers > 25 %" };
+const FLAG_LABELS = { few_holders: "peu de holders", bot_volume: "volume de bots ?", quiet: "peu d'activité",
+  very_young: "très jeune", smart_money: "wallets gagnants déjà vus", no_socials: "ni X ni Telegram ni site", late: "vieux (> 48 h)", liq_edge: "liquidité juste", one_sided: "achats/ventes déséquilibrés",
+  concentrated: "top 10 un peu lourd" };
+const flagText = (f) => (f || "").split(" ").filter(Boolean).map(x => FLAG_LABELS[x] || x).join(" · ");
+const DANGERS = { honeypot: "honeypot (revente impossible)", high_tax: "taxe > 10 %", cannot_sell_all: "impossible de tout revendre",
+  cannot_buy: "achat bloqué", hidden_owner: "propriétaire caché", selfdestruct: "contrat autodestructible", tax_modifiable: "taxe modifiable",
+  tax_per_wallet: "taxe par wallet", trading_cooldown: "délai entre trades", creator_made_honeypots: "créateur de honeypots", closed_source: "code non publié" };
+const killLabel = (k) => KILLS[k] || (k && k.startsWith("danger:") ? "Piège du contrat : " + (DANGERS[k.slice(7)] || k.slice(7)) : k);
+
+function drawTrend() {
+  const T = S.trend || {}, st = $("trendStats"); st.replaceChildren();
+  if (T.error) { $("trendNote").textContent = "TENDANCE illisible : " + T.error; return; }
+  const eq = T.equity, chg = eq == null ? null : (eq / T.bankroll - 1) * 100;
+  [["Valeur", eq == null ? "…" : plain(eq), chg == null ? "prix pas encore lus" : pct(chg) + " depuis le début"],
+   ["En position", String((T.assets || []).filter(a => a.usd).length) + " / " + (T.assets || []).length, "cash " + (T.cash == null ? "–" : plain(T.cash))],
+   ["Ordres", String(T.n_fills || 0), T.started ? "depuis le " + new Date(T.started * 1000).toLocaleDateString("fr-FR") : "pas encore lancé"]]
+    .forEach(([l, v, sub]) => { const c = el("div", { class: "card" }); c.append(el("div", { class: "label" }, l), el("div", { class: "big" }, v), el("div", { class: "sub" }, sub)); st.append(c); });
+  table("trendAssets", [["Actif"], ["Prix", 1], ["vs moyenne 200 j", 1], ["Signal"], ["Détenu", 1], ["Source"]],
+    (T.assets || []).map(a => [a.asset, a.price == null ? "…" : a.price.toLocaleString("fr-FR", { maximumFractionDigits: 2 }),
+      a.gap_pct == null ? "–" : span(sign(a.gap_pct), pct(a.gap_pct)),
+      a.in == null ? (a.why || "…") : span(a.in ? "up" : "down", a.in ? "dedans" : "dehors"),
+      a.usd ? plain(a.usd) : "–", a.src || "–"]), "Pas encore de prix : TREND les lit au démarrage du desk.");
+  const errs = Object.entries(T.errors || {});
+  const best = ((T.bt || {}).runs || []).find(r => r.name === "portefeuille");
+  $("trendNote").textContent = (best ? `Backtest ${best.from.slice(0, 4)}–${best.to.slice(0, 4)} du portefeuille : ${best.verdict}, ${best.why}. ` : "Backtest au premier passage de TREND. ")
+    + (errs.length ? "Source en panne : " + errs.map(([k, v]) => `${k} (${v})`).join(" · ") : "");
+  table("trendBt", [["Actifs"], ["Période"], ["Règle %/an", 1], ["Chute max", 1], ["Garder %/an", 1], ["Chute max", 1], ["Ordres", 1], ["Verdict"]],
+    ((T.bt || {}).runs || []).map(r => [r.name, `${r.from.slice(0, 7)} → ${r.to.slice(0, 7)}`, pct(r.trend.cagr), r.trend.mdd + "%",
+      pct(r.hold.cagr), r.hold.mdd + "%", String(r.trades),
+      span(r.verdict === "DATA VALIDATED" ? "up" : r.verdict === "NO EDGE" ? "down" : "", r.verdict)]), "Pas encore de backtest.");
+  $("trendBtNote").textContent = "DATA VALIDATED : positif et meilleur Sharpe que garder sur chaque moitié de la période, et chute max plus faible. TRADE-OFF : chute max au plus 3/4 de celle de garder, rendement positif, mais pas meilleur partout. NO EDGE : le reste. Coûts : 0,40 % par ordre en crypto, 0,05 % en ETF.";
+  table("trendFills", [["Quand"], ["Actif"], ["Sens"], ["Montant", 1], ["Prix", 1], ["Pourquoi"]],
+    (T.fills || []).map(f => [f.time, f.asset, f.side, plain(+f.usd), (+f.price).toLocaleString("fr-FR", { maximumFractionDigits: 2 }), f.why]),
+    "Aucun ordre pour l'instant.");
+}
+function drawIncidents() {
+  const I = S.incidents || {}, st = $("incStats"); st.replaceChildren();
+  $("incReading").textContent = I.reading ? "En ce moment, " + I.reading.text : "En ce moment : pas encore de lecture (AUDIT lit le solde chaque minute).";
+  [["Tickets", I.factor == null ? "–" : (I.factor < 1 ? "×" + I.factor : "normaux"), I.dd_pct ? `${I.dd_pct} % sous le plus haut` : "au plus haut"],
+   ["Achats", I.paused_s ? "en pause" : "ouverts", I.paused_s ? `encore ${Math.ceil(I.paused_s / 60)} min (après un incident)` : "aucun incident récent"],
+   ["Analyses", String((I.recent || []).length), "les dernières, ci-dessous"]]
+    .forEach(([l, v, sub]) => { const c = el("div", { class: "card" }); c.append(el("div", { class: "label" }, l), el("div", { class: "big" }, v), el("div", { class: "sub" }, sub)); st.append(c); });
+  table("incTable", [["Quand"], ["Niveau"], ["Baisse", 1], ["Cause"], ["Ce qu'il en ressort"]],
+    (I.recent || []).slice().reverse().map(r => [r.time.slice(5), span(r.level === "incident" ? "down" : "", r.level === "incident" ? "INCIDENT" : "analyse"),
+      "-" + plain(r.drop), r.cause, el("span", { class: "why" }, r.detail + (r.normal ? " · perte normale" : ""))]),
+    "Aucune baisse notable depuis le reset.");
+  $("incNote").textContent = ((I.patterns || []).length ? "Motif récurrent : " + I.patterns.join(" · ") + ". " : "") +
+    "Une baisse est comparée au bruit habituel du solde et à ce que les positions bougent normalement en une heure. Une analyse ne change rien. " +
+    "Un incident (3× le bruit et 3 % de la banque en 1 h, ou un rug) met les achats en pause 30 min et fait relire toutes les positions sur X. " +
+    "Une glissade lente depuis le plus haut de la journée est analysée dès 30 $ (puis tous les 15 $). À 50 $ de vraie perte, le desk passe en prudence : mises ×0.8, seulement les tokens notés 65 ou plus, relecture X de toutes les positions, jusqu'à avoir regagné la moitié de la baisse. " +
+    "En baisse prolongée, chaque 10 % perdu depuis le plus haut réduit aussi les mises de 20 % (règle des Turtles). Jamais de mise plus grosse pour se refaire.";
+}
+function drawPanels() {
+  drawIncidents();
+  drawTrend();
+  table("open", [["Token"], ["Entrée", 1], ["Prix", 1], ["Variation", 1], ["Plus haut", 1], ["Reste", 1], ["Depuis", 1], ["PnL latent", 1]],
+    S.open.map(p => [tokenCell(p.mint, p.symbol),
+      p.entry.toPrecision(3), p.price ? p.price.toPrecision(3) : "…", span(sign(p.pct), pct(p.pct, 0)), span(sign(p.peak_pct), pct(p.peak_pct, 0)),
+      Math.round(p.left_pct) + "%", p.hours < 1 ? Math.round(p.hours * 60) + " min" : p.hours.toFixed(1) + " h",
+      p.pnl == null ? "…" : span(sign(p.pnl), usd(p.pnl))]),
+    "Aucune position ouverte : SCOUT et GARDE cherchent.");
+
+  const g = $("groups"); g.replaceChildren();
+  [["BUY", "X dit BUY"], ["SKIP", "X dit SKIP"], ["NO_X", "Sans X (nuit)"], ["non lu", "Pas lu"]].forEach(([k, l]) => {
+    const v = S.groups[k], c = el("div", { class: "stat" });
+    c.append(el("div", { class: "label" }, `${l} · ${v.n}`), el("div", { class: "v " + sign(v.pnl) }, usd(v.pnl))); g.append(c);
+  });
+  table("experiment", [["Token"], ["Note", 1], ["X"], ["Pourquoi"], ["Statut"], ["PnL", 1]],
+    S.experiment.map(e => [tokenCell(e.mint, e.symbol),
+      el("span", { title: flagText(e.flags) || "aucun signal" }, e.score == null ? "–" : String(e.score)),
+      el("span", { class: "pill" }, e.x || "non lu"), el("div", { class: "why" }, e.why || flagText(e.flags)),
+      el("span", { class: "pill" }, e.status),
+      (() => { const w = el("span"); w.append(span(sign(e.pnl), usd(e.pnl)), el("span", { style: "color: var(--muted)" }, e.open ? " ouvert" : "")); return w; })()]),
+    "Aucun PASS pour l'instant.");
+
+  const a = S.audit, st = $("auditStats"); st.replaceChildren();
+  const share = (o) => o.n ? Math.round(o.crashed / o.n * 100) + "%" : "–";
+  [["Éliminés qui ont chuté", share(a.killed), `${a.killed.crashed}/${a.killed.n} à −50 % en 6 h`],
+   ["PASS qui ont chuté", share(a.passed), `${a.passed.crashed}/${a.passed.n}`],
+   ["Gagnants ratés", String(a.missed.length), "éliminés puis +100 %"]].forEach(([l, v, sub]) => {
+    const c = el("div", { class: "stat" }); c.append(el("div", { class: "label" }, l), el("div", { class: "v" }, v), el("div", { class: "sub" }, sub)); st.append(c);
+  });
+  const kb = $("kills"); kb.replaceChildren();
+  const max = Math.max(1, ...S.kills.map(k => k.n));
+  S.kills.forEach(k => {
+    const row = el("div", { class: "bar" }), t = el("div", { class: "t" }), i = el("i");
+    i.style.width = (k.n / max * 100) + "%"; t.append(i);
+    row.append(el("span", {}, killLabel(k.label)), el("span", {}, String(k.n)), t);
+    row.addEventListener("pointermove", (evt) => showTip(evt, `${k.n} tokens`, killLabel(k.label) + " (" + k.label + ")"));
+    row.addEventListener("pointerleave", hideTip);
+    kb.append(row);
+  });
+  if (!S.kills.length) kb.append(el("div", { class: "empty" }, "Aucune élimination pour l'instant."));
+  $("missed").textContent = a.missed.length ? "À regarder : " + a.missed.map(m => `$${m.symbol} ${pct(m.change_pct, 0)} (tué par ${killLabel(m.reason)})`).join(" · ")
+    : "AUDIT re-prix chaque verdict 6 h après. Un bon filtre tue surtout des tokens qui chutent.";
+  const es = $("edgeStats"); es.replaceChildren();
+  const E = S.edge || {};
+  [["Trades clôturés", `${E.n || 0} / ${E.min_trades || 200}`, `il en faut ${E.min_trades || 200} pour conclure`],
+   ["Rendement moyen par trade", E.mean_pct == null ? "–" : pct(E.mean_pct), E.ci_low_pct == null ? "" : `IC 95 % : ${pct(E.ci_low_pct)} à ${pct(E.ci_high_pct)}`],
+   ["Trades gagnants", E.win_rate == null ? "–" : Math.round(E.win_rate * 100) + "%", E.profit_factor ? `profit factor ${E.profit_factor}` : ""],
+   ["Pire drawdown", E.max_drawdown == null ? "–" : plain(E.max_drawdown), "limite : 30 % de la banque"]].forEach(([l, v, sub]) => {
+    const c = el("div", { class: "stat" }); c.append(el("div", { class: "label" }, l), el("div", { class: "v" }, v), el("div", { class: "sub" }, sub)); es.append(c);
+  });
+  const L = S.living || {}, ls = $("livingStats"); ls.replaceChildren();
+  if (L.month) {
+    const M = L.month;
+    [["Revenu par mois (moyenne)", M.mean_pct == null ? "–" : usd(M.mean_pct), `fourchette 95 % : ${M.ci_low_pct == null ? "–" : usd(M.ci_low_pct)} à ${M.ci_high_pct == null ? "–" : usd(M.ci_high_pct)}`],
+     ["Trades par jour", String(L.trades_per_day), `sur ${L.n} trades clôturés`],
+     ["Mise max par trade", L.ticket_cap == null ? "–" : plain(L.ticket_cap), "plafond du marché : 2 % du pool médian"],
+     [`Rendement nécessaire pour ${plain(L.target)}/mois`, L.return_needed_pct == null ? "–" : pct(L.return_needed_pct), `banque nécessaire ≈ ${L.bankroll_needed == null ? "–" : plain(L.bankroll_needed)}`]
+    ].forEach(([l, v, sub]) => { const c = el("div", { class: "stat" }); c.append(el("div", { class: "label" }, l), el("div", { class: "v" }, v), el("div", { class: "sub" }, sub)); ls.append(c); });
+  }
+  $("livingNote").textContent = (L.why || "") + ". Revenu = rendement par trade × mise max que le marché accepte × trades par jour × 30, coûts réels inclus (frais, MEV, priorité). Aucune banque ne relève ce plafond : la profondeur des pools le fixe.";
+  $("edgeNote").textContent = (E.why || "") + (E.suggested_ticket ? ` Ticket suggéré pour commencer : ${plain(E.suggested_ticket)} (un quart du Kelly, plafonné à 5 % de la banque et à 1 % du pool).` : "")
+    + (S.smart ? ` · ${S.smart} wallet(s) « gagnants » appris.` : "");
+  const SH = S.shadow || { reasons: [], waiting: 0 };
+  table("shadowTable", [["Raison de l'élimination"], ["Tokens", 1], ["Rendement net s'il avait été acheté", 1], ["Gagnants", 1]],
+    (SH.all ? [{ reason: "tous les écartés", ...SH.all }] : []).concat(SH.reasons || []).map(r => [
+      r.reason === "tous les écartés" ? el("b", {}, "tous les écartés") : killLabel(r.reason), String(r.n),
+      span(sign(r.mean), pct(r.mean)), Math.round(r.win * 100) + "%"]),
+    "Les premiers résultats arrivent 6 h après les premières éliminations.");
+  const B0 = (SH.bought || {});
+  $("shadowNote").textContent = `${SH.waiting || 0} token(s) écarté(s) suivi(s) en ce moment. Chaque token que GARDE élimine après les règles de pool est suivi 6 h par VIGIE, puis rejoué avec le vrai moteur de sortie et les coûts réels. `
+    + (SH.all && B0.mean != null ? `Écartés : ${pct(SH.all.mean)} par trade · achetés : ${pct(B0.mean)} (${B0.n} trades). ` : "")
+    + "Si les écartés font mieux que les achetés, le filtre coûte de l'argent au lieu d'en sauver. Un rendement négatif ici veut dire que GARDE a eu raison. "
+    + "Une règle souple dont les écartés gagnent plus de 5 % par trade sur 20 trades fantômes, sur les deux moitiés, est levée toute seule ; les règles dures (mint, freeze, LP non brûlée, honeypot, whale, wallets d'usine) jamais."
+    + ((SH.waived || []).length ? " Levées en ce moment : " + SH.waived.map(killLabel).join(", ") + "." : " Aucune règle levée pour l'instant.");
+  const T = S.tgbot || {};
+  $("tgNote").textContent = T.on
+    ? `Actif · ${T.today} lecture(s) aujourd'hui · ${T.checks_7d} sur 7 jours · ${T.users_7d} personne(s) différente(s), dont ${T.returning_7d || 0} revenue(s) un autre jour. Il lit, il ne trade jamais. Le chiffre qui compte pour en faire un produit : combien reviennent. `
+      + (T.paired ? "Lié à ton Telegram : tu reçois les alertes du desk, tes CA passent par GARDE, et /etat te donne en 5 lignes ce que le desk a fait dans l'heure (/etat 6 pour 6 h)."
+                  : `Pour recevoir les alertes du desk sur ton téléphone, envoie au bot : /lier ${T.code}`)
+    : "Éteint. Crée un bot avec @BotFather sur Telegram, puis dans le dossier du desk : read -rs T && echo \"TELEGRAM_BOT_TOKEN=$T\" >> .env && chmod 600 .env, et relance ./start.sh.";
+  const LN = S.learn || {}, lst = $("learnStats"); lst.replaceChildren();
+  [["Leçons", `${LN.n || 0} / ${LN.min || 110}`, "tokens jugés puis suivis 6 h"],
+   ["Modèle", LN.trusted ? "fiable" : "en apprentissage", LN.trusted ? "il décide à la place des règles souples" : "les règles décident"],
+   ["Ses choix sur des tokens jamais vus", LN.pick_avg == null ? "–" : pct(LN.pick_avg), LN.test_avg == null ? "" : `moyenne de tous : ${pct(LN.test_avg)}`]
+  ].forEach(([l, v, sub]) => { const c = el("div", { class: "stat" }); c.append(el("div", { class: "label" }, l), el("div", { class: "v" }, v), el("div", { class: "sub" }, sub)); lst.append(c); });
+  $("learnLessons").replaceChildren(...(LN.lessons || []).map(t => el("li", {}, t)));
+  $("learnNote").textContent = (LN.why || "Le premier entraînement a lieu au prochain passage d'AUDIT.")
+    + ". Chaque token jugé par GARDE, acheté ou non, est suivi 6 h et rejoué avec les vraies sorties et les vrais coûts : c'est une leçon. "
+    + "Le modèle ne décide que s'il bat la moyenne sur des tokens qu'il n'a jamais vus. Les règles dures (mint, freeze, honeypot, LP retirable, whale) ne bougent jamais.";
+  const B = S.bilan || {}, bs = $("bilanStats"); bs.replaceChildren();
+  const ci = (c) => c && c[0] != null ? `IC 95 % : ${pct(c[0], 0)} à ${pct(c[1], 0)}` : "";
+  [["Papier : rendement par trade", B.paper_mean == null ? "–" : pct(B.paper_mean), [`${B.paper_n || 0} trades`, ci(B.paper_ci)].filter(Boolean).join(" · ")],
+   ["Backtest : règle actuelle", B.bt_mean == null ? "–" : pct(B.bt_mean), [`${B.bt_n || 0} trades`, ci(B.bt_ci)].filter(Boolean).join(" · ")],
+   ["Décision", { stop: "STOP", go_on: "continuer", mixed: "bruit", wait: "attendre" }[B.verdict] || "–", B.due ? "bilan dû" : "le " + (B.on || "")]
+  ].forEach(([l, v, sub]) => { const c = el("div", { class: "stat" }); c.append(el("div", { class: "label" }, l), el("div", { class: "v" }, v), el("div", { class: "sub" }, sub)); bs.append(c); });
+  $("bilanNote").textContent = (B.why || "") + ". Règle fixée le 19 octobre : si le papier et le backtest sont tous deux ≤ 0, on arrête d'optimiser le trading.";
+  const BT = S.backtest || {}, card = BT.card || { rules: {} };
+  const vtxt = { wait: "trop tôt", flat: "aucun avantage", stop: "abandonner", edge: "avantage probable" };
+  table("btRules", [["Règle"], ["Trades", 1], ["Moyenne", 1], ["IC 95 %", 1], ["1re / 2e moitié", 1], ["Verdict"]],
+    Object.entries(card.rules || {}).map(([k, v]) => [k, String(v.n), span(sign(v.mean), pct(v.mean)),
+      `${pct(v.ci95[0], 0)} à ${pct(v.ci95[1], 0)}`, `${v.half1 == null ? "–" : pct(v.half1, 0)} / ${v.half2 == null ? "–" : pct(v.half2, 0)}`,
+      el("span", { class: "pill", title: v.why || "" }, vtxt[v.verdict] || v.verdict || "–")]),
+    "Pas encore de backtest : le premier part une minute après le démarrage du desk.");
+  const hist = (BT.history || []).slice(-8).reverse();
+  table("btHistory", [["Run"], ["Graduations", 1], ["Règle actuelle", 1], ["Largeur de l'IC", 1], ["Momentum", 1]],
+    hist.map(h => { const r = h.rules["early: desk now (60 min + graduation)"], m = h.rules["momentum: desk rule"];
+      return [new Date(h.t * 1000).toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }),
+        String(h.graduates), r ? `n=${r.n} · ${pct(r.mean)}` : "–", r ? `${(r.ci95[1] - r.ci95[0]).toFixed(0)} pts` : "–",
+        m ? `n=${m.n} · ${pct(m.mean)}` : "–"]; }),
+    "L'historique se remplit à chaque run : l'intervalle doit se resserrer.");
+  const when = (t) => t ? new Date(t * 1000).toLocaleString("fr-FR", { weekday: "short", hour: "2-digit", minute: "2-digit" }) : "–";
+  $("btNote").textContent = (BT.running ? "Run en cours. " : `Dernier run : ${when(BT.finished)} · prochain : ${when(BT.next)}. `)
+    + `Toutes les ${BT.every_h || 6} h, AUDIT rejoue de nouvelles graduations pump.fun (chaîne, Helius) et les tokens momentum vus par SCOUT (${card.sightings || 0} vus), coûts réels inclus. `
+    + "Il faut 200 trades par règle pour conclure ; à 300 trades, une moyenne ≤ 0 met fin à l'idée d'en vivre."
+    + (BT.early_error ? " · " + BT.early_error : "") + (BT.momentum_error ? " · momentum : " + BT.momentum_error : "");
+  const bd = S.breakdown || { hour: [], age: [] };
+  [["byHour", "Heure d'achat", bd.hour], ["byAge", "Âge du token", bd.age], ["byTier", "Mise", bd.tier || []]].forEach(([id, head, rows]) =>
+    table(id, [[head], ["Trades", 1], ["Gagnants", 1], ["PnL", 1]],
+      rows.filter(r => r.n).map(r => [r.bucket, String(r.n), Math.round(r.win / r.n * 100) + "%", span(sign(r.pnl), usd(r.pnl))]),
+      "Pas encore de position clôturée."));
+  table("byChain", [["Chaîne"], ["Trades", 1], ["Rendement moyen", 1], ["PnL", 1]],
+    (S.by_chain || []).map(g => [g.group, String(g.n), span(sign(g.mean_pct), pct(g.mean_pct)), span(sign(g.total), usd(g.total))]),
+    "Pas encore de trade clôturé avec les règles actuelles.");
+  if (S.ruggers) $("missed").textContent += ` · Liste noire : ${S.ruggers} dev(s) dont un token s'est effondré, tués d'office.`;
+  const lab = S.lab || { trades: 0, results: [] };
+  table("lab", [["Profil de sortie"], ["Trades", 1], ["Gagnants", 1], ["PnL rejoué", 1], ["1re moitié", 1], ["2e moitié", 1]],
+    lab.results.map(r => {
+      const name = el("span", {}, r.name === "actif" ? `actif (${lab.active === "actif" ? "config.py" : lab.active})` : r.name);
+      if (r.name === "actif") name.style.fontWeight = "700";
+      return [name, String(r.n), r.n ? Math.round(r.win / r.n * 100) + "%" : "–", span(sign(r.pnl), usd(r.pnl)),
+              span(sign(r.first_half), usd(r.first_half)), span(sign(r.second_half), usd(r.second_half))];
+    }), "Le labo démarre après les premières ventes : il lui faut des trajets de prix enregistrés.");
+  $("labNote").textContent = `Chaque profil est rejoué sur le vrai trajet de prix de chaque trade clôturé (pendant le trade et 6 h après la vente). `
+    + `Le desk change de profil tout seul seulement si un autre gagne sur les deux moitiés des trades, nettement, et à partir de ${lab.min_trades || 30} trades. `
+    + (lab.trades ? `Aujourd'hui : ${lab.trades} trade(s) rejoué(s).` : "");
+  const sp = lab.speed || [];
+  $("speed").replaceChildren();
+  if (lab.trades && sp.length) {
+    const base = sp[0].pnl;
+    sp.forEach(r => {
+      const c = el("div", { class: "stat" });
+      c.append(el("div", { class: "label" }, `VIGIE toutes les ${r.every_s} s`),
+               el("div", { class: "v " + sign(r.pnl) }, usd(r.pnl)),
+               el("div", { class: "sub" }, r === sp[0] ? "vitesse actuelle" : `${usd(r.pnl - base)} vs actuelle`));
+      $("speed").append(c);
+    });
+    const loss = base - sp[1].pnl, tol = Math.max(5, Math.abs(base) * 0.05);
+    $("speedNote").textContent = loss <= tol
+      ? "Regarder 3 fois moins souvent ne fait pas pire : aller plus vite que 20 s ne rapporterait rien."
+      : `Regarder 3 fois moins souvent coûte ${usd(loss)} : la vitesse compte, passer à 10 s pourrait valoir la peine.`;
+  } else $("speedNote").textContent = "Le test de vitesse démarre avec les premiers trades clôturés.";
+  const xb = a.x.BUY, xs = a.x.SKIP;
+  if (xb.n || xs.n) $("missed").textContent += ` · ECHO : ${xs.crashed}/${xs.n} écartés ont chuté, ${xb.crashed}/${xb.n} approuvés ont chuté.`;
+  const ru = a.regime["SOL up"], rd = a.regime["SOL down"];
+  if (ru.n || rd.n) $("missed").textContent += ` · Régime : ${rd.crashed}/${rd.n} PASS ont chuté quand SOL baissait, ${ru.crashed}/${ru.n} quand SOL montait.`;
+}
+
+function drawTop() {
+  const live = $("live");
+  live.className = "live " + (S.alive ? "on" : "off");
+  $("liveText").textContent = S.alive ? "LIVE" : "DESK ARRÊTÉ";
+  $("modeLabel").textContent = (S.paper ? "TRADING MODE · PAPIER" : "TRADING MODE · RÉEL") + (S.marks_age > 90 && S.open.length ? " · prix en retard" : "");
+  $("tasks").textContent = `${S.tasks.toLocaleString("fr-FR")} TÂCHES`;
+  const e = S.edge || { verdict: "wait", n: 0, min_trades: 200 };
+  const ready = $("ready");
+  ready.className = "live " + (e.verdict === "yes" ? "on" : e.verdict === "no" ? "off" : "");
+  ready.style.borderColor = e.verdict === "wait" ? "" : (e.verdict === "yes" ? "rgba(63,211,155,.5)" : "rgba(239,111,111,.5)");
+  $("readyText").textContent = e.verdict === "yes" ? "PRÊT POUR LE RÉEL" : e.verdict === "no" ? "PAS D'AVANTAGE" : `RÉEL : ${e.n}/${e.min_trades} TRADES`;
+  ready.title = e.why + (e.suggested_ticket ? ` · ticket suggéré ${plain(e.suggested_ticket)}` : "");
+  const sol = S.sol || {};
+  $("sol").textContent = sol.sol_24h == null ? "" : `SOL 24H ${pct(sol.sol_24h)} · 1H ${pct(sol.sol_1h)}`;
+  $("sol").className = "tasks " + sign(sol.sol_24h || 0);
+  const LC = S.learn || {};
+  const SH = S.shadow || {}, matured = Math.max(LC.n || 0, (SH.all || {}).n || 0);   // lessons matured since the last training count too
+  $("learnChip").textContent = LC.trusted ? "MODÈLE FIABLE" : `MODÈLE ${matured}/${LC.min || 110} LEÇONS` + (SH.waiting ? ` (+${SH.waiting} EN COURS)` : "");
+  $("learnChip").className = "tasks " + (LC.trusted ? "up" : "");
+  const dl = (S.trend || {}).dial;
+  $("dial").textContent = dl ? `CADRAN ${Object.values(dl.parts).filter(Boolean).length}/${Object.keys(dl.parts).length}` : "";
+  $("dial").className = "tasks " + (dl ? (dl.value >= 0.5 ? "up" : "down") : "");
+  if (dl) $("dial").title = $("dial").title.split(" · ")[0] + " · " + Object.entries(dl.parts).map(([k, v]) => `${k} ${v ? "oui" : "non"}`).join(" · ");
+  $("balance").textContent = plain(S.balance);
+  const IN = S.incidents || {};
+  $("balanceSub").textContent = `started at ${plain(S.bankroll)}` + (S.open.length ? ` · ${S.open.length} position${S.open.length > 1 ? "s" : ""}` : "")
+    + (IN.paused_s ? ` · achats en pause ${Math.ceil(IN.paused_s / 60)} min` : "") + (IN.factor < 1 ? ` · mises ×${IN.factor}` : "")
+    + (IN.strict_score ? ` · prudence : notes ${IN.strict_score}+` : "");
+  const TT = S.trend || {}, TE = TT.equity;
+  $("trendBig").textContent = TE == null ? "–" : plain(TE);
+  $("trendBig").className = "big";
+  const held = (TT.assets || []).filter(a => a.usd).map(a => a.asset);
+  $("trendSub").textContent = TE == null ? "BTC ETH SOL QQQ SPY · prix en lecture" :
+    `${pct((TE / TT.bankroll - 1) * 100)} · ${held.length ? held.join(" ") : "cash"}`;
+  $("trendSub").className = "sub " + (TE == null ? "" : sign(TE - TT.bankroll));
+  $("pnl").textContent = usd(S.pnl); $("pnl").className = "big " + sign(S.pnl);
+  $("pnlCard").classList.toggle("neg", S.pnl < 0);
+  $("pnlSub").textContent = `${pct(S.pnl / S.bankroll * 100)} · réalisé ${usd(S.realized)} · latent ${usd(S.unrealized)}`;
+  $("pnlSub").className = "sub " + sign(S.pnl);
+  $("posCount").textContent = String(S.open.length);
+  $("posSub").textContent = `${plain(S.open.reduce((s, p) => s + (p.cost ?? S.ticket), 0))} engagés · cash libre ${plain(S.cash)}`;
+  const n = S.wins + S.losses, rate = n ? S.wins / n : 0;
+  $("wins").textContent = S.wins + "W"; $("losses").textContent = S.losses + "L";
+  const d = $("donut"); d.replaceChildren();
+  const C = 2 * Math.PI * 26;
+  d.append(el("svg:circle", { cx: 32, cy: 32, r: 26, fill: "none", stroke: "rgba(255,255,255,.08)", "stroke-width": 7 }));
+  if (n) d.append(el("svg:circle", { cx: 32, cy: 32, r: 26, fill: "none", stroke: "var(--up)", "stroke-width": 7, "stroke-linecap": "round",
+    "stroke-dasharray": `${C * rate} ${C}`, transform: "rotate(-90 32 32)" }));
+  d.append(el("svg:text", { x: 32, y: 37, "text-anchor": "middle", style: "fill: var(--ink); font: 600 14px var(--mono)" }, n ? Math.round(rate * 100) + "%" : "–"));
+  d.setAttribute("aria-label", n ? `${Math.round(rate * 100)} % de trades gagnants` : "aucun trade clôturé");
+
+  // the day: profit fills toward green, losses eat into the daily loss limit
+  const fill = $("dayFill");
+  const used = Math.min(1, Math.max(0, -S.today) / S.loss_limit);
+  fill.classList.toggle("loss", S.today < 0);
+  fill.style.width = (S.today < 0 ? used * 100 : Math.min(100, S.today / S.loss_limit * 100)) + "%";
+  $("dayLabel").textContent = pct(S.today / S.bankroll * 100);
+  $("dayLabel").title = `${usd(S.today)} aujourd'hui · limite de perte ${plain(S.loss_limit)}`;
+  $("dayLabel").className = "pctlabel " + sign(S.today);
+}
+
+// ---------- MEGA PROFIT ----------
+function confetti(ms = 4200) {
+  // thin pastel strips falling from above the screen, each with its own sway and spin
+  const c = $("confetti"), ctx = c.getContext("2d"), dpr = devicePixelRatio || 1;
+  c.width = innerWidth * dpr; c.height = innerHeight * dpr;
+  const colors = ["#ffffff", "#f08aa8", "#6fd6b0", "#f2cf7a", "#a99af0", "#f2a272", "#8ccbf0"];
+  const bits = Array.from({ length: 230 }, () => ({
+    x: Math.random() * c.width, y: (Math.random() * .55 - .5) * c.height,
+    vy: (1.8 + Math.random() * 2.6) * dpr, sway: Math.random() * 6.28, sw: .6 + Math.random() * 1.4,
+    r: Math.random() * 6.28, vr: (Math.random() - .5) * .12,
+    w: (2 + Math.random() * 2.2) * dpr, h: (6 + Math.random() * 9) * dpr, c: colors[Math.random() * colors.length | 0] }));
+  const t0 = performance.now();
+  (function step(t) {
+    const k = (t - t0) / ms;
+    ctx.clearRect(0, 0, c.width, c.height);
+    ctx.globalAlpha = k > .8 ? Math.max(0, (1 - k) / .2) : 1;
+    for (const b of bits) {
+      b.y += b.vy; b.sway += .03; b.r += b.vr;
+      const x = b.x + Math.sin(b.sway) * 14 * b.sw * dpr;
+      ctx.save(); ctx.translate(x, b.y); ctx.rotate(b.r); ctx.fillStyle = b.c;
+      ctx.beginPath(); ctx.roundRect ? ctx.roundRect(-b.w / 2, -b.h / 2, b.w, b.h, b.w / 2) : ctx.rect(-b.w / 2, -b.h / 2, b.w, b.h); ctx.fill();
+      ctx.restore();
+    }
+    if (k < 1) requestAnimationFrame(step); else ctx.clearRect(0, 0, c.width, c.height);
+  })(t0);
+}
+const profitQueue = [];
+let showingProfit = false;
+function mega(e) { profitQueue.push(e); if (!showingProfit) nextProfit(); }
+function nextProfit() {
+  const e = profitQueue.shift();
+  if (!e) { showingProfit = false; return; }
+  showingProfit = true;
+  $("megaTitle").textContent = e.pct >= S.mega_pct ? "MEGA PROFIT" : "PROFIT";
+  $("megaSym").textContent = "$" + (e.symbol || "");
+  $("megaPct").textContent = pct(e.pct);
+  $("megaUsd").textContent = usd(e.pnl);
+  const box = $("mega");
+  box.classList.remove("show"); void box.offsetWidth; box.classList.add("show");
+  if (!matchMedia("(prefers-reduced-motion: reduce)").matches) confetti();
+  clearTimeout(nextProfit.t);
+  nextProfit.t = setTimeout(() => { box.classList.remove("show"); setTimeout(nextProfit, 350); }, 4400);
+}
+$("mega").addEventListener("click", () => { clearTimeout(nextProfit.t); $("mega").classList.remove("show"); setTimeout(nextProfit, 200); });
+
+// paste a CA: the page only queues it, the desk's GARDE runs the checks and the log shows the verdict
+$("checkForm").addEventListener("submit", async (evt) => {
+  evt.preventDefault();
+  const input = $("checkInput"), mint = input.value.trim();
+  const r = await fetch("/api/check", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mint }) }).catch(() => null);
+  const ok = r && r.ok;
+  input.classList.toggle("bad", !ok);
+  input.value = ""; input.placeholder = ok ? "envoyé à GARDE : verdict dans le log d'ici quelques secondes" : "adresse Solana invalide";
+  setTimeout(() => { input.placeholder = "coller un CA Solana : GARDE le vérifie"; input.classList.remove("bad"); }, 5000);
+  if (ok) setTimeout(load, 1500);
+});
+
+// ---------- loop ----------
+function render() {
+  drawTop(); drawChart(); drawAgents(); drawPanels(); drawPanel();
+}
+let loading = false;      // one request at a time: a slow answer must not stack new ones behind it
+async function load() {
+  if (loading) return;
+  loading = true;
+  const slow = setTimeout(() => { if (!S) $("liveText").textContent = "CHARGEMENT…"; }, 4000);
+  try {
+    let r;
+    try {
+      r = await fetch("/api/state?range=" + range + "&book=" + book, { cache: "no-store" });
+      S = await r.json();
+    } catch {
+      $("live").className = "live off"; $("liveText").textContent = "DASHBOARD HORS LIGNE"; return;
+    }
+    const newIds = new Set(S.events.filter(e => e.id > lastEventId).map(e => e.id));
+    if (!firstLoad) {
+      // every sale that made money gets the card: PROFIT, or MEGA PROFIT past the threshold. oldest first
+      S.events.filter(e => newIds.has(e.id) && e.kind === "sell" && e.pnl > 0).reverse().forEach(mega);
+    }
+    lastEventId = Math.max(lastEventId, ...S.events.map(e => e.id), 0);
+    drawLog(firstLoad ? new Set() : newIds);
+    firstLoad = false;
+    render();
+  } catch (err) {        // a drawing error: said on the page instead of a page stuck on "…"
+    $("liveText").textContent = "ERREUR D'AFFICHAGE";
+    const row = el("div", { class: "ev" });
+    row.append(el("span", { class: "tag", style: "color: var(--down)" }, "[PAGE]"),
+               el("span", { class: "txt", style: "white-space: normal" }, String(err && err.stack || err).slice(0, 300)));
+    $("log").prepend(row);
+  } finally {
+    clearTimeout(slow); loading = false;
+  }
+}
+setInterval(() => {   // the clock and the live edge of the chart move every second
+  if (S) $("clock").textContent = new Date().toLocaleTimeString("fr-FR") + " / " + S.range.toUpperCase();
+  if (S) { drawChart(); drawAgents(); drawPanel(); }
+}, 1000);
+addEventListener("resize", () => S && render());
+load();
+setInterval(load, 3000);
+</script>
+</body>
+</html>

@@ -1,0 +1,359 @@
+# RUG DESK — self-hosted, no Grok Bot
+
+The desk from @0xboan's article, rebuilt as plain Python you run on your own machine.
+Grok Bot only supplied a hosted computer and a chat; `run.py` replaces its routines,
+`notify.py` replaces the chat (terminal + `data/desk.log` + optional free Telegram).
+
+    code kills, (optionally) Grok reads X, you sign.
+
+## What it costs
+
+| piece | cost |
+|---|---|
+| limits, contract facts (Solana chain + GoPlus), pool (DexScreener), scanner, exits, report | free |
+| check 14, Grok reading X | **paid** xAI API, per call. Off by default (`JUDGE = "none"`) |
+
+With `JUDGE = "none"` a token that survives every code check gets verdict `PASS`.
+In paper mode it is paper-bought (`PAPER_BUY_ON_PASS = True`), so a week of
+`data/trades.csv` tells you what the code filter alone is worth. In live mode a PASS
+only posts an approval line telling you to read X yourself before you buy.
+
+## Setup (5 minutes)
+
+    # Python 3.10+
+    cd rug-desk
+    pip install -r requirements.txt
+    python -m unittest discover -s tests      # 17 offline tests, should print OK
+    python check.py <any Solana mint>         # one verdict, as JSON
+    python run.py                             # the desk: 6 agents, paper bankroll $1000
+    python dashboard.py                       # private dashboard on http://localhost:8765
+
+Optional `.env` (copy `.env.example`, never commit it):
+- `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID` → alerts on your phone, free.
+- `XAI_API_KEY` + `JUDGE = "grok"` in config.py → turns on check 14.
+
+## Files
+
+| file | job |
+|---|---|
+| config.py | every number. you edit it, the code never does |
+| book.py | limits, positions, trades. `python book.py add/close/show` for live fills |
+| facts.py | contract facts: chain + GoPlus (Rugcheck's domain died in Oct 2026) |
+| market.py | checks 10-13 (pool) |
+| grok.py, prompts.py | check 14, only loaded when `JUDGE = "grok"` |
+| check.py | one mint in, one verdict out |
+| watch.py | exits: liquidity pull, stop, ladder, trail, time stop |
+| scan.py | leads: six DexScreener feeds plus the DexScreener search (trending tickers + rotating words), PumpSwap pools in the age window |
+| report.py | evening report from the CSVs |
+| run.py, agents.py | the desk as 6 agents: VIGIE (exits, 20 s), SCOUT (leads, 10 min), GARDE (13 checks), AUDIT (was the filter right, 30 min), PLUME (21:30 report); ECHO is the Claude-in-Chrome X reader |
+| audit.py | re-prices every verdict 6 h later: killed tokens that crashed vs passed ones, and ECHO's BUY vs SKIP |
+| score.py | ranks every PASS 0-100 like a careful human: holders, distribution, dev, two-way trading, activity, bot volume, age, liquidity margin. below MIN_SCORE it is not bought |
+| pending.py | ECHO_MODE = "observe" (paper default): every PASS is bought at once and queued for ECHO, whose verdict is recorded next to the trade. "gate": a PASS waits for ECHO's BUY |
+| grads.py | SCOUT's main source: every pump.fun graduation to PumpSwap, read from pump.fun's migration account on chain (~40 an hour) |
+| size.py | paper ticket per PASS, % of the balance: base 4%, strong 8% (2-3 signals), max 14% (4+). signals: score 75+, score 85+, 1 h volume >= pool, buyers leading 5 min, smart wallets, ECHO's X narrative. P&L by tier in the evening report |
+| health.py | did the desk run all night: pauses (Mac asleep, desk stopped) in data/pauses.csv plus macOS's own sleep log. `python3 health.py` |
+| ECHO.md | the X reader's instructions. run it from a local Claude session with Claude in Chrome: `/loop 10m Lis et applique ~/Documents/rug-desk-run/rug-desk/ECHO.md` |
+| events.py | the event log and agent status the dashboard reads |
+| ruggers.py | the desk's own creator blacklist: a token that collapses (-90% at audit, or a pulled pool) blacklists its creator, and GARDE kills that wallet's next tokens |
+| chains.py | every chain the desk trades: DexScreener, GoPlus and GeckoTerminal ids, gas, pool fee and MEV per swap |
+| facts_evm.py | the rug checks on EVM chains, from GoPlus: honeypot, taxes, mint, pause, blacklist, creator, holders, LP lock |
+| evmnew.py | SCOUT's launch feed on EVM chains: GeckoTerminal's newest pools, followed until they are 60 min old |
+| backtest.py | replays pump.fun graduations from the chain; `--accumulate` adds a batch to the cumulative sample (AUDIT runs it every 6 h) |
+| mbacktest.py | the momentum lane replayed: tokens SCOUT saw at the time, GeckoTerminal 5-min candles, same costs and exits |
+| edge.py | the go-live gate (200 trades), the criteria fixed on Oct 19, the Oct 26 review, the "can it pay a living" projection |
+| tgbot.py | GARDE as a Telegram bot: any CA in, every rug signal out. reads only, never trades |
+| dashboard.py + .html | private dashboard: `python3 dashboard.py`, then http://localhost:8765 |
+| data/ | checks.csv, trades.csv, positions.json, desk.log |
+
+## Rules that are in the code
+- A failed source is a SKIP. Null is not clean: a missing field kills the token.
+- The desk never holds a wallet key. Live mode prints "SELL NOW in your wallet" / approval lines; you sign.
+- Paper fills happen at the screen price. Real fills are worse. Treat paper PnL as a ceiling.
+
+Not financial advice. Most memecoins go to zero; this filter removes obvious rugs, it does not create an edge.
+
+## The filter, check by check
+
+Rugcheck (the article's source) stopped resolving in October 2026. Facts now come from
+the Solana chain itself and GoPlus, both free, no key.
+
+| # | check | source | status |
+|---|---|---|---|
+| 1 | already rugged | pool checks (liquidity, pool gone) | indirect |
+| 2 | mint authority open | chain + GoPlus | yes |
+| 3 | freeze authority open | chain + GoPlus | yes |
+| 4 | Token-2022 traps (permanent delegate, closable, transfer hook/fee, upgradable) | GoPlus | yes, replaces Rugcheck's danger flags |
+| 5 | risk score | - | **not checked** (Rugcheck-only) |
+| 6 | LP burned | chain, PumpSwap pools | yes for PumpSwap; other DEXes die as `lp_unverified` |
+| 7 | top 10 wallets > 30% | GoPlus holders, pools excluded on chain | yes |
+| 8 | dev wallet > 5% | creator read from the PumpSwap pool on chain, its balance via RPC | yes for PumpSwap; plus no single wallet > 5% |
+| 9b | copycat | DexScreener search: a bigger token launched this week under the same ticker | the copy is killed |
+| 9 | insiders / bundles | same SOL balance in 3+ top wallets; 5+ big wallets within 2% | heuristic, read the kills |
+| 10-13 | depth, ticket share, age, sells | DexScreener | yes |
+| 14 | X read | you (links in every PASS), or Grok if paid | manual by default |
+
+Public RPC note: `api.mainnet-beta.solana.com` rate-limits hard. If you see `facts failed: ... 429`,
+create a free RPC key (Helius or QuickNode) and paste its URL into `SOLANA_RPC` in config.py.
+
+## Exits
+
+No study gives the best exit for memecoins; the evidence is thin and partly conflicting. What it does support:
+
+- volatility-adjusted trailing stops (LeBeau's Chandelier Exit, ATR x 3) over fixed-percent trails, to avoid noise exits:
+  [volatilitybox](https://volatilitybox.com/research/volatility-adjusted-stop-losses/),
+  [stratbase](https://stratbase.ai/en/blog/average-true-range-trailing-stop),
+  [trendrider (counter-evidence)](https://trendrider.net/blog/stop-loss-strategies-crypto-trading-2026)
+- the dump phase of a meme pump: >30% under the peak with volume below half of the pump's:
+  [arXiv 2507.01963](https://arxiv.org/html/2507.01963v2)
+- selling into strength in tiers, and leaving on a stall:
+  [odin.tools](https://odin.tools/blog/pump-fun-autosell-take-profit-stop-loss-2026),
+  [thrive](https://thrive.fi/blog/trading/memecoin-trading-strategy-risk-management-guide)
+
+So `exits.py` runs that as the starting profile (liquidity, stop, ladder, lock, Chandelier trail, dump, stall, time),
+VIGIE records every traded token's price path during the trade and 6 h after, and `exitlab.py` replays a dozen
+alternative profiles on those real paths every 30 minutes. With `EXIT_AUTOTUNE`, the desk switches profile by itself
+only when a candidate wins on both halves of at least 30 trades by a clear margin (data/exit_profile.json).
+
+## Rug factories (Oct 19)
+
+Two paper rugs in one day, FOMO (-$25) and Gemini (-$74), came from the same factory. Read on chain:
+18 "Gemini" and 14 "FOMO" graduated within 24 h, each pumped for ~1 h by hundreds of fresh wallets buying
+the same small bag ($4-9 swaps; FOMO's pool went from 67 to 503 SOL in a straight line), then sold in
+one block (FOMO: slot 458785212, 505 SOL -> 87 SOL), every one ending at -95.7%. No wallet ever held
+more than 0.05%, so no top-10 or bundle check could see it. The dump takes one block: no exit is fast
+enough, the only defense is not buying. What the desk checks now:
+
+| kill | what it reads | FOMO / Gemini | real runners (UHI, XBT, HOOT, KIBI, SPORE) |
+|---|---|---|---|
+| micro_trades | average swap over the last hour, 100+ swaps | $4-9 | $40-75 |
+| serial_farm | 2+ older PumpSwap namesakes, dead, with bot-sized swaps | 13-17 | 0 (their copies came after them) |
+| holder_farm | every holder (Helius DAS): biggest group of identical bags | hundreds x 0.046% | none |
+| fake_cap / dead_volume | cap vs pool, pool turnover | | |
+| stale_data | the pool's SOL read on chain vs DexScreener | | |
+
+VIGIE also reads each PumpSwap position's pool vaults on chain every 20 s, so a drained pool is sold
+on the next tick even when DexScreener lags or drops the pair. ECHO can answer SCAM (concrete evidence on
+X): the desk sells at once.
+
+## The team
+
+A job is an agent only when it needs its own clock, its own failure domain or its own tools; the rest
+are functions. Five pass the bar (PLUME, a scheduled report, is now AUDIT's job):
+
+| agent | why it is separate | runs |
+|---|---|---|
+| VIGIE | the only latency-critical job: positions re-priced on chain every 20 s, whatever the others wait on | its own thread; restarted by the main loop if it dies, and it warns if the main loop stalls 5 min |
+| SCOUT | cheap and broad, the funnel's first cut | every 3 min |
+| GARDE | expensive and deep: checks, deep read, the buy (cost asymmetry with SCOUT) | per lead, + ECHO's reads every 30 s |
+| ECHO | the only job that needs a model and a browser | its own Claude session |
+| AUDIT | the slow learning loop and the reports | every 30 min, reports at 21:30 and 08:00 |
+
+How they work as one (following "share context" and "one writer at a time"):
+- **one book, one writer at a time**: book.LOCK around every buy and sale, so VIGIE's thread and GARDE
+  can never overwrite each other; a sale on a position already closed is a no-op
+- **a shared dossier per token** (dossier.py, data/dossiers/): SCOUT's source, GARDE's verdict and every
+  measure, ECHO's read, VIGIE's sale, AUDIT's 6 h price. ECHO's queue carries GARDE's case in one line;
+  the dashboard shows the dossier when you click a token
+- **a rug reaches every agent** (agents.on_rug): holders remembered at once, creator and cluster funder
+  blacklisted, and any other open position sharing 5+ holders or the funder is sold (contagion)
+
+## Two lanes
+
+| lane | what | sources | rules |
+|---|---|---|---|
+| early | launches, 15 min to 72 h, PumpSwap | pump.fun graduations on chain, DexScreener feeds | everything above, LP burn and creator verified on chain |
+| momentum | survivors older than 72 h, any DEX | GeckoTerminal trending (5 min, 1 h), Jupiter top organic score (1 h), DexScreener boosts | pool $100k+, $300k+ a day, +3% over 1 h and not falling over 5 min, hourly volume 1.3x its 6 h average, buyers ahead, not past +80% in 1 h |
+
+On Oct 19 afternoon BONK, POPCAT, Fartcoin, PNUT, GOAT, MOODENG, MEW, SPX and TROLL all sat within 1%
+over the hour: a quiet day for survivors is a day the momentum lane buys nothing, by design.
+
+Free sources: DexScreener, GeckoTerminal (~10 calls a minute, no key), GoPlus, pump.fun's migration
+account, Jupiter (free key on its Developer Platform, JUPITER_KEY in .env; without it the old keyless
+host), Helius (free RPC + DAS), Solana Tracker (free key, 2,500 a month, capped at 75 a day).
+
+## The deep read (GARDE, last stage)
+
+Only for tokens that passed everything above and score high enough to be bought, cheapest first.
+Any source that fails or has no key is skipped: unknown is never a kill.
+
+| step | source | kills |
+|---|---|---|
+| factory wallets | the desk's memory (smart.py + seeds/factory_wallets.json) | 5+ holders that held 2+ rugs and no winner |
+| Jupiter | lite-api.jup.ag, free, no key | isSus, creator with 20+ launches, < 10% organic volume |
+| funding clusters | your RPC (Helius) | 3+ top holders funded by one non-exchange wallet holding 10%+; 60%+ in fresh wallets; a funder from an earlier rug |
+| Solana Tracker | data.solanatracker.io, key in .env as SOLANATRACKER_KEY (2,500 free requests) | rugged, bundlers > 15%, insiders > 15%, snipers > 25% |
+
+Every value is logged in checks.csv with the verdict, so AUDIT can say within a week which cut kills
+crashers and which kills winners. A rug (VIGIE) marks every holder wallet at once, and the cluster's funder.
+
+Not wired: Bubblemaps (API keys come with its paid Pro plan), GMGN (no public API), RugCheck (dead).
+
+## Backtest (Oct 19): what the history says
+
+`python3 backtest.py 300` replays pump.fun graduations from the chain (pool reserves every 6 min for 7 h),
+applies the pool rules and the active exit engine, with real costs (0.3% fee x2, 1% MEV x2, $0.50 tx x2:
+about 5% of a $50 ticket per round trip). `BT_WINDOW=14,22` picks graduations 14-22 h old.
+
+539 graduations, two windows, net return per trade, active exit:
+
+| entry rule | n | mean | 95% CI | half 1 / half 2 |
+|---|---|---|---|---|
+| old desk (15 min + rules) | 38 | -22.4% | [-43.9, +1.4] | -19.5 / -25.0 |
+| wait 30 min | 32 | -21.5% | [-44.9, +4.9] | -3.1 / -34.1 |
+| wait 60 min | 20 | -4.9% | [-29.5, +23.5] | -21.2 / +8.5 |
+| **desk now: 60 min + above graduation price** | 18 | +2.9% | [-21.0, +30.9] | -18.2 / +19.9 |
+
+The old entry lost on both halves: it was removed. The new one roughly breaks even and its interval
+holds zero: **no edge is proven.** With a ~72% standard deviation per trade, telling +5% from 0 takes
+about 800 trades. Run the backtest again on your Mac (Helius key) to add data; trust nothing below 200.
+
+### The backtest runs by itself
+
+Every 6 h AUDIT starts `backtest.py --accumulate` in a child process (it never holds up the agents):
+- 40 fresh pump.fun graduations replayed from the chain, appended to `data/backtest_rows.jsonl` on top of
+  the 518 of `seeds/backtest_oct19.jsonl`. Helius only: the public RPC rate-limits a replay. About 50 RPC
+  calls per graduation, ~8,000 a day: watch the credits in your Helius dashboard, lower `backtest_n` if needed.
+- the momentum lane (`mbacktest.py`): every momentum pool SCOUT sees with $100k+ liquidity is noted at the
+  time (no survivorship bias), then replayed 7 h later from GeckoTerminal's 5-min candles.
+
+AUDIT's panel shows each rule's n, mean, interval and both halves, and the history of runs: the interval
+must narrow. ~3% of graduations are entries under the current rule, so 200 trades take about 6 weeks.
+
+The criteria were fixed on Oct 19, before the data (edge.py): under 200 trades, no conclusion; 300 trades
+with a mean at or below 0 ends the idea of living off it; 200+ trades with a mean of +3% or more and the
+whole interval above 0 is an edge. **Oct 26 review** (computed by the desk, AUDIT panel): if the paper
+trades and the backtest of the current rule are both at or below 0, stop optimizing the trading.
+
+## Every major chain (Oct 19)
+
+The desk was Solana-only. It now reads 14 chains: Solana, Robinhood Chain (mainnet Jul 1 2026; that evening
+7 of DexScreener's 30 paid boosts), BNB Chain, Base, Ethereum, Arbitrum, Monad, Abstract, Sonic, Avalanche,
+Polygon, Optimism, Berachain and Unichain (chains.py).
+- SCOUT: DexScreener's lists and search on every chain, GeckoTerminal trending across networks, and the
+  newest EVM pools (evmnew.py), the EVM counterpart of the pump.fun graduation feed.
+- GARDE: Solana keeps its full pipeline. On EVM chains GoPlus reads the contract: a honeypot, a tax over
+  10%, a hidden owner, a self-destruct, a modifiable tax or unpublished code is a hard kill; mint, pause,
+  blacklist or balance edits count as open authorities; the LP must be burned or locked (on v3/v4 pools a
+  position held by a plain wallet can be pulled: that is the classic rug); creator share, top 10, whale.
+  The deep read (Jupiter, funding clusters, Solana Tracker) stays Solana-only.
+- Costs per chain: gas, the usual meme pool fee, MEV. Ethereum's gas would eat 12% of a $25 ticket:
+  those tokens die as fees_eat_ticket.
+- A token is its Solana mint, or "chain:0xaddress". Paste a bare 0x address in the dashboard or the bot:
+  the desk finds its chain (the deepest pool among the supported chains).
+- Not covered yet: the backtest (Solana graduations only), Tron, Sui, TON (other address formats and
+  other contract models).
+
+## The desk learns (Oct 20)
+
+Every token GARDE judges, bought or not, is followed 6 h in shadow and replayed with the desk's exits and
+costs: ~150-250 lessons a day where trades alone give ~20.
+- learn.py: a small model on those lessons (ridge regression, outliers clipped), retrained every 6 h.
+  It decides where the soft rules did only if its picks beat the average on tokens it never saw, beyond
+  their noise. On 40 draws of pure noise it was never trusted; on a planted signal, 34 of 40.
+- reviews.py: each agent reviews itself every 6 h (dashboard panel "Auto-critique", Telegram /journal):
+  VIGIE replays every exit profile on the same tokens and switches to a better one; GARDE reports the
+  kills that cost winners and the passes that crashed (its soft rules lift themselves, its model learns);
+  SCOUT ranks its sources by what their tokens earned (never drops one); ECHO checks whether its SKIPs
+  foresee drops, and a SKIP sells again only if they clearly do.
+- coach.py, the guards: 40 cases at least; a gain above its noise with the bar raised for the number of
+  variants tried; on both halves of the data; one change per agent per day, chosen from a closed list;
+  re-tested 48 h later on new data and undone if it disappoints; every recent change undone if the
+  balance loses 10% of the bankroll. Changes live in data/tuning.json and data/journal.jsonl; config.py
+  is never touched.
+
+## The anti-rug bot (Telegram)
+
+The part of the desk with a value shown on data is GARDE: most tokens it kills do crash. `tgbot.py` offers
+it to anyone on Telegram: paste a CA, get every rug signal the desk knows (authorities, LP, holder farms,
+funded clusters, known factory wallets, bot volume, recycled names, Jupiter). It reads only: no book, no
+memory written, Solana Tracker's daily cap left to the desk. On a token a week old or more, cap and holder
+concentration are shown as notes, not red (exchanges and multi-pool liquidity).
+
+Setup: Telegram, @BotFather, /newbot, copy the token, then in the desk folder
+`read -rs T && echo "TELEGRAM_BOT_TOKEN=$T" >> .env && chmod 600 .env` and restart `./start.sh`.
+`TELEGRAM_DAILY_CAP` (default 200) bounds the RPC cost; `TELEGRAM_ALLOW=id1,id2` makes it private.
+GARDE's panel counts checks and distinct users over 7 days: the number that says whether it is a product
+is how many come back. `python3 tgbot.py <CA>` prints the answer without Telegram.
+
+## Overnight
+
+`./start.sh` runs the desk and the dashboard, restarts either one 10 s after a crash, and keeps the Mac and
+its screen awake while it runs (a screen that turns off is what locks the Mac). Every pause is logged and
+shown in the journal and the morning brief, with macOS's reason. What can still stop the night, and what the desk does about it:
+
+| what | effect | what the desk does |
+|---|---|---|
+| lid closed, or Mac on battery | macOS sleeps, everything pauses | start.sh warns on battery. `sudo pmset -a disablesleep 1` stops lid-close sleep (`0` to undo) |
+| screen locks | Chrome, so ECHO, can stall | caffeinate -d keeps the screen on; in observe mode trading never waits for ECHO anyway |
+| macOS update restart | everything stops | turn off automatic restarts for updates |
+| a crash in the desk or the dashboard | one process dies | start.sh restarts it in 10 s, state is on disk |
+| ECHO's session closes or hits its usage limit | no X reads | observe mode: trading goes on, the dashboard's ECHO card turns red. gate mode: after 45 min of silence, only PASSes scoring 75+ are bought, tagged NO_X |
+| DexScreener or the RPC down | no prices / no facts | positions held and retried every 20 s; tokens skipped, retried later |
+| public RPC rate limits (429) | some tokens skipped | a free Helius RPC URL in SOLANA_RPC removes most of them |
+
+PLUME posts a morning brief at 08:00: what was bought, sold and killed overnight, and whether ECHO went silent.
+
+## TENDANCE: a second book on the majors (Oct 20)
+
+The memecoin desk can sit idle for hours when the market is thin: that is the filter working. TREND
+(majors.py) is a second paper book with its own $1,000 that moves every day: BTC, ETH, SOL, QQQ, SPY.
+It holds an asset while its close is above its 200-day average (in at +1%, out at -3%), equal weight
+among the assets in, cash otherwise. No leverage, no short. Costs: 0.40% per order in crypto, 0.05% on ETFs.
+
+The same rule is backtested every day on up to 10 years of daily closes, against simply holding, on
+the whole period and on each half, with a plain verdict: DATA VALIDATED, TRADE-OFF (less drawdown,
+not more return) or NO EDGE. Run it yourself: `python3 majors.py`.
+
+The regime dial (BTC > 200 d, ETH > 200 d, SOL > 50 d) is logged with every memecoin verdict. If
+memecoins passed in a red regime clearly lose (40 cases, beyond noise, both halves), TREND's
+self-review makes the meme desk stand down under a dial of 0.5, re-tested after 48 h like every change.
+VIGIE's review also tests a "volume fade" exit (5-min volume under 25% of its hour average).
+
+## When the balance falls (Oct 20)
+
+AUDIT watches the balance every minute (incidents.py). A fall is compared with the balance's own usual
+10-min moves and with what the open positions should move in an hour given their volatility.
+- an ANALYSE (past 2x the noise and $5 in 10 min): the cause in one line, nothing changes. five memecoins
+  held at once move a few dollars an hour, and reacting to that is how revenge trading starts
+- an INCIDENT (past 3x the noise and 3% of the bankroll in an hour, a rug exit, or a ticket lost): no new
+  entry for 30 min, ECHO re-reads every open position on X at once, VIGIE sells what shares wallets or a
+  funder with a rug, and the entry's facts are kept as a lesson
+- a slow slide from the day's peak is analysed from $30 (and every $15 lower). past $50 of real loss (gains
+  handed back from a peak don't count) the desk turns prudent: tickets x0.8, only tokens scored 65+, ECHO
+  re-reads every position, until half the drop is won back (24 h at most)
+- in a drawdown, every 10% of the bankroll lost from the peak cuts the tickets by 20% (the Turtle rule,
+  three steps at most); they grow back with the balance. never a bigger ticket to win a loss back
+- traits shared by 3 rugs in 7 days and rare among the other buys are reported; rules change only through
+  the guarded learners (shadow book, model, coach)
+
+## Real money
+
+`edge.py` is the go-live gate, on the dashboard header and in every evening report. Real money only when:
+at least 50 closed paper trades (costs included), the 95% bootstrap interval of the average trade is entirely
+above zero, and the worst drawdown stayed under 30% of the bankroll. It then suggests a first ticket: a quarter
+of the Kelly fraction, capped at 5% of the bankroll (and the 1% pool rule still applies).
+
+Base rates, so the gate is not optional: ~74% of Solana memecoin buyers end with less SOL after fees, the
+consistently profitable window is the first seconds after launch, which belongs to snipers
+([Bitquery via Decrypt](https://decrypt.co/337157/solana-dex-traders-decline-meme-coin-scams)), and ~0.4% of
+pump.fun wallets had realized more than $10k ([Dune via Cointelegraph](https://cointelegraph.com/news/pump-fun-crypto-traders-majority-do-not-realize-profits-dune-data)).
+
+### The real wallet (live.py, Oct 21)
+
+Decided before the gate: about 50 EUR, stop at -30%, no approval per trade. The paper desk keeps deciding
+everything; `live.py` copies its **BNB Chain** buys and sells into a dedicated wallet, through KyberSwap.
+- 13 $ per real buy, 20 $ max per transaction, 3 real positions, 8 buys a day, a honeypot.is buy-and-sell
+  simulation before each buy (no answer, no buy). sells follow the paper: the same share of what is left.
+- the wallet worth 30% under its value at the first real buy: no more buys, sells go on, alert.
+- the only transactions ever signed: a swap sent to KyberSwap's router, and an approval of that router for the
+  exact amount sold. nothing can transfer funds elsewhere, whatever ECHO reads on X.
+- `LIVE=dry` quotes every order on the real chain and logs what it would have got (`SIMULÉ` on Telegram);
+  `LIVE=on` sends. real vs paper on the same trades: `python3 live.py status`, and the export.
+
+```
+python3 -m pip install --user eth-account     # once
+python3 live.py new-wallet                    # key into .env, prints the address only
+python3 live.py test                          # RPC, BNB price, KyberSwap, honeypot.is, wallet balance
+echo "LIVE=dry" >> .env                       # 24 h, then LIVE=on in .env, restart
+touch data/STOP                               # no more real buys      python3 live.py sellall: sell everything
+```
