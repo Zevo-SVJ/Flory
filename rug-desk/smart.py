@@ -73,9 +73,17 @@ def is_smart(rec: dict) -> bool:
     return rec["runs"] >= MIN_RUNS and rec["runs"] >= 2 * rec["crashes"]   # ...and twice as many runs as crashes
 
 
+def _norm(w: str) -> str:
+    return w.lower() if w.startswith("0x") else w      # EVM addresses arrive in mixed case
+
+
 def count(wallets: list[str]) -> int:
-    mem = memory()
-    return sum(1 for w in wallets or [] if w in mem and is_smart(mem[w]))
+    """Smart wallets among these holders. a blacklisted creator is never smart, whatever its record:
+    WHALE found 28 wallets on both lists (Oct 25), and the model scored the smart_money flag at -11.9"""
+    import ruggers
+    mem = {_norm(k): v for k, v in memory().items()}
+    bad = {_norm(d) for d in ruggers.known()}
+    return sum(1 for w in {_norm(x) for x in wallets or []} if w in mem and w not in bad and is_smart(mem[w]))
 
 
 def is_toxic(rec: dict) -> bool:

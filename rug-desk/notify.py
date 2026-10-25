@@ -22,4 +22,4 @@ def post(text: str):
             requests.post(f"https://api.telegram.org/bot{token}/sendMessage",
                           json={"chat_id": chat, "text": text[:4000]}, timeout=15)
         except Exception as e:
-            print(f"telegram down: {e}", flush=True)
+            print(f"telegram down: {str(e).replace(token, '<token>')}", flush=True)   # the URL carries the token

@@ -2468,3 +2468,16 @@ class Live(unittest.TestCase):
         self.assertTrue(st["stopped"])
         self.assertTrue(live.load("on")["stopped"])
         self.assertTrue(any("arrêt à -30 %" in t for t in self.said))
+
+
+class SmartNotRugger(unittest.TestCase):
+    """a blacklisted creator never counts as smart money, and EVM case does not split a wallet in two."""
+
+    def test_rugger_excluded_and_case_merged(self):
+        import smart, ruggers
+        mem = {"Good1": {"runs": 3, "crashes": 0}, "Bad1": {"runs": 3, "crashes": 0},
+               "0xAbC": {"runs": 2, "crashes": 0}}
+        with mock.patch.object(smart, "memory", lambda: mem), \
+                mock.patch.object(ruggers, "known", lambda: {"Bad1"}):
+            self.assertEqual(smart.count(["Good1", "Bad1"]), 1)
+            self.assertEqual(smart.count(["0xabc", "0xABC"]), 1)
