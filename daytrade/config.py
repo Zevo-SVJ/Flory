@@ -5,6 +5,7 @@
 # Momentum Strategy for S&P500 ETF (SPY)" (Swiss Finance Institute RP 24-97, 2024, revised Feb 2025):
 # 2007 to early 2024, net of costs, +19.6% a year, Sharpe 1.33. the desk first REPRODUCES that backtest on
 # its own data (backtest.py). nothing trades, not even on paper, until the reproduction holds.
+from __future__ import annotations   # python 3.9 (the Mac's own python3) reads the type hints
 import os
 
 HERE = os.path.dirname(os.path.abspath(__file__))

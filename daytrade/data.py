@@ -1,6 +1,7 @@
 # data.py
 # SPY minute bars from Alpaca (free data plan), cached by month in data/bars/. regular session only.
 #   python3 data.py fetch 2016-01-01 2026-10-23
+from __future__ import annotations   # python 3.9 (the Mac's own python3) reads the type hints
 import csv, json, os, sys, time
 import datetime as dt
 from zoneinfo import ZoneInfo

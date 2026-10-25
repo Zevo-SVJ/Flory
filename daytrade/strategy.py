@@ -11,6 +11,7 @@
 #
 # no look-ahead: a decision uses the bar that just closed and only past days; it is executed at the NEXT
 # bar's open, paying slippage and commission.
+from __future__ import annotations   # python 3.9 (the Mac's own python3) reads the type hints
 import math
 from config import STRATEGY, COSTS
 

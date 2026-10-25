@@ -5,6 +5,7 @@
 # the GATE (config.py) is the go / no-go: if our reproduction on the paper's own period is far below what
 # the paper reports, the strategy (or our code) is wrong and nothing goes to paper trading.
 # the period after March 2024 never fed the paper: it is the honest out-of-sample test.
+from __future__ import annotations   # python 3.9 (the Mac's own python3) reads the type hints
 import json, math, os, sys
 from collections import deque
 from config import DATA, STRATEGY, COSTS, GATE
