@@ -2481,3 +2481,24 @@ class SmartNotRugger(unittest.TestCase):
                 mock.patch.object(ruggers, "known", lambda: {"Bad1"}):
             self.assertEqual(smart.count(["Good1", "Bad1"]), 1)
             self.assertEqual(smart.count(["0xabc", "0xABC"]), 1)
+
+
+class ReplayGlitch(unittest.TestCase):
+    """Oct 25 audit: a one-tick x44,600 quote must not be sold in a replay; a confirmed move still is."""
+
+    def test_spike_dropped_real_move_kept(self):
+        import exitlab
+        base = [{"t": i, "price": 1.0, "liq": 50000} for i in range(6)]
+        spike = base + [{"t": 6, "price": 44600.0, "liq": 88770}, {"t": 7, "price": 1.0, "liq": 1.99}]
+        self.assertNotIn(44600.0, [p["price"] for p in exitlab.clean(spike)])
+        real = base + [{"t": 6, "price": 12.0, "liq": 50000}, {"t": 7, "price": 11.0, "liq": 50000}]
+        self.assertIn(12.0, [p["price"] for p in exitlab.clean(real)])
+
+    def test_comma_in_reason_does_not_break_reads(self):
+        import pending
+        with open(pending.X_READS, "w") as f:
+            f.write("time,mint,symbol,verdict,raison\n2026-10-25 10:00,M1,ANTI,BUY,un, deux\n")
+        r = pending.reads()["M1"]
+        self.assertEqual(r["verdict"], "BUY")
+        self.assertEqual(r["raison"], "un, deux")
+        os.remove(pending.X_READS)

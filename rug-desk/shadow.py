@@ -87,6 +87,7 @@ def replay(r: dict, params: dict | None = None, p=None) -> float | None:
 # never waived, whatever the shadow book says: each one is a way to lose the whole ticket at once
 HARD = {"pass", "model_veto", "dev_rugged_before", "mint_open", "freeze_open", "lp_unlocked", "nobody_can_sell", "holder_farm",
         "factory_wallets", "rug_funder", "st_rugged", "stale_data", "whale", "no_holders"}
+CAP_PCT = 1000              # one shadow token counts at most +1000% in the means: one glitch must not lift a rule
 WAIVE_MIN_N = 20            # shadow trades replayed for that reason
 WAIVE_MIN_MEAN = 5.0        # net % per trade, after costs, and positive on both halves
 _waived = {"t": 0.0, "v": set()}
@@ -118,7 +119,7 @@ def results() -> dict:
             continue
         x = replay(r)
         if x is not None:
-            done.append((r["reason"], x))
+            done.append((r["reason"], min(x, CAP_PCT)))
     by = {}
     for reason, x in done:                  # in kill order, so each reason's list splits into two halves
         by.setdefault(reason, []).append(x)

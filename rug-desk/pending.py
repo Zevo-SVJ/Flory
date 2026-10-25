@@ -46,8 +46,15 @@ def reads() -> dict:
     """ECHO's latest verdict per mint."""
     if not os.path.exists(X_READS):
         return {}
+    out = {}
     with open(X_READS, newline="") as f:
-        return {r["mint"]: r for r in csv.DictReader(f) if r.get("mint")}
+        for r in csv.DictReader(f):
+            extra = r.pop(None, None)          # a comma inside « raison » spills into extra columns: glue it back
+            if extra:
+                r["raison"] = ",".join([r.get("raison") or ""] + extra)
+            if r.get("mint"):
+                out[r["mint"]] = r
+    return out
 
 
 def write_queue(p: dict, done: dict):

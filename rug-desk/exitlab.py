@@ -67,8 +67,31 @@ def fill(value: float, liq: float | None) -> float:
     return r * value / (r + value) if r > 0 else 0.0
 
 
+SPIKE_X = 10      # a tick 10x above (or below) the recent median...
+SPIKE_LOOK = 5    # ...of the 5 ticks before it, that the next tick does not confirm, is a bad quote
+
+
+def clean(path: list[dict]) -> list[dict]:
+    """Drops one-tick price glitches before a replay. Oct 25 audit: NODF (Base) quoted x44,600 for one
+    tick on a pool that held $1.99 the tick after, and the replay sold there: +317,496% for one shadow
+    token, which alone pushed the mint_open row to +13,220%. a real move is still there one tick later"""
+    out = path[:1]
+    for i, s in enumerate(path[1:], 1):
+        prev = sorted(p["price"] for p in out[-SPIKE_LOOK:] if p["price"] > 0)
+        nxt = path[i + 1]["price"] if i + 1 < len(path) else None
+        if prev and s["price"] > 0:
+            med = prev[len(prev) // 2]
+            up = s["price"] > SPIKE_X * med and (nxt is None or nxt < s["price"] / 2)
+            down = s["price"] < med / SPIKE_X and (nxt is None or nxt > 2 * s["price"])
+            if up or down:
+                continue
+        out.append(s)
+    return out
+
+
 def simulate(path: list[dict], params: dict) -> float | None:
     """Replay one exit profile on one recorded path. Returns pnl in $ for one ticket."""
+    path = clean(path)
     if len(path) < 2 or path[0]["price"] <= 0:
         return None
     entry = path[0]["price"]
@@ -136,7 +159,7 @@ def run() -> dict:
         with open(exits.PROFILE) as f:
             active_name = json.load(f).get("name", "actif")
     return {"trades": len(replays), "results": [{k: v for k, v in r.items() if k != "params"} for r in results],
-            "switched": switched, "active": active_name, "min_trades": MIN_TRADES,
+            "switched": switched, "active": active_name, "min_trades": MIN_TRADES, "autotune": EXIT_AUTOTUNE,
             "speed": speed_test(raw, exits.active())}
 
 
