@@ -2,6 +2,7 @@
 # the ICT setups traders post about, turned into fixed rules and replayed on every day since 2016.
 #   python3 ict.py                         (SPY, a proxy for ES)
 #   DAYTRADE_SYMBOL=QQQ python3 ict.py     (QQQ, a proxy for NQ)
+#   python3 ict.py --short                 (one line per setup, no JSON)
 #
 # vocabulary, as coded here (5-minute candles, regular session only):
 #   bullish FVG at candle k : low[k] > high[k-2]   the gap (high[k-2], low[k]) was skipped by a fast move up
@@ -266,7 +267,12 @@ def main():
     out = {"symbol": SYMBOL, "range": [days[0][0], days[-1][0]]}
     for name, f in SETUPS.items():
         out[name] = report(run(days, f))
-    print(json.dumps(out, indent=1))
+    if "--short" not in sys.argv:
+        print(json.dumps(out, indent=1))
+    for name in SETUPS:
+        d, h = out[name]["discovery"], out[name]["holdout"]
+        print(f"{SYMBOL} {name}: 2016-21 {d.get('avg_r_net')}R t={d.get('t_stat')} n={d.get('trades')} | "
+              f"2022+ {h.get('avg_r_net')}R t={h.get('t_stat')} n={h.get('trades')}")
     for name in SETUPS:
         print(f"{SYMBOL} {name}: {'PASS' if out[name]['pass'] else 'FAIL'}")
     return 0
