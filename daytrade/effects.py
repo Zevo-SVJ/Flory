@@ -71,9 +71,10 @@ def tom(s: list[dict]) -> list[tuple[str, float]]:
     months = {}
     for i, d in enumerate(s):
         months.setdefault(d["date"][:7], []).append(i)
-    held = set()
-    for ix in months.values():
-        held.update(ix[-1:])
+    held, last = set(), max(months) if months else None
+    for m, ix in months.items():
+        if m != last:                                    # the data's final month is not over: no "last day" yet
+            held.update(ix[-1:])
         held.update(ix[:3])
     out = []
     for i in range(1, len(s)):
