@@ -33,6 +33,11 @@ PROFILES = {
     # the 6 h time stop near flat. the lab tests a tighter stop and a shorter clock on the same paths
     "stop -25%": {"stop_pct": -25},
     "time stop 3 h": {"time_stop_hours": 3},
+    # Oct 26: Skide's style B (narrative momentum, hours to days), the exits Profit and Orangie describe:
+    # stop -50%, stake back at x2, 25% at x5, 15% at x10, the rest on a 30% trail; no lock, stall or time stop
+    "regles B": {"stop_pct": -50, "ladder": [(100, 0.50), (400, 0.25), (900, 0.15)], "trail": "fixed",
+                 "trail_pct": 30, "arm_pct": 100, "lock_after_pct": 10**9, "dump_drop_pct": 10**9,
+                 "stall_min": 10**9, "time_stop_hours": 10**9},
 }
 
 

@@ -1860,6 +1860,19 @@ class Trend(Base):
         self.assertEqual(reviews._whipsaws([{"asset": "BTC", "side": "achat", "price": "100"},
                                             {"asset": "BTC", "side": "vente", "price": "95"}]), ["BTC -5.0 %"])
 
+
+    def test_regles_b_exits(self):
+        import config, exitlab
+        p = {**config.EXIT, **exitlab.PROFILES["regles B"]}
+        mk = lambda prices: [{"t": 1000 + 60 * i, "price": x, "liq": 1e6, "b5": 1, "s5": 1, "v5": 1}
+                             for i, x in enumerate(prices)]
+        t = config.TICKET_USD
+        # x2 sells half (stake back), x5 a quarter, then a 30% fall from the 6x peak closes the rest at 4.2x
+        got = exitlab.simulate(mk([1, 1.5, 2, 3, 5, 6, 4.2]), p)
+        self.assertAlmostEqual(got, t * (0.5 * 1 + 0.25 * 4 + 0.25 * 3.2), places=6)
+        # a -50% hit before any take loses half the ticket; -40% holds
+        self.assertAlmostEqual(exitlab.simulate(mk([1, 0.7, 0.5, 2]), p), -0.5 * t, places=6)
+        self.assertGreater(exitlab.simulate(mk([1, 0.6, 1.1]), p), 0)
     def test_volume_fade_is_a_lab_profile_only(self):
         import exits, exitlab
         t0 = 1_000_000.0
