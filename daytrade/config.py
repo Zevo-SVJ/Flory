@@ -11,7 +11,7 @@ import os
 HERE = os.path.dirname(os.path.abspath(__file__))
 DATA = os.environ.get("DAYTRADE_DATA") or os.path.join(HERE, "data")
 
-SYMBOL = "SPY"
+SYMBOL = os.environ.get("DAYTRADE_SYMBOL", "SPY")   # DAYTRADE_SYMBOL=QQQ python3 ... for the Nasdaq
 TZ = "America/New_York"
 SESSION_MINUTES = 390            # 09:30 -> 16:00, one bar per minute
 
@@ -41,3 +41,19 @@ GATE = {
 
 # paper trading later (live.py, not written yet): much smaller than the backtest
 LIVE = {"max_leverage": 1.0, "daily_loss_halt_pct": 2.0}
+
+# ict.py: the ICT setups, written as fixed rules BEFORE seeing any result. a setup counts only if it holds on
+# the discovery years AND on the holdout years it never saw. no rule is changed after the first run.
+ICT = {
+    "discovery": ("2016-01-01", "2021-12-31"),
+    "holdout": ("2022-01-01", "2099-12-31"),
+    "bar_min": 5,                    # FVGs are read on 5-minute candles
+    "risk_pct": 0.5,                 # each trade risks 0.5% of the account between entry and stop...
+    "max_leverage": 4.0,             # ...within 4x the account
+    "target_r": 2.0,                 # take profit at 2R, else stop, else out at the close
+    "min_gap_pct": 0.02,             # an FVG smaller than 0.02% of price is noise
+    "min_risk_pct": 0.03,            # a stop closer than 0.03% of price is not a real stop
+    "sb_window": (30, 90),           # Silver Bullet: FVG formed and filled between 10:00 and 11:00
+    "ifvg_window": (15, 150),        # IFVG: inversion between 09:45 and 12:00
+    "gate": {"min_trades": 100, "min_avg_r": 0.10, "min_t": 2.0, "holdout_min_avg_r": 0.0, "holdout_min_t": 1.0},
+}

@@ -93,7 +93,7 @@ def days(start: str | None = None, end: str | None = None) -> list[tuple[str, li
     if not os.path.isdir(BARS):
         return []
     for name in sorted(os.listdir(BARS)):
-        if not name.endswith(".csv"):
+        if not (name.startswith(SYMBOL + "_") and name.endswith(".csv")):
             continue
         with open(os.path.join(BARS, name), newline="") as f:
             for r in csv.DictReader(f):
