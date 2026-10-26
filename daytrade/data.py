@@ -51,9 +51,12 @@ def session(t_utc: str) -> tuple[str, int] | None:
 def fetch_month(year: int, month: int, feed: str = "sip") -> int:
     start = dt.date(year, month, 1)
     end = dt.date(year + (month == 12), month % 12 + 1, 1)
+    # the free plan refuses SIP data from the last 15 minutes: never ask past now - 20 min
+    stop = min(dt.datetime(end.year, end.month, end.day, tzinfo=dt.timezone.utc),
+               dt.datetime.now(dt.timezone.utc) - dt.timedelta(minutes=20))
     rows, token = [], None
     while True:
-        p = {"symbols": SYMBOL, "timeframe": "1Min", "start": f"{start}T00:00:00Z", "end": f"{end}T00:00:00Z",
+        p = {"symbols": SYMBOL, "timeframe": "1Min", "start": f"{start}T00:00:00Z", "end": stop.strftime("%Y-%m-%dT%H:%M:%SZ"),
              "limit": 10000, "adjustment": "all", "feed": feed, "sort": "asc"}
         if token:
             p["page_token"] = token
