@@ -27,14 +27,18 @@ def env(name: str) -> str | None:
 def _get(params: dict) -> dict:
     import requests
     for attempt in range(5):
-        r = requests.get(URL, params=params, timeout=30, headers={
-            "APCA-API-KEY-ID": env("ALPACA_KEY_ID") or "", "APCA-API-SECRET-KEY": env("ALPACA_SECRET_KEY") or ""})
-        if r.status_code == 429:
+        try:
+            r = requests.get(URL, params=params, timeout=60, headers={
+                "APCA-API-KEY-ID": env("ALPACA_KEY_ID") or "", "APCA-API-SECRET-KEY": env("ALPACA_SECRET_KEY") or ""})
+        except (requests.Timeout, requests.ConnectionError):     # a slow or dropped answer: wait, ask again
+            time.sleep(2 + 3 * attempt)
+            continue
+        if r.status_code == 429 or r.status_code >= 500:
             time.sleep(2 + 3 * attempt)
             continue
         r.raise_for_status()
         return r.json()
-    raise RuntimeError("Alpaca: too many 429s")
+    raise RuntimeError("Alpaca: no answer after 5 tries, run the same command again (done months are kept)")
 
 
 def session(t_utc: str) -> tuple[str, int] | None:
