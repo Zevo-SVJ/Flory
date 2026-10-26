@@ -84,10 +84,10 @@ def manage(bars: list[dict], start_m: int, entry: float, stop: float, target: fl
     return bars[-1]["c"], bars[-1]["m"]
 
 
-def _trade(bars, fill_m, entry, stop, p, limit=False):
+def _trade(bars, fill_m, entry, stop, p, limit=False, target=None):
     if entry - stop < p["min_risk_pct"] / 100 * abs(entry):
         return None
-    target = entry + p["target_r"] * (entry - stop)
+    target = target if target is not None else entry + p["target_r"] * (entry - stop)
     px, m = manage(bars, fill_m, entry, stop, target, limit)
     return {"m": fill_m, "entry": entry, "stop": stop, "exit": px, "exit_m": m, "r": (px - entry) / (entry - stop)}
 
@@ -188,8 +188,74 @@ def order_block(bars: list[dict], prev: dict | None, p: dict = ICT) -> dict | No
     return None
 
 
+def swings(cs: list[dict], n: int) -> list[tuple[int, str, float]]:
+    """(index of the candle that CONFIRMS it, "h" or "l", price): a swing high is a candle whose high beats
+    the n candles on each side, so it is only known n candles later."""
+    out = []
+    for i in range(n, len(cs) - n):
+        side = cs[i - n:i] + cs[i + 1:i + n + 1]
+        if all(cs[i]["h"] > c["h"] for c in side):
+            out.append((i + n, "h", cs[i]["h"]))
+        if all(cs[i]["l"] < c["l"] for c in side):
+            out.append((i + n, "l", cs[i]["l"]))
+    return out
+
+
+def tjr(bars: list[dict], prev: dict | None, p: dict = ICT) -> dict | None:
+    """TJR's day-trading plan, step by step (long; short is the mirror), 5-minute candles:
+    1-2 a swing low (or yesterday's low) is taken.  3 a candle then CLOSES above the last swing high: BOS.
+    4 the impulse left a bullish FVG.  5 price comes back into it (within 30 candles of the BOS) without
+    closing under it.  6 a candle closes back above the FVG: buy the next minute's open.
+    stop under the low that made the BOS; target the next liquidity above (a swing high or yesterday's
+    high) at least 1R away, else 2R. entries only between 10:00 and 11:30 (16:00-17:30 Paris)."""
+    lo, hi = p["tjr_window"]
+    cs = candles(bars, p["bar_min"])
+    sw = swings(cs, p["swing_n"])
+    known = lambda k, kind: [px for at, t, px in sw if at <= k and t == kind]
+    pdl, pdh = (prev["l"], prev["h"]) if prev else (None, None)
+    swept_low, bos, gap, entered = None, None, None, False
+    for k, c in enumerate(cs):
+        lows, highs = known(k - 1, "l"), known(k - 1, "h")
+        pools = lows[-1:] + ([pdl] if pdl is not None else [])
+        if bos is None:
+            if pools and c["l"] < max(pools):
+                swept_low = c["l"] if swept_low is None else min(swept_low, c["l"])
+            elif swept_low is not None:
+                swept_low = min(swept_low, c["l"])
+            if swept_low is not None and highs and c["c"] > highs[-1]:
+                bos = k
+            continue
+        if gap is None:                                      # 4: the FVG of the impulse, fresh BOS only
+            if k - bos > p["bos_fresh"]:
+                swept_low, bos = None, None
+                continue
+            for j in range(max(2, k - 3), k + 1):
+                if cs[j]["l"] > cs[j - 2]["h"] and cs[j]["l"] - cs[j - 2]["h"] >= p["min_gap_pct"] / 100 * abs(c["c"]):
+                    gap = (cs[j - 2]["h"], cs[j]["l"])
+            if gap is None:
+                continue
+            continue
+        bottom, top = gap
+        if k - bos > p["fvg_return"] or c["c"] < bottom:     # too late, or closed through: no trade
+            swept_low, bos, gap, entered = None, None, None, False
+            continue
+        if c["l"] <= top:
+            entered = True
+        if entered and c["c"] > top and lo <= c["e"] < hi:  # 6: the reaction
+            nxt = [b for b in bars if b["m"] >= c["e"]]
+            if not nxt:
+                return None
+            entry, stop = nxt[0]["o"], swept_low - TICK
+            risk = entry - stop
+            above = sorted(x for x in known(k, "h") + ([pdh] if pdh is not None else []) if x >= entry + risk)
+            return _trade(bars, nxt[0]["m"], entry, stop, p, target=above[0] if above else None)
+        if c["e"] >= hi:
+            return None
+    return None
+
+
 SETUPS = {"silver_bullet": silver_bullet, "ifvg": ifvg, "turtle_soup": turtle_soup, "judas": judas,
-          "order_block": order_block}
+          "order_block": order_block, "tjr": tjr}
 
 
 def day_trades(bars: list[dict], prev: dict | None, setup) -> list[dict]:

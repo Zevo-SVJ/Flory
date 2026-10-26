@@ -97,6 +97,43 @@ class Batch2(unittest.TestCase):
         self.assertLess(t["stop"], 98.8)
 
 
+def from_candles(spec, tail=None):
+    """5-minute candles (o, h, l, c) -> 1-minute prices o, l, h, c, c."""
+    px = []
+    for o, h, l, c in spec:
+        px += [o, l, h, c, c]
+    return day(px + (tail or []))
+
+
+TJR_DAY = [(100, 100.3, 99.9, 100.2), (100.2, 100.6, 100.1, 100.5), (100.5, 101.0, 100.4, 100.8),
+           (100.8, 100.9, 100.3, 100.4), (100.4, 100.5, 99.9, 100.0), (100.0, 100.1, 99.6, 99.7),
+           (99.7, 99.8, 99.3, 99.6), (99.6, 100.0, 99.5, 99.9), (99.9, 100.2, 99.8, 100.1),
+           (100.1, 100.15, 99.0, 99.1),                       # 9: takes the swing low at 99.3
+           (99.1, 99.4, 98.9, 99.3), (99.3, 100.3, 99.2, 100.2),
+           (100.2, 101.4, 100.2, 101.3),                      # 12: closes above the last swing high: BOS
+           (101.3, 101.5, 101.0, 101.2),                      # 13: FVG 100.3 - 101.0
+           (101.2, 101.25, 100.6, 100.7),                     # 14: back into the FVG
+           (100.7, 101.3, 100.65, 101.2)]                     # 15: closes back above it: entry
+
+
+class TJR(unittest.TestCase):
+    def test_sweep_bos_fvg_return_reaction(self):
+        bars = from_candles(TJR_DAY, [106.0] * 310)
+        t = ict.tjr(bars, {"h": 105.0, "l": 90.0})
+        self.assertEqual(t["m"], 80)                          # 10:50, the minute after candle 15
+        self.assertAlmostEqual(t["entry"], 101.2)
+        self.assertAlmostEqual(t["stop"], 98.89)
+        self.assertAlmostEqual(t["exit"], 105.0)              # next liquidity: yesterday's high
+
+    def test_no_bos_no_trade(self):
+        spec = TJR_DAY[:12] + [(100.2, 100.2, 99.8, 99.9)] * 4
+        self.assertIsNone(ict.tjr(from_candles(spec, [100.0] * 310), {"h": 105.0, "l": 90.0}))
+
+    def test_close_through_the_fvg_cancels(self):
+        spec = TJR_DAY[:14] + [(101.2, 101.2, 99.0, 99.2), (99.2, 101.3, 99.1, 101.2)]
+        self.assertIsNone(ict.tjr(from_candles(spec, [100.0] * 310), {"h": 105.0, "l": 90.0}))
+
+
 class Backtest(unittest.TestCase):
     def test_run_counts_costs(self):
         rows = ict.run([("2020-01-01", day([100.0] * 390)), ("2020-01-02", sb_day())], ict.silver_bullet)

@@ -60,6 +60,11 @@ ICT = {
     "judas_min": 30,                 # judas swing (PO3/AMD): the first 30 minutes fake one way...
     "judas_fake_pct": 0.10,          # ...by at least 0.10% beyond the open, then close back across it
     "ob_window": (30, 150),          # order block: displacement FVG after a sweep, 10:00-12:00, retest of the OB
-    "ob_lookback": 4,                # the OB is the last down candle within 4 candles before the displacement
+    "ob_lookback": 4,
+    # batch 4, TJR's own plan (his notes, Oct 26), fixed before any run
+    "tjr_window": (30, 120),         # entries 10:00-11:30 New York = 16:00-17:30 Paris
+    "swing_n": 2,                    # a swing high / low beats the 2 candles on each side
+    "bos_fresh": 20,                 # the FVG must come within 20 candles of the BOS ("BOS frais")
+    "fvg_return": 30,                # the return into the FVG within 30 candles ("plus de 30: on s'en blc")                # the OB is the last down candle within 4 candles before the displacement
     "gate": {"min_trades": 100, "min_avg_r": 0.10, "min_t": 2.0, "holdout_min_avg_r": 0.0, "holdout_min_t": 1.0},
 }
