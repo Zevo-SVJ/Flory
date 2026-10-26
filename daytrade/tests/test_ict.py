@@ -73,6 +73,30 @@ class InverseFVG(unittest.TestCase):
         self.assertIsNone(ict.ifvg(bars, {"h": 101.5, "l": 98.0}))
 
 
+class Batch2(unittest.TestCase):
+    def test_turtle_soup(self):
+        bars = day([100.0] * 10 + [98.5] * 5 + [99.5] * 375)      # under 99 at 09:40, back above in the 09:45 candle
+        t = ict.turtle_soup(bars, PREV)
+        self.assertEqual(t["m"], 20)
+        self.assertAlmostEqual(t["stop"], 98.49)
+
+    def test_judas(self):
+        bars = day([100.0] * 5 + [99.7] * 10 + [100.2] * 375)     # fake drop 0.3%, back above the open by 10:00
+        t = ict.judas(bars, PREV)
+        self.assertEqual(t["m"], 30)
+        self.assertAlmostEqual(t["entry"], 100.2)
+        self.assertAlmostEqual(t["stop"], 99.69)
+        self.assertIsNone(ict.judas(day([100.0] * 5 + [99.95] * 10 + [100.2] * 375), PREV))   # 0.05%: no fake
+
+    def test_order_block(self):
+        # down candle 09:55-10:00 (the OB, top 99.8), sweep, displacement leaves an FVG, retest of 99.8
+        px = [100.0] * 25 + [99.8] * 4 + [98.8] * 1 + [98.8] * 5 + [99.6] * 5 + [100.4] * 5 + [99.7] * 5 + [102.0] * 340
+        t = ict.order_block(day(px), PREV)
+        self.assertIsNotNone(t)
+        self.assertLess(t["entry"], 100.4)
+        self.assertLess(t["stop"], 98.8)
+
+
 class Backtest(unittest.TestCase):
     def test_run_counts_costs(self):
         rows = ict.run([("2020-01-01", day([100.0] * 390)), ("2020-01-02", sb_day())], ict.silver_bullet)

@@ -16,7 +16,8 @@
 #   forms; buy the retrace to the top of the gap. stop just below the swept low. target 2R.
 # IFVG REVERSAL (long): a bearish FVG forms on the way down, a low is swept, then a candle closes above the
 #   FVG before 12:00; buy that close. stop just below the swept low. target 2R.
-# both: one trade per setup per day, out at the close at the latest. if stop and target are hit in the same
+# TURTLE SOUP, JUDAS SWING (PO3), ORDER BLOCK: batch 2, see each function.
+# all: one trade per setup per day, out at the close at the latest. if stop and target are hit in the same
 # minute, the stop counts. a limit fills only if price trades a cent through it.
 import json, math, sys
 from config import ICT, COSTS, SYMBOL
@@ -132,7 +133,62 @@ def ifvg(bars: list[dict], prev: dict | None, p: dict = ICT) -> dict | None:
     return None
 
 
-SETUPS = {"silver_bullet": silver_bullet, "ifvg": ifvg}
+def turtle_soup(bars: list[dict], prev: dict | None, p: dict = ICT) -> dict | None:
+    """Yesterday's low is taken, then a 5-minute candle closes back above it: buy the next minute's open,
+    stop under the low of the sweep."""
+    if not prev:
+        return None
+    low = None
+    for c in candles(bars, p["bar_min"]):
+        if c["e"] > p["soup_window"]:
+            return None
+        if c["l"] < prev["l"]:
+            low = c["l"] if low is None else min(low, c["l"])
+        if low is not None and c["c"] > prev["l"]:
+            nxt = [b for b in bars if b["m"] >= c["e"]]
+            return _trade(bars, nxt[0]["m"], nxt[0]["o"], low - TICK, p) if nxt else None
+    return None
+
+
+def judas(bars: list[dict], prev: dict | None, p: dict = ICT) -> dict | None:
+    """Power of three: the first 30 minutes run below the open (the fake move), then close back above it;
+    buy at 10:00, stop under that early low."""
+    first = [b for b in bars if b["m"] < p["judas_min"]]
+    nxt = [b for b in bars if b["m"] >= p["judas_min"]]
+    if not first or not nxt:
+        return None
+    o, low = first[0]["o"], min(b["l"] for b in first)
+    if low > o * (1 - p["judas_fake_pct"] / 100) or first[-1]["c"] <= o:
+        return None
+    return _trade(bars, nxt[0]["m"], nxt[0]["o"], low - TICK, p)
+
+
+def order_block(bars: list[dict], prev: dict | None, p: dict = ICT) -> dict | None:
+    """After a sweep, a displacement up leaves a bullish FVG; the last down candle before it is the order
+    block. buy the retest of its top, stop under the OB or the swept low, whichever is lower."""
+    lo, hi = p["ob_window"]
+    sw = sweeps(bars, levels(prev, bars))
+    cs = candles(bars, p["bar_min"])
+    for k in range(2, len(cs)):
+        c, a = cs[k], cs[k - 2]
+        if not (lo < c["e"] <= hi) or (c["e"] - 1) not in sw:
+            continue
+        if c["l"] - a["h"] < p["min_gap_pct"] / 100 * abs(c["c"]):
+            continue
+        ob = next((cs[j] for j in range(k - 2, max(-1, k - 2 - p["ob_lookback"]), -1) if cs[j]["c"] < cs[j]["o"]), None)
+        if ob is None or ob["h"] >= c["c"]:
+            continue
+        entry, stop = ob["h"], min(ob["l"], sw[c["e"] - 1]) - TICK
+        for b in bars:
+            if b["m"] < c["e"] or b["m"] >= hi:
+                continue
+            if b["l"] <= entry - TICK:
+                return _trade(bars, b["m"], entry, stop, p, limit=True)
+    return None
+
+
+SETUPS = {"silver_bullet": silver_bullet, "ifvg": ifvg, "turtle_soup": turtle_soup, "judas": judas,
+          "order_block": order_block}
 
 
 def day_trades(bars: list[dict], prev: dict | None, setup) -> list[dict]:

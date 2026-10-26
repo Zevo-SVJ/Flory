@@ -55,5 +55,11 @@ ICT = {
     "min_risk_pct": 0.03,            # a stop closer than 0.03% of price is not a real stop
     "sb_window": (30, 90),           # Silver Bullet: FVG formed and filled between 10:00 and 11:00
     "ifvg_window": (15, 150),        # IFVG: inversion between 09:45 and 12:00
+    # batch 2, fixed on Oct 26 before any run. a setup is kept only if it PASSES on SPY and on QQQ
+    "soup_window": 120,              # turtle soup: sweep of yesterday's low and close back above it, by 11:30
+    "judas_min": 30,                 # judas swing (PO3/AMD): the first 30 minutes fake one way...
+    "judas_fake_pct": 0.10,          # ...by at least 0.10% beyond the open, then close back across it
+    "ob_window": (30, 150),          # order block: displacement FVG after a sweep, 10:00-12:00, retest of the OB
+    "ob_lookback": 4,                # the OB is the last down candle within 4 candles before the displacement
     "gate": {"min_trades": 100, "min_avg_r": 0.10, "min_t": 2.0, "holdout_min_avg_r": 0.0, "holdout_min_t": 1.0},
 }
