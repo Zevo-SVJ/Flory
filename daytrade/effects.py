@@ -87,7 +87,17 @@ def tom(s: list[dict]) -> list[tuple[str, float]]:
     return out
 
 
-EFFECTS = {"last30": last30, "hedge30": hedge30, "night": night, "tom": tom}
+def day(s: list[dict]) -> list[tuple[str, float]]:
+    """The other half of holding: open -> close, every day (a yardstick, not a strategy)."""
+    return [(d["date"], d["c"] / d["o"] - 1 - cost(d["o"])) for d in s[1:]]
+
+
+def hold(s: list[dict]) -> list[tuple[str, float]]:
+    """Buy and hold, no cost: what every effect has to beat."""
+    return [(d["date"], d["c"] / y["c"] - 1) for y, d in zip(s, s[1:])]
+
+
+EFFECTS = {"last30": last30, "hedge30": hedge30, "night": night, "tom": tom, "day": day, "hold": hold}
 
 
 def stats(rets: list[float]) -> dict:
@@ -125,8 +135,9 @@ def main():
         print(json.dumps(out, indent=1))
     for name, v in out.items():
         d, h = v["discovery"], v["holdout"]
-        print(f"{SYMBOL} {name}: 2016-21 {d.get('cagr_pct')}%/y sharpe={d.get('sharpe')} t={d.get('t_stat')} | "
-              f"2022+ {h.get('cagr_pct')}%/y sharpe={h.get('sharpe')} t={h.get('t_stat')} | "
+        print(f"{SYMBOL} {name}: 2016-21 {d.get('cagr_pct')}%/y sharpe={d.get('sharpe')} t={d.get('t_stat')} "
+              f"dd={d.get('max_dd_pct')}% | 2022+ {h.get('cagr_pct')}%/y sharpe={h.get('sharpe')} "
+              f"t={h.get('t_stat')} dd={h.get('max_dd_pct')}% | "
               f"{'PASS' if v['pass'] else 'FAIL'}")
     return 0
 
