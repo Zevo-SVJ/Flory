@@ -43,6 +43,22 @@ class SilverBullet(unittest.TestCase):
         self.assertAlmostEqual(ict.silver_bullet(bars, PREV)["r"], -1.0)
 
 
+class Fills(unittest.TestCase):
+    def test_no_target_in_the_limit_fill_minute(self):
+        bars = sb_day()
+        for b in bars:
+            if b["m"] == 55:
+                b["h"] = 101.5                          # the high may have printed before the dip that filled
+        t = ict.silver_bullet(bars, PREV)
+        self.assertEqual(t["exit_m"], 60)
+
+    def test_gap_through_stop_exits_at_open(self):
+        bars = day([100.0] * 10 + [99.0] * 380)
+        bars[20]["o"], bars[20]["l"] = 97.0, 97.0
+        px, m = ict.manage(bars, 15, 99.0, 98.0, 101.0)
+        self.assertEqual((px, m), (97.0, 20))
+
+
 class InverseFVG(unittest.TestCase):
     def test_bearish_gap_swept_then_closed_through(self):
         bars = day([100.0] * 15 + [98.9] * 10 + [100.3] * 365)

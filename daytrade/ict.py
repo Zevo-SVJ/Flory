@@ -67,23 +67,26 @@ def sweeps(bars: list[dict], lv: list[tuple[int, float]]) -> dict[int, float]:
     return out
 
 
-def manage(bars: list[dict], start_m: int, entry: float, stop: float, target: float) -> tuple[float, int]:
-    """Exit price and minute, walking 1-minute bars from the fill minute. stop first when both are touched."""
+def manage(bars: list[dict], start_m: int, entry: float, stop: float, target: float,
+           limit: bool = False) -> tuple[float, int]:
+    """Exit price and minute, walking 1-minute bars from the fill minute. stop first when both are touched;
+    a minute that opens through the stop exits at that open. after a limit fill the target does not count
+    in the fill minute itself: its high may have come before the dip that filled the order."""
     for b in bars:
         if b["m"] < start_m:
             continue
         if b["l"] <= stop:
-            return stop, b["m"]
-        if b["h"] >= target:
+            return (min(stop, b["o"]) if b["m"] > start_m else stop), b["m"]
+        if b["h"] >= target and not (limit and b["m"] == start_m):
             return target, b["m"]
     return bars[-1]["c"], bars[-1]["m"]
 
 
-def _trade(bars, fill_m, entry, stop, p):
+def _trade(bars, fill_m, entry, stop, p, limit=False):
     if entry - stop < p["min_risk_pct"] / 100 * abs(entry):
         return None
     target = entry + p["target_r"] * (entry - stop)
-    px, m = manage(bars, fill_m, entry, stop, target)
+    px, m = manage(bars, fill_m, entry, stop, target, limit)
     return {"m": fill_m, "entry": entry, "stop": stop, "exit": px, "exit_m": m, "r": (px - entry) / (entry - stop)}
 
 
@@ -103,7 +106,7 @@ def silver_bullet(bars: list[dict], prev: dict | None, p: dict = ICT) -> dict | 
             if b["m"] < c["e"] or b["m"] >= hi:
                 continue
             if b["l"] <= entry - TICK:
-                return _trade(bars, b["m"], entry, stop, p)
+                return _trade(bars, b["m"], entry, stop, p, limit=True)
         # not filled: the next FVG of the window may still give a trade
     return None
 
