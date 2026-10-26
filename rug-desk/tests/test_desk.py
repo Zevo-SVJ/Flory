@@ -1819,6 +1819,63 @@ class Trend(Base):
         self.assertIn("BTC", majors.book()["qty"])
         self.assertIn("source en panne", line)
 
+    def test_lab_weights(self):
+        import majors, trendlab
+        up = [100 * 1.003 ** i for i in range(500)]
+        down = [100 * 0.997 ** i for i in range(500)]
+        self.assertEqual(trendlab.weights(up, "crypto", "200j")[-1], 1.0)
+        self.assertEqual(trendlab.weights(down, "crypto", "ensemble")[-1], 0.0)
+        self.assertEqual(trendlab.weights(down, "crypto", "long/short")[-1], -1.0)    # smooth: vol under 40%
+        self.assertEqual(trendlab.weights(down, "etf", "long/short")[-1], 0.0)        # no short ETF
+        self.assertIsNone(trendlab.weights(up, "crypto", "ensemble")[100])            # warming up
+        import random
+        random.seed(1)
+        wild = [100.0]
+        for _ in range(499):
+            wild.append(wild[-1] * (1.003 + random.gauss(0, 0.05)))                   # ~95% a year of vol
+        w = trendlab.weights(wild, "crypto", "vol seule")[-1]
+        self.assertLess(w, 0.6)
+        self.assertGreater(w, 0.2)
+
+    def test_lab_runs_and_judges_against_the_200_day_rule(self):
+        import trendlab
+        up = [100 * 1.002 ** i for i in range(800)]
+        data = {"BTC": {"bars": self.bars(up)}, "QQQ": {"bars": self.bars(up, crypto=False)}}
+        res = trendlab.run(data)
+        names = [r["rule"] for r in res["rules"]]
+        self.assertEqual(names, ["hold"] + trendlab.RULES)
+        for r in res["rules"]:
+            self.assertIn(r["verdict"], ("-", "MEILLEUR", "TRADE-OFF", "NON"))
+        self.assertGreater(next(r for r in res["rules"] if r["rule"] == "hold")["full"]["cagr"], 0)
+
+    def test_activate_needs_a_lab_win_and_shorts_trade_in_paper(self):
+        import majors, trendlab, coach
+        fake = {"rules": [{"rule": "long/short", "verdict": "NON"}]}
+        self.assertTrue(trendlab.activate("long/short", fake).startswith("refusé"))
+        self.assertEqual(majors.rule(), "200j")
+        fake = {"rules": [{"rule": "long/short", "verdict": "MEILLEUR"}]}
+        trendlab.activate("long/short", fake)
+        self.assertEqual(majors.rule(), "long/short")
+        down = [100 * 0.997 ** i for i in range(500)]
+        up = [100 * 1.002 ** i for i in range(500)]
+        closes = {"BTC": down, "ETH": up, "SOL": up, "QQQ": up, "SPY": down}
+        with self.fake(closes), mock.patch.object(majors, "REFRESH_S", 0):
+            line, did = majors.tick()
+            b = majors.book()
+            self.assertLess(b["qty"]["BTC"], 0)                                   # short BTC
+            self.assertNotIn("SPY", b["qty"])                                    # an ETF going down is cash
+            self.assertGreater(b["qty"]["ETH"], 0)
+            self.assertIn("BTC (short)", line)
+            eq = majors.equity()
+            self.assertLess(eq, 1000)
+            self.assertGreater(eq, 990)                                           # only costs so far
+            self.assertEqual(majors.tick()[1], [])                                # nothing moved: no order
+            closes["BTC"] = down + [down[-1] * 0.9]                               # BTC falls 10% more: the short earns
+            majors.tick()
+            self.assertGreater(majors.equity(), eq)
+        trendlab.activate("200j")
+        self.assertEqual(majors.rule(), "200j")
+
     def test_the_dial_and_what_garde_logs(self):
         import majors
         up, down = [100 * 1.002 ** i for i in range(260)], [100 * 0.998 ** i for i in range(260)]

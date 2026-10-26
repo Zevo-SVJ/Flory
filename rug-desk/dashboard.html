@@ -617,6 +617,7 @@ const DOES = {
           "Si des positions sont ouvertes et qu'ECHO n'a rien lu depuis 90 min, le desk donne l'alerte (page et Telegram)."],
   TREND: ["Un second portefeuille paper de 1 000 $, à part des memecoins : BTC, ETH, SOL (crypto, 7 j/7) et QQQ, SPY (Nasdaq 100, S&P 500).",
           "Règle : on détient un actif tant que sa clôture est au-dessus de sa moyenne 200 jours (entrée à +1 %, sortie à −3 %, pour ne pas trader à chaque croisement). Les actifs « dedans » se partagent le portefeuille à parts égales, le reste est en cash. Pas de levier.",
+          "Labo (trendlab.py) : les règles des trend followers (momentum 1, 3 et 12 mois, taille selon la volatilité, short sur la crypto comme avec un perp) rejouées sur les mêmes 10 ans. Une règle ne remplace la 200 jours que si elle fait mieux sur les deux moitiés, sans chute plus profonde.",
           "Toutes les 5 min : prix (Coinbase ou Kraken, Yahoo ou Stooq), signal, ordres si l'ensemble des actifs dedans change. Backtest refait chaque jour, coûts compris, verdict DATA VALIDATED, TRADE-OFF ou NO EDGE.",
           "Calcule le cadran de régime pour les memecoins : s'ils perdent clairement quand il est rouge, il les met en retrait (sous garde-fous, annulé s'il déçoit)."],
   AUDIT: ["Surveille le solde chaque minute : une baisse est comparée au bruit habituel. Une baisse ordinaire est expliquée en une ligne, sans rien changer ; un incident (rug, ou baisse anormale) déclenche une pause des achats de 30 min, une relecture X de toutes les positions et la vente de ce qui est lié à un rug.",

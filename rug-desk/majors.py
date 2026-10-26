@@ -478,6 +478,56 @@ def rebalance(b: dict, want: set, data: dict, sig: dict) -> list[str]:
     return did
 
 
+def rule() -> str:
+    """The rule TREND's paper book runs: the 200-day rule unless the lab's winner was activated
+    (trendlab.activate, guarded: only a rule judged MEILLEUR on both halves)."""
+    try:
+        import coach
+        return coach.get("trend_rule") or "200j"
+    except Exception:
+        return "200j"
+
+
+def rebalance_w(b: dict, data: dict, name: str) -> list[str]:
+    """Move the paper book toward the lab rule's weights. Each asset with a weight owns 1/N of the book; a
+    negative weight is a short (crypto only, as a perp would be). A slot is traded only when its target
+    moves by a quarter slot or changes side, like in the lab. An asset whose price is missing keeps its
+    position: no blind trade."""
+    import trendlab
+    w = {}
+    for n in ASSETS:
+        bars = complete(n, (data.get(n) or {}).get("bars") or [])
+        x = trendlab.weights([c for _, c in bars], ASSETS[n]["kind"], name) if len(bars) > trendlab.WARMUP else []
+        if x and x[-1] is not None:
+            w[n] = x[-1]
+    eq = equity(b, data)
+    if not w or eq is None:
+        return []
+    slot = eq / len(w)
+    did = []
+    for n, wt in sorted(w.items()):
+        px = last(n, data)
+        if not px:
+            continue
+        cur = b["qty"].get(n, 0.0) * px
+        target = wt * slot
+        flip = (target > 0) != (cur > 0) and abs(target - cur) > 0.01 and (abs(target) > 1e-9 or abs(cur) > 1e-9)
+        if not (abs(target - cur) >= trendlab.BAND * slot or flip):
+            continue
+        delta = target - cur
+        c = abs(delta) * COST_PCT[ASSETS[n]["kind"]] / 100
+        q = delta / px
+        b["qty"][n] = b["qty"].get(n, 0.0) + q
+        if abs(b["qty"][n] * px) < 0.01:
+            b["qty"].pop(n)
+        b["cash"] -= delta + c
+        side = "achat" if q > 0 else ("vente à découvert" if target < 0 and cur <= 0 else "vente")
+        _fill(n, side, abs(q), px, abs(delta), c, f"règle {name} : poids {wt:+.2f} d'une part ({target:+.0f} $)")
+        b["fills"] = b.get("fills", 0) + 1
+        did.append(f"{side} {n} ${abs(delta):.0f} à {px:,.2f} (poids {wt:+.2f})")
+    return did
+
+
 def log_equity(b: dict, data: dict):
     eq = equity(b, data)
     if eq is None:
@@ -498,11 +548,15 @@ def tick() -> tuple[str, list[str]]:
     b = book()
     if b.get("started") is None:
         b["started"] = time.time()
-    held_now = set(b["qty"])
-    want = {n for n, s in sig.items() if s.get("in")}
-    unknown = {n for n, s in sig.items() if s.get("in") is None}
-    want |= held_now & unknown                 # a source down keeps what is held: no blind sale
-    did = rebalance(b, want, data, sig) if want != held_now else []
+    name = rule()
+    if name == "200j":
+        held_now = set(b["qty"])
+        want = {n for n, s in sig.items() if s.get("in")}
+        unknown = {n for n, s in sig.items() if s.get("in") is None}
+        want |= held_now & unknown                 # a source down keeps what is held: no blind sale
+        did = rebalance(b, want, data, sig) if want != held_now else []
+    else:
+        did = rebalance_w(b, data, name)
     _write(STATE, b)
     log_equity(b, data)
     if time.time() - _read(BT, {}).get("t", 0) > BACKTEST_S:
@@ -510,7 +564,10 @@ def tick() -> tuple[str, list[str]]:
     eq = equity(b, data)
     d = dial(data)
     line = (f"${eq:,.0f} ({(eq / BANKROLL - 1) * 100:+.1f} %)" if eq is not None else "prix incomplets")
-    line += " · en position : " + (", ".join(sorted(b["qty"])) or "rien, tout en cash")
+    line += (" · en position : " + (", ".join(f"{n}{' (short)' if q < 0 else ''}" for n, q in sorted(b["qty"].items()))
+                                   or "rien, tout en cash"))
+    if name != "200j":
+        line += f" · règle {name}"
     if d:
         line += f" · cadran {sum(d['parts'].values())}/{len(d['parts'])}"
     if data.get("errors"):
