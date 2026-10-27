@@ -42,14 +42,23 @@ def watch() -> tuple[list[dict], dict]:
     ghosts = paths.ghosts()
     if not positions and not ghosts:
         return out, marks
+    backup = False
     try:
         live = pools(list(positions) + [g for g in ghosts if g not in positions])
     except Exception as e:
-        return [{"kind": "error", "text": f"price feed down ({e}), holding, will retry"}], marks
+        backup = True
+        # DexScreener down used to leave every position unpriced, so no stop could fire until it came back
+        # (Oct 27 evening). the positions are now priced from the pool itself (Solana, last known quote
+        # price) and from GeckoTerminal for the rest, and the exits keep running
+        live = backup_marks(positions)
+        out.append({"kind": "error", "text": f"price feed down ({str(e)[:120]}), {len(live)}/{len(positions)} "
+                                             f"position(s) priced from the backup sources"})
 
     now = time.time()
     for mint in ghosts:                       # sold tokens: only recorded, for the exit lab
         m = live.get(mint)
+        if backup and not m:                  # no price is not a price of zero: nothing is recorded
+            continue
         if mint not in positions:
             paths.append(mint, sample(now, m))
 
@@ -60,6 +69,8 @@ def watch() -> tuple[list[dict], dict]:
     with book.LOCK:
         for mint, p in positions.items():
             m = live.get(mint)
+            if backup and not m and mint not in onchain:
+                continue                          # unpriced while the feed is down: held, never sold at "zero"
             s = sample(now, m)
             if mint in onchain:                   # the pool itself beats any indexer...
                 cp, cl = onchain[mint]
@@ -110,6 +121,51 @@ def watch() -> tuple[list[dict], dict]:
                         "reason": why, "closed": closed, "share": 1.0 if closed else share,
                         "text": f"{pos['symbol']}: {verb} {size} at {pct:+.0f}% ({why}), pnl ${pnl:+.2f}"})
     return out, marks
+
+
+_gt_seen: dict[str, tuple[float, float]] = {}     # key -> (time, price): GeckoTerminal is read once a minute
+GT_EVERY_S = 60
+
+
+def backup_marks(positions: dict) -> dict:
+    """{mint: market-like dict} when DexScreener is down: the pool's own reserves where the desk knows the
+    vaults (Solana), else GeckoTerminal's token price (no liquidity: the liquidity exit waits for it)."""
+    import chains, gt
+    out = {}
+    for mint, (price, liq) in chain_marks(positions, {}).items():
+        out[mint] = {"price": price, "liq_usd": liq}
+    now = time.time()
+    rest = {}
+    for mint in positions:
+        if mint in out:
+            continue
+        seen = _gt_seen.get(mint)
+        if seen and now - seen[0] < GT_EVERY_S:
+            out[mint] = {"price": seen[1], "liq_usd": None}
+            continue
+        chain, addr = chains.split(mint)
+        if chains.supported(chain):
+            rest.setdefault(chain, []).append((mint, addr))
+    for chain, items in rest.items():
+        net = chains.CHAINS[chain]["gt"]
+        try:
+            r = gt.get(f"https://api.geckoterminal.com/api/v2/simple/networks/{net}/token_price/"
+                       + ",".join(a for _, a in items), wait_max=5)
+            r.raise_for_status()
+            px = ((r.json().get("data") or {}).get("attributes") or {}).get("token_prices") or {}
+        except Exception:
+            continue
+        low = {k.lower(): v for k, v in px.items()}
+        for mint, addr in items:
+            v = low.get(addr.lower())
+            try:
+                p = float(v)
+            except (TypeError, ValueError):
+                continue
+            if p > 0:
+                _gt_seen[mint] = (now, p)
+                out[mint] = {"price": p, "liq_usd": None}
+    return out
 
 
 def sample(t: float, m: dict | None) -> dict:

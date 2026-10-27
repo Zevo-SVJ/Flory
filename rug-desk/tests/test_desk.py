@@ -310,6 +310,28 @@ class Exits(Base):
         self.assertIn("pool_gone", e[0])
         self.assertAlmostEqual(book.today_pnl(), -25)
 
+    def test_feed_down_backup_price_still_fires_the_stop(self):
+        import gt
+        watch._gt_seen.clear()
+        resp = mock.Mock(**{"raise_for_status.return_value": None,
+                            "json.return_value": {"data": {"attributes": {"token_prices": {MINT: "0.4"}}}}})
+        with mock.patch("watch.pools", side_effect=RuntimeError("dexscreener timeout")), \
+                mock.patch.object(gt, "get", return_value=resp):
+            out = watch.watch()[0]
+        texts = [x["text"] for x in out]
+        self.assertTrue(any("backup" in t for t in texts), texts)
+        self.assertTrue(any("stop" in t for t in texts), texts)
+        self.assertNotIn(MINT, book.load())
+
+    def test_feed_down_and_no_backup_holds_never_sells_at_zero(self):
+        import gt
+        watch._gt_seen.clear()
+        with mock.patch("watch.pools", side_effect=RuntimeError("dexscreener timeout")), \
+                mock.patch.object(gt, "get", side_effect=RuntimeError("geckoterminal down")):
+            out = watch.watch()[0]
+        self.assertEqual([x["kind"] for x in out], ["error"])
+        self.assertIn(MINT, book.load())                        # held, not sold as a vanished pool
+
     def test_report_runs(self):
         self.tick(0.6)
         out = report.report()
