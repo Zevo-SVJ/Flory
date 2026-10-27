@@ -38,6 +38,11 @@ PROFILES = {
     "regles B": {"stop_pct": -50, "ladder": [(100, 0.50), (400, 0.25), (900, 0.15)], "trail": "fixed",
                  "trail_pct": 30, "arm_pct": 100, "lock_after_pct": 10**9, "dump_drop_pct": 10**9,
                  "stall_min": 10**9, "time_stop_hours": 10**9},
+    # Oct 27: Rugikk's article runs the same ladder start (half off at x2) with a -35% stop. the lab and
+    # VIGIE's review judge it against "regles B" on the same paths; nothing changes unless it wins
+    "regles B stop -35%": {"stop_pct": -35, "ladder": [(100, 0.50), (400, 0.25), (900, 0.15)], "trail": "fixed",
+                           "trail_pct": 30, "arm_pct": 100, "lock_after_pct": 10**9, "dump_drop_pct": 10**9,
+                           "stall_min": 10**9, "time_stop_hours": 10**9},
 }
 
 
