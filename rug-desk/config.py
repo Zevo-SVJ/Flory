@@ -91,6 +91,9 @@ FACTS = {                   # the rug filter. code only, no model
     # the graduation price was the one variant near break-even (+2.9%, n=18): the first hour is where
     # snipers, devs and factories dump. it limits losses; it does not prove an edge
     "min_age_min": 60,
+    "max_drop_1h_pct": 50,      # a launch already down 50%+ in the last hour is collapsing: buying it is
+                                # buying the exits of those dumping (LMAO, Oct 27: -61.9% in the hour before
+                                # entry, score 100, then -58% one minute after the buy). shadowed like every kill
     "min_vs_graduation": 1.0,   # early lane: price must be at least this x the pool's price at graduation
     "max_fixed_cost_pct": 5,    # gas paid twice may eat at most this % of the base ticket (kills Ethereum at $25)
     # fake caps: on Oct 19, 20 of 33 graduates with a "real" pool were clones ("US Oil Exchange",

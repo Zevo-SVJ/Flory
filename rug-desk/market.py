@@ -117,6 +117,8 @@ def market_kill(m: dict | None) -> str | None:
     if m["age_min"] is None or m["age_min"] < FACTS["min_age_min"]:
         return "too_fresh"
     if m["buys_1h"] >= 20 and m["sells_1h"] == 0:                return "nobody_can_sell"
+    if lane(m) == "early" and (m.get("chg_1h") or 0) <= -FACTS.get("max_drop_1h_pct", 101):
+        return "falling_knife"
     if lane(m) == "momentum":
         return momentum_kill(m)
     return None

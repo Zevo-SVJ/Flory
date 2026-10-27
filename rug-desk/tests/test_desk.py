@@ -316,6 +316,18 @@ class Exits(Base):
         self.assertIn("realized pnl today: $-10.00", out)
 
 
+
+class FallingKnife(unittest.TestCase):
+    def test_a_launch_collapsing_in_the_hour_is_not_bought(self):
+        import market
+        m = {"price": 0.0005, "liq_usd": 60000, "chain": "solana", "mcap": 400000, "buys_1h": 300,
+             "sells_1h": 300, "avg_trade_1h": 40, "vol_1h": 300000, "age_min": 282, "chg_1h": -10}
+        self.assertIsNone(market.market_kill(m))
+        self.assertEqual(market.market_kill({**m, "chg_1h": -61.9}), "falling_knife")     # LMAO, Oct 27
+        self.assertIsNone(market.market_kill({**m, "chg_1h": -49}))
+        import shadow
+        self.assertIn("falling_knife", shadow.POOL_KILLS)                                 # its cost is measured
+
 if __name__ == "__main__":
     unittest.main()
 
