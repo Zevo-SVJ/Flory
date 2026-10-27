@@ -35,14 +35,17 @@ PROFILES = {
     "time stop 3 h": {"time_stop_hours": 3},
     # Oct 26: Skide's style B (narrative momentum, hours to days), the exits Profit and Orangie describe:
     # stop -50%, stake back at x2, 25% at x5, 15% at x10, the rest on a 30% trail; no lock, stall or time stop
+    # Oct 28: no clock at all left AXIS, BAN, XDP flat for 33-42 h, ~$120 that new tokens could not use.
+    # a token not even +20% after 24 h is let go (the 6 h clock cut slow starters too early; the lab's
+    # paths end 6 h after a sale, so this one is a judgment call, not a lab result)
     "regles B": {"stop_pct": -50, "ladder": [(100, 0.50), (400, 0.25), (900, 0.15)], "trail": "fixed",
                  "trail_pct": 30, "arm_pct": 100, "lock_after_pct": 10**9, "dump_drop_pct": 10**9,
-                 "stall_min": 10**9, "time_stop_hours": 10**9},
+                 "stall_min": 10**9, "time_stop_hours": 24, "time_stop_min_pct": 20},
     # Oct 27: Rugikk's article runs the same ladder start (half off at x2) with a -35% stop. the lab and
     # VIGIE's review judge it against "regles B" on the same paths; nothing changes unless it wins
     "regles B stop -35%": {"stop_pct": -35, "ladder": [(100, 0.50), (400, 0.25), (900, 0.15)], "trail": "fixed",
                            "trail_pct": 30, "arm_pct": 100, "lock_after_pct": 10**9, "dump_drop_pct": 10**9,
-                           "stall_min": 10**9, "time_stop_hours": 10**9},
+                           "stall_min": 10**9, "time_stop_hours": 24, "time_stop_min_pct": 20},
 }
 
 

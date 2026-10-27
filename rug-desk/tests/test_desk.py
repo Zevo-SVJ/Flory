@@ -1964,6 +1964,13 @@ class Trend(Base):
         # a -50% hit before any take loses half the ticket; -40% holds
         self.assertAlmostEqual(exitlab.simulate(mk([1, 0.7, 0.5, 2]), p), -0.5 * t, places=6)
         self.assertGreater(exitlab.simulate(mk([1, 0.6, 1.1]), p), 0)
+        # the 24 h clock: flat after a day goes, a +25% runner stays
+        slow = lambda last: [{"t": 1000 + 3600 * i, "price": x, "liq": 1e6, "b5": 1, "s5": 1, "v5": 1}
+                             for i, x in enumerate([1.0] * 25 + [last])]
+        import exits
+        pos = {"entry": 1.0, "peak": 1.0, "opened": 1000, "steps": 0, "liq0": 1e6, "qty": 1, "qty0": 1}
+        self.assertEqual(exits.decide(pos, slow(1.05)[-1], p)[1], "time_stop")
+        self.assertIsNone(exits.decide(pos, slow(1.25)[-1], p))
     def test_volume_fade_is_a_lab_profile_only(self):
         import exits, exitlab
         t0 = 1_000_000.0
