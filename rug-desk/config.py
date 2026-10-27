@@ -46,6 +46,11 @@ TICKET_USD = 25             # the smallest ticket. the real size comes from SIZI
 # bigger tickets on signals nobody has validated only enlarge the losses. raise strong/max again once
 # AUDIT's tier breakdown shows the signals earn more, on enough trades
 SIZING = {"base": 4, "strong": 4, "max": 4,
+          # Oct 28: the "strong" and "max" tiers are no longer bought at all. three looks agree: Oct 19 -$109 over
+          # 8 trades, Oct 20-27 -$158 over 20 (base +$170 over 31), shadow replay -10% per token over 12 (base
+          # +21% over 21). 2+ heat signals mark a token already at the top of its hype (LMAO: score 100).
+          # the skipped ones are followed in shadow ("hot_signals"): the report says if the skip costs money
+          "skip_hot": True,
           "score_strong": 75, "score_max": 85,  # score thresholds that count as a signal
           "turnover_hot": 1.0,                  # 1 h volume >= the pool's liquidity
           "organic_avg_trade": 30,              # activity counts only if the average swap is $30+

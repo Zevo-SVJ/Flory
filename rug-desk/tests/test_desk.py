@@ -350,6 +350,22 @@ class FallingKnife(unittest.TestCase):
         import shadow
         self.assertIn("falling_knife", shadow.POOL_KILLS)                                 # its cost is measured
 
+
+class HotSignals(unittest.TestCase):
+    def test_strong_and_max_passes_are_not_bought_and_are_shadowed(self):
+        import check
+        self.assertIsNone(check.hot_skip({"tier": "base"}))
+        why = check.hot_skip({"tier": "strong", "signals": ["score 90", "turnover x1.2"]})
+        self.assertTrue(why.startswith("not bought: hot signals"))
+        self.assertIsNotNone(check.hot_skip({"tier": "max", "signals": []}))
+        import shadow
+        with mock.patch.object(shadow.paths, "haunt"):
+            self.assertTrue(shadow.note("Hot1111", {"verdict": "PASS", "action": why, "symbol": "HOT",
+                                                    "price": 1.0, "liq_usd": 50000, "stage": "judge"}))
+        self.assertEqual([r["reason"] for r in shadow._rows() if r["mint"] == "Hot1111"], ["hot_signals"])
+        with mock.patch.dict(config.SIZING, {"skip_hot": False}):
+            self.assertIsNone(check.hot_skip({"tier": "strong"}))
+
 if __name__ == "__main__":
     unittest.main()
 

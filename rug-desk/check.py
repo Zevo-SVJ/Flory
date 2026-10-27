@@ -252,6 +252,14 @@ def deep_read(mint: str, token: dict, desk: bool = True, skip: frozenset | set =
     return {"kill": kill, "logged": logged}
 
 
+def hot_skip(v: dict) -> str | None:
+    """A pass whose ticket came out "strong" or "max" (2+ heat signals: high score, turnover, buyers ahead,
+    smart wallets, X narrative) is not bought: those tickets lost money in every sample (config SIZING)."""
+    if SIZING.get("skip_hot") and v.get("tier") in ("strong", "max"):
+        return f"not bought: hot signals, already at the top of its hype ({', '.join(v.get('signals') or [])})"
+    return None
+
+
 def run(mint: str) -> dict:
     v = check(mint)
     v.update(market.sol_regime() or {})
@@ -290,6 +298,9 @@ def run(mint: str) -> dict:
         else:
             v["action"] = f"not bought: score {v['score']} < {MIN_SCORE} ({v.get('flags') or 'no flag'})"
             return v
+    if enter and (why := hot_skip(v)):
+        v["action"] = why
+        return v
     if enter and PAPER and v["verdict"] == "PASS" and ECHO_MODE == "gate":
         pending.add(mint, {**v, "flags": (v.get("flags") or "").split()})
         v["action"] = f"waiting for ECHO's X read (score {v['score']})"

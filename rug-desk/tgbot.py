@@ -35,6 +35,7 @@ LABELS = {
     "fake_cap": "capitalisation gonflée face à une liquidité minuscule",
     "micro_trades": "volume de bots : trades moyens de quelques dollars",
     "nobody_can_sell": "honeypot probable : des achats, aucune vente",
+    "hot_signals": "déjà au sommet de sa hype (2 signaux chauds ou plus) : ces achats ont perdu à chaque fois",
     "falling_knife": "déjà en chute de 50 % ou plus sur la dernière heure : on n'achète pas un effondrement",
     "serial_farm": "nom recyclé par une usine à rugs (homonymes morts)",
     "copycat": "copie d'un ticker plus gros et actif",
