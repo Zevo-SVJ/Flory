@@ -165,6 +165,11 @@ EXIT = {
     "time_stop_hours": 6,                   # not up 20% after 6 hours -> out, dead money
     "time_stop_min_pct": 20,
 }
+# a chain whose tokens behave apart gets its own exits. Oct 28: on 322 replayed pump.fun graduations the
+# config exits (stop -35%, early ladder, lock, trail, 6 h clock) beat "regles B" for every one of the 11
+# entry rules on the same tokens, by 3 to 24 points per trade: Solana graduates that fall keep falling,
+# so B's -50% stop and 24 h patience cost money there. B stays for the other chains (+$134 vs +$22)
+EXIT_BY_CHAIN = {"solana": "config"}
 EXIT_AUTOTUNE = False       # since Oct 20 VIGIE's self-review switches profiles (reviews.py, coach.py): it learns
                             # from every shadowed token, ten times the trades, under stricter guards
 

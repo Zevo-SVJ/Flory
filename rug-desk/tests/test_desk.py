@@ -381,6 +381,14 @@ class Pulse(unittest.TestCase):
         self.assertEqual([a[0] for a in said], ["DESK"])
         self.assertIn("SCOUT a mis", said[0][2])
 
+
+class ExitByChain(unittest.TestCase):
+    def test_solana_keeps_the_config_exits_other_chains_the_profile_in_force(self):
+        import exits, chains
+        b = {"stop_pct": -50}
+        self.assertEqual(exits.for_mint(MINT, b)["stop_pct"], config.EXIT["stop_pct"])     # a Solana mint
+        self.assertEqual(exits.for_mint(chains.key("bsc", "0x" + "ab" * 20), b), b)
+
 if __name__ == "__main__":
     unittest.main()
 

@@ -37,6 +37,19 @@ def active() -> dict:
     return p
 
 
+def for_mint(mint: str, profile: dict | None = None) -> dict:
+    """The profile for one position: the one in force, unless its chain has its own (EXIT_BY_CHAIN)."""
+    import chains
+    from config import EXIT_BY_CHAIN
+    name = EXIT_BY_CHAIN.get(chains.split(mint)[0])
+    if name == "config":
+        return dict(EXIT)
+    if name:
+        import exitlab
+        return {**EXIT, **exitlab.PROFILES.get(name, {})}
+    return profile if profile is not None else active()
+
+
 def volatility_pct(hist: list[dict], bars: int = 12, bar_s: int = 300) -> float | None:
     """Average 5-minute range as % of price over the last hour: an ATR built from VIGIE's samples."""
     buckets = {}

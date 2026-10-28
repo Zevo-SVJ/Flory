@@ -97,7 +97,7 @@ def watch() -> tuple[list[dict], dict]:
             else:
                 pos = p
             hist = paths.load(mint, since=max(pos["opened"], now - 3600))
-            d = exits.decide(pos, exits.features(hist)[-1] if hist else s, profile)
+            d = exits.decide(pos, exits.features(hist)[-1] if hist else s, exits.for_mint(mint, profile))
             if not d:
                 continue
             frac, why = d
