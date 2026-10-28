@@ -389,6 +389,51 @@ class ExitByChain(unittest.TestCase):
         self.assertEqual(exits.for_mint(MINT, b)["stop_pct"], config.EXIT["stop_pct"])     # a Solana mint
         self.assertEqual(exits.for_mint(chains.key("bsc", "0x" + "ab" * 20), b), b)
 
+
+class SnipeLab(unittest.TestCase):
+    def setUp(self):
+        import snipelab
+        if os.path.exists(snipelab.OUT):
+            os.remove(snipelab.OUT)
+
+    def ev(self, kind, mint="Snip111", vsol=30.0, vtok=1.0e9, **k):
+        return {"txType": kind, "mint": mint, "symbol": "SNP", "traderPublicKey": "Dev1",
+                "vSolInBondingCurve": vsol, "vTokensInBondingCurve": vtok, **k}
+
+    def test_filters_at_launch(self):
+        import snipelab
+        self.assertEqual(snipelab.launch_kill(self.ev("create"), {"Dev1"}), "dev_rugged_before")
+        self.assertEqual(snipelab.launch_kill(self.ev("create", initialBuy=2e8), set()), "dev_buy_heavy")
+        self.assertIsNone(snipelab.launch_kill(self.ev("create", initialBuy=3e7), set()))
+
+    def test_entry_waits_for_the_delay_and_the_replay_pays_costs(self):
+        import snipelab
+        import random
+        lab = snipelab.Lab(random.Random(1))
+        lab.blacklist = set()
+        with mock.patch.dict(config.SNIPE, {"sample_every": 1}):
+            self.assertEqual(lab.on_create(self.ev("create"), 1000.0), "Snip111")
+        lab.on_trade(self.ev("buy", vsol=31.0), 1000.5)                   # before our delay: not our price
+        self.assertIsNone(lab.tracked["Snip111"]["entry"])
+        lab.on_trade(self.ev("buy", vsol=33.0), 1003.0)                   # our entry
+        e = lab.tracked["Snip111"]["entry"]["price"]
+        for i, v in enumerate([40.0, 50.0, 70.0, 66.0, 60.0]):            # it runs, then cools
+            lab.on_trade(self.ev("buy", vsol=v), 1010.0 + 30 * i)
+        self.assertEqual(lab.due(1000.0 + 31 * 60), ["Snip111"])
+        row = lab.finish("Snip111")
+        self.assertTrue(row["entered"])
+        self.assertGreater(row["gross_pct"], 0)
+        self.assertLess(row["net_pct"], row["gross_pct"])                 # fee, impact and tips paid
+        self.assertAlmostEqual(row["delay_s"], 3.0)
+        self.assertAlmostEqual(e, 33.0 / 1e9)
+
+    def test_report_applies_the_rule(self):
+        import snipelab
+        self.assertIn("pas encore", snipelab.report([{"entered": True, "net_pct": 5, "delay_s": 3,
+                                                       "vs_launch_pct": 10}] * 50)["verdict"])
+        bad = [{"entered": True, "net_pct": x, "delay_s": 3, "vs_launch_pct": 10} for x in [-30, 10] * 160]
+        self.assertTrue(snipelab.report(bad)["verdict"].startswith("NON"))
+
 if __name__ == "__main__":
     unittest.main()
 

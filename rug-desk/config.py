@@ -221,3 +221,17 @@ AGENTS = os.path.join(DATA, "agents.json")
 EQUITY = os.path.join(DATA, "equity.csv")
 AUDIT = os.path.join(DATA, "audit.csv")
 PATHS = os.path.join(DATA, "paths")          # one price path per traded token, for the exit lab
+
+# snipelab.py, the dry sniper (Oct 28): nothing is bought, it measures what sniping pump.fun launches would
+# earn at the speed this desk can reach. the rule (min_n entries, interval above 0, both halves) is in the file
+SNIPE = {
+    "latency_s": 2,             # our entry: the first trade at least 2 s after we saw the launch (never block 0)
+    "follow_min": 30,           # each followed launch is watched for 30 min, then replayed with the Solana exits
+    "sample_every": 5,          # 1 launch in 5 that pass the launch filters is followed (thousands launch a day)
+    "max_tracked": 40,          # at most this many followed at once on the one websocket
+    "max_dev_buy_pct": 10,      # the creator bought more than 10% of the supply in its launch -> skipped
+    "ticket_sol": 0.25,
+    "curve_fee_pct": 1.25,      # pump.fun's bonding-curve fee, each side
+    "tip_sol": 0.001,           # a Jito tip / priority fee, each side
+    "min_n": 300,
+}
