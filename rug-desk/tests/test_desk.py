@@ -448,6 +448,26 @@ class LpFromRugcheck(unittest.TestCase):
         self.assertFalse(check.lp_from_rugcheck(t3, {"rc_lp_locked": 0}))   # the chain's own read wins
         self.assertFalse(check.lp_from_rugcheck({"lp_burned_pct": None}, {}))
 
+
+class EvmFocus(unittest.TestCase):
+    def test_bsc_and_robinhood_get_their_own_newest_pools_page(self):
+        import evmnew, gt, chains
+        if os.path.exists(evmnew.STATE):
+            os.remove(evmnew.STATE)
+        urls = []
+        def get(url, params=None, **k):
+            urls.append(url)
+            data = []
+            if "networks/bsc/new_pools" in url:      # no network relationship on a per-network page
+                data = [{"relationships": {"base_token": {"data": {"id": "bsc_0x" + "cd" * 20}}},
+                         "attributes": {"name": "FROG / WBNB"}}]
+            return mock.Mock(**{"raise_for_status.return_value": None, "json.return_value": {"data": data}})
+        with mock.patch.object(gt, "get", get):
+            self.assertEqual(evmnew.fetch(), 1)
+        self.assertTrue(any("networks/bsc/new_pools" in u for u in urls))
+        self.assertTrue(any("networks/robinhood/new_pools" in u for u in urls))
+        self.assertIn(chains.key("bsc", "0x" + "cd" * 20), evmnew.recent())
+
 if __name__ == "__main__":
     unittest.main()
 
