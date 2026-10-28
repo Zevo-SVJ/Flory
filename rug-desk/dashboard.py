@@ -263,10 +263,13 @@ def state(range_key: str = "auto", series: str = "memes") -> dict:
     src = sources.load()
 
     hb = _json(HEARTBEAT, None)
+    vb = _json(os.path.join(DATA, "heartbeat_vigie.json"), None)
+    main_ok = bool(hb and now - hb["time"] < 120)
+    vigie_ok = bool(vb and now - vb["time"] < 120)
     balance = PAPER_BANKROLL_USD + realized + unrealized
     return {
         "now": now, "paper": PAPER, "judge": JUDGE, "ticket": TICKET_USD,
-        "alive": bool(hb and now - hb["time"] < 120),
+        "alive": main_ok or vigie_ok, "busy": vigie_ok and not main_ok,
         "bankroll": PAPER_BANKROLL_USD, "balance": balance, "realized": realized, "unrealized": unrealized,
         "pnl": balance - PAPER_BANKROLL_USD, "today": book.today_pnl(), "loss_limit": DAILY_LOSS_HALT_USD,
         "cash": book.cash(positions), "marks_age": now - marks.get("t", 0),

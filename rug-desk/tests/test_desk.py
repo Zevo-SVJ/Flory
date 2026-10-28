@@ -366,6 +366,21 @@ class HotSignals(unittest.TestCase):
         with mock.patch.dict(config.SIZING, {"skip_hot": False}):
             self.assertIsNone(check.hot_skip({"tier": "strong"}))
 
+
+class Pulse(unittest.TestCase):
+    def test_vigie_beats_and_a_slow_job_is_named(self):
+        import agents
+        agents.vigie_beat()
+        with open(agents.VIGIE_BEAT) as f:
+            self.assertLess(time.time() - json.load(f)["time"], 5)
+        said = []
+        with mock.patch.object(agents, "SLOW_JOB_S", -1), mock.patch.object(agents, "emit",
+                                                                            lambda *a, **k: said.append(a)):
+            agents.run_job("SCOUT", lambda: "ok", 180)
+            agents.run_job("VIGIE", lambda: "ok", 20)
+        self.assertEqual([a[0] for a in said], ["DESK"])
+        self.assertIn("SCOUT a mis", said[0][2])
+
 if __name__ == "__main__":
     unittest.main()
 

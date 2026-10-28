@@ -968,7 +968,7 @@ function drawPanels() {
 function drawTop() {
   const live = $("live");
   live.className = "live " + (S.alive ? "on" : "off");
-  $("liveText").textContent = S.alive ? "LIVE" : "DESK ARRÊTÉ";
+  $("liveText").textContent = S.alive ? (S.busy ? "LIVE · OCCUPÉ" : "LIVE") : "DESK ARRÊTÉ";
   $("modeLabel").textContent = (S.paper ? "TRADING MODE · PAPIER" : "TRADING MODE · RÉEL") + (S.marks_age > 90 && S.open.length ? " · prix en retard" : "");
   $("tasks").textContent = `${S.tasks.toLocaleString("fr-FR")} TÂCHES`;
   const e = S.edge || { verdict: "wait", n: 0, min_trades: 200 };

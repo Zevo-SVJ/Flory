@@ -431,11 +431,28 @@ def incident_watch():
             post(r["text"])
 
 
+SLOW_JOB_S = 120
+VIGIE_BEAT = os.path.join(DATA, "heartbeat_vigie.json")
+
+
+def vigie_beat():
+    """VIGIE's own pulse: the page tells "the desk is down" from "the main loop is busy" with it."""
+    tmp = atomic.tmp(VIGIE_BEAT)
+    with open(tmp, "w") as f:
+        json.dump({"time": time.time()}, f)
+    os.replace(tmp, VIGIE_BEAT)
+
+
 def run_job(name: str, job, every: float | None):
     """One turn of one agent: its status before and after, its errors counted, never fatal."""
     set_agent(name, status="work", msg="au travail…")
+    t0 = time.time()
     try:
         msg = job()
+        took = time.time() - t0
+        if took > SLOW_JOB_S and name != "VIGIE":   # the page shows the loop as stopped past 2 min
+            emit("DESK", "error", f"{name} a mis {took / 60:.1f} min à finir son tour (réseau lent ?) : "
+                                  f"pendant ce temps VIGIE surveillait les positions")
         set_agent(name, status="idle", msg=msg, runs=load_runs(name) + 1,
                   next=time.time() + every if every else None)
     except Exception as e:
@@ -454,6 +471,10 @@ def vigie_loop(stop: threading.Event):
     while not stop.is_set():
         t0 = time.time()
         run_job("VIGIE", vigie, every)
+        try:
+            vigie_beat()
+        except OSError:
+            pass
         hb = _main_beat["t"]
         if hb and time.time() - hb > 300 and not warned:   # the main loop has not turned in 5 min
             emit("DESK", "error", "la boucle principale (SCOUT, GARDE, AUDIT) est bloquée depuis 5 min : "
