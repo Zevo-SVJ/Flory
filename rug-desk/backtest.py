@@ -350,6 +350,17 @@ ENTRY_RULES = {
     "rising 30 min (+10%)": {"rise_30m": 0.10},
     "pool $30k+": {"min_liq": 30000},
     "desk now (60 min + above graduation)": {"min_age": 60, "above_t0": 1.0},
+    # Oct 28: how the traders who catch Solana runners early say they enter (research, Oct 28), each a
+    # different moment than the desk's late, above-graduation entry. judged on the same recorded paths:
+    #   migration dip: graduates often dump 30-50% as the curve's buyers sell into the new pool; buy the
+    #                  bounce once the token is back 20% above that low, while it still trades
+    #   early strength: 15+ min old and already 30% above its graduation price: demand right away
+    #   new high: a second leg, a fresh high after the first hour (the run that follows a base)
+    #   crowd: 600+ swaps in the last hour, the on-chain trace of attention (X, callers, KOLs)
+    "migration dip, bounce +20%": {"min_age": 15, "dip_bounce": (0.30, 0.20)},
+    "early strength (+30% at 15 min)": {"min_age": 15, "above_t0": 1.3},
+    "new high after 60 min": {"min_age": 60, "new_high": True},
+    "crowd (600+ swaps/h)": {"min_age": 15, "min_n1h": 600},
 }
 
 
@@ -370,6 +381,15 @@ def _entry(row: dict, rule: dict) -> int | None:
         if a is None or (n1h >= 100 and a < FACTS["min_avg_trade_usd"]) or n1h * a < FACTS["min_turnover_1h"] * liq:
             continue
         if price < rule.get("above_t0", 0) * p0:
+            continue
+        if n1h < rule.get("min_n1h", 0):
+            continue
+        if "dip_bounce" in rule:
+            dip, bounce = rule["dip_bounce"]
+            low = min(q[1] for q in path[:k + 1])
+            if low > p0 * (1 - dip) or price < low * (1 + bounce):
+                continue
+        if rule.get("new_high") and (k == 0 or price <= max(q[1] for q in path[:k])):
             continue
         if "rise_30m" in rule:
             back = next((q for q in reversed(path[:k]) if q[0] <= t - 1800), None)
@@ -430,6 +450,16 @@ def variants(rows: list[dict], exits_only: tuple = ()) -> list[dict]:
 # last: run as a script, every function above is defined (a main block placed before variants()
 # made every automatic run crash with a NameError, Oct 19)
 if __name__ == "__main__":
+    if sys.argv[1:] == ["--variantes"]:
+        rows = rows_all()
+        res = variants(rows, exits_only=("actif", "regles B"))
+        print(f"{sum(1 for r in rows if r.get('path'))} graduations pump.fun rejouées (desk entries + sorties)")
+        print(f"{'entrée':<38}{'sortie':<10}{'n':>5}{'net %':>8}  {'IC 95 %':<16}{'1re':>7}{'2e':>7}")
+        for v in res:
+            print(f"{v['entry']:<38}{v['exit']:<10}{v['n']:>5}{v['mean']:>+8.1f}  "
+                  f"[{v['ci95'][0]:+.1f}, {v['ci95'][1]:+.1f}]{'':<2}{v['half1'] if v['half1'] is not None else '-':>7}"
+                  f"{v['half2'] if v['half2'] is not None else '-':>7}")
+        sys.exit(0)
     if sys.argv[1:] == ["--accumulate"]:
         try:
             os.nice(10)                  # the desk's own reads come first
