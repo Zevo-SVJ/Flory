@@ -171,6 +171,21 @@ def scout(balance: float | None) -> dict:
     return {"did": did, "mistakes": mistakes, "change": change}
 
 
+def _test_source(entry) -> dict:
+    """After a new source order: does its first source still beat its last one, on tokens seen since?"""
+    new = entry.get("new") or []
+    if len(new) < 2:
+        return {"n": 0}
+    by = {}
+    for d in lessons():
+        if float(d["row"]["t"]) > entry["t"]:
+            by.setdefault(_source_of(d["row"]["mint"]) or "inconnue", []).append(d["y"])
+    a, b = by.get(new[0], []), by.get(new[-1], [])
+    if len(a) < 2 or len(b) < 2:
+        return {"n": min(len(a), len(b))}
+    return {"n": min(len(a), len(b)), "mean": statistics.mean(a) - statistics.mean(b)}
+
+
 # ---------------------------------------------------------------- ECHO
 def _echo_groups(after: float = 0) -> tuple[list[float], list[float]]:
     import pending
@@ -293,7 +308,8 @@ def run_all(balance: float | None) -> dict:
             out[name] = fn(balance)
         except Exception as e:
             out[name] = {"did": [], "mistakes": [], "change": f"revue impossible : {str(e)[:120]}"}
-    judged = coach.evaluate({"exit_profile": _test_exit, "echo_skip_sells": _test_echo, "meme_dial_gate": _test_gate})
+    judged = coach.evaluate({"exit_profile": _test_exit, "echo_skip_sells": _test_echo, "meme_dial_gate": _test_gate,
+                             "source_rank": _test_source})
     tripped = coach.circuit(balance) if balance is not None else []
     import incidents
     inc = incidents.recent(0, 7)

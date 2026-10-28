@@ -653,7 +653,7 @@ function drawPanel() {
   table("journal", [["Quand"], ["Agent"], ["Réglage"], ["Avant → après"], ["Preuve"], ["Statut"]],
     (S.journal || []).slice().reverse().map(e => [new Date(e.t * 1000).toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }),
       e.agent, e.key, `${JSON.stringify(e.old)} → ${JSON.stringify(e.new)}`, e.why || "",
-      el("span", { class: "pill", title: e.undone_why || "" }, { active: "en test 48 h", confirmed: "confirmé", rolled_back: "annulé" }[e.status] || e.status)]),
+      el("span", { class: "pill", title: e.undone_why || "" }, { active: "en test 48 h", confirmed: "confirmé", rolled_back: "annulé", superseded: "remplacé" }[e.status] || e.status)]),
     "Aucun changement pour l'instant : aucun agent n'a encore assez de preuves.");
   P.style.setProperty("--c", AGENT_COLORS[a.name]);
   $("pname").textContent = a.name; $("prole").textContent = a.role;

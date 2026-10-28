@@ -260,7 +260,7 @@ def handle(tok: str, message: dict):
     if body.startswith("/journal") and str(chat) == owner():  # what the agents changed in themselves, and why
         import coach
         rows = coach.journal(last=10)
-        status = {"active": "en test", "confirmed": "confirmé", "rolled_back": "annulé"}
+        status = {"active": "en test", "confirmed": "confirmé", "rolled_back": "annulé", "superseded": "remplacé"}
         send(tok, chat, "\n".join(f"{time.strftime('%d/%m %H:%M', time.localtime(e['t']))} · {e['agent']} · "
                                     f"{e['key']} : {e['old']} → {e['new']} · {status.get(e['status'], e['status'])}"
                                     for e in rows) or "Aucun changement : aucun agent n'a encore assez de preuves.")

@@ -1805,6 +1805,29 @@ class Coach(Base):
         self.assertIsNone(coach.get("exit_profile"))                                   # back to the old value
         self.assertEqual(coach.journal()[-1]["status"], "rolled_back")
 
+    def test_a_key_waits_for_its_last_change_to_be_judged(self):
+        import coach
+        ok = {"ok": True, "why": "t", "n": 80, "mean": 5}
+        with mock.patch.object(coach, "RATE_S", 0):
+            self.assertIsNotNone(coach.apply("SCOUT", "source_rank", ["a", "b"], ok, 900.0))
+            self.assertIsNone(coach.apply("SCOUT", "source_rank", ["b", "a"], ok, 900.0))     # not judged yet
+            self.assertIn("pas encore jugé", coach.can_change("SCOUT", "source_rank"))
+            with mock.patch.object(coach, "EVAL_S", 0):
+                coach.evaluate({"source_rank": lambda e: {"n": 40, "mean": 2.0}})
+            self.assertEqual(coach.journal()[-1]["status"], "confirmed")
+            self.assertIsNotNone(coach.apply("SCOUT", "source_rank", ["b", "a"], ok, 900.0))  # judged: free again
+
+    def test_an_older_change_is_superseded_never_undone_over_a_newer_one(self):
+        import coach, json as _j
+        for i, v in enumerate((["a"], ["b"])):
+            coach._log({"id": f"{i}-SCOUT-source_rank", "t": time.time() - 3 * 86400, "agent": "SCOUT",
+                        "key": "source_rank", "old": None, "new": v, "status": "active"})
+        with mock.patch.object(coach, "EVAL_S", 0):
+            coach.evaluate({"source_rank": lambda e: {"n": 40, "mean": 1.0}})
+        st = {e["id"]: e["status"] for e in coach.journal()}
+        self.assertEqual(st["0-SCOUT-source_rank"], "superseded")
+        self.assertEqual(st["1-SCOUT-source_rank"], "confirmed")
+
     def test_circuit_breaker(self):
         import coach
         coach.apply("ECHO", "echo_skip_sells", True, {"ok": True, "why": "t"}, 900.0)

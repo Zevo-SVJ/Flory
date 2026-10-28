@@ -114,6 +114,12 @@ def can_change(agent: str, key: str) -> str | None:
               and time.time() - r["t"] < RATE_S]
     if recent:
         return f"{agent} a déjà changé quelque chose il y a moins de 24 h"
+    # Oct 28: SCOUT changed source_rank every 24 h while each change waited 48 h for its re-test, and came back
+    # to the Oct 25 order on Oct 28: noise chased four times, never judged. a key moves again only once its
+    # last change has been judged (confirmed or undone), or after 4 x EVAL_S if the data never came
+    pending = [r for r in journal() if r["key"] == key and r["status"] == "active" and time.time() - r["t"] < 4 * EVAL_S]
+    if pending:
+        return f"le dernier changement de « {key} » n'est pas encore jugé (re-test à 48 h)"
     return None
 
 
@@ -148,6 +154,12 @@ def evaluate(tests: dict) -> list[dict]:
     """Re-test every active change older than EVAL_S on the data that came after it.
     tests: {key: f(entry) -> paired() result of new vs old on post-change cases}."""
     out = []
+    latest = {}
+    for e in journal():                                        # an older change of a key that moved again since
+        if e["status"] == "active":                            # is superseded, never undone over the newer one
+            if e["key"] in latest:
+                _update(latest[e["key"]]["id"], status="superseded")
+            latest[e["key"]] = e
     for e in journal():
         if e["status"] != "active" or time.time() - e["t"] < EVAL_S or e["key"] not in tests:
             continue
