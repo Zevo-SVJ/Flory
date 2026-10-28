@@ -434,6 +434,20 @@ class SnipeLab(unittest.TestCase):
         bad = [{"entered": True, "net_pct": x, "delay_s": 3, "vs_launch_pct": 10} for x in [-30, 10] * 160]
         self.assertTrue(snipelab.report(bad)["verdict"].startswith("NON"))
 
+
+class LpFromRugcheck(unittest.TestCase):
+    def test_a_non_pumpswap_pool_is_verified_by_rugcheck_and_an_unlocked_one_still_dies(self):
+        import check, facts
+        t = {"lp_burned_pct": None}
+        self.assertTrue(check.lp_from_rugcheck(t, {"rc_lp_locked": 100}))
+        self.assertEqual(t["lp_burned_pct"], 100.0)
+        t2 = {"lp_burned_pct": None}
+        check.lp_from_rugcheck(t2, {"rc_lp_locked": 0})
+        self.assertEqual(t2["lp_burned_pct"], 0.0)            # fact_kill reads this as lp_unlocked (hard)
+        t3 = {"lp_burned_pct": 97.0}
+        self.assertFalse(check.lp_from_rugcheck(t3, {"rc_lp_locked": 0}))   # the chain's own read wins
+        self.assertFalse(check.lp_from_rugcheck({"lp_burned_pct": None}, {}))
+
 if __name__ == "__main__":
     unittest.main()
 

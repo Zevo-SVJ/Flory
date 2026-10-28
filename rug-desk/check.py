@@ -171,6 +171,11 @@ def check(mint: str) -> dict:
     if not evm:                          # RugCheck's view, logged for learn.py, never a kill by itself
         import rugcheck
         seen.update(rugcheck.fetch(mint) or {})
+        # the chain read only knows PumpSwap pools: on Raydium, Meteora or a LaunchLab pool the LP stayed
+        # "unverified" and the token was killed for it, whatever its pool really was. 4 of the 5 winners the
+        # filter missed by Oct 28 died that way (Mimi +31,812%, STREAM, MUNK, Monaka). RugCheck reads those
+        # pools: its locked share now stands in, and an unlocked pool is still a hard kill (lp_unlocked)
+        lp_from_rugcheck(token, seen)
     seen.update(top10=token.get("top10_pct"), max_wallet=token.get("max_wallet_pct"), holders=token.get("holders"))
     try:                                 # the score of every token that got this far, killed or not: learn.py compares all
         sc0 = score(m, token)
@@ -250,6 +255,18 @@ def deep_read(mint: str, token: dict, desk: bool = True, skip: frozenset | set =
             kill = stracker.kill(s, DEEP)
             kill = None if kill in skip else kill
     return {"kill": kill, "logged": logged}
+
+
+def lp_from_rugcheck(token: dict, seen: dict) -> bool:
+    """RugCheck's locked LP share where the chain read could not see the pool (anything but PumpSwap)."""
+    if token.get("lp_burned_pct") is not None or seen.get("rc_lp_locked") is None:
+        return False
+    try:
+        token["lp_burned_pct"] = float(seen["rc_lp_locked"])
+    except (TypeError, ValueError):
+        return False
+    seen["lp_source"] = "rugcheck"
+    return True
 
 
 def hot_skip(v: dict) -> str | None:

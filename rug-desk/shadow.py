@@ -79,7 +79,7 @@ def replay(r: dict, params: dict | None = None, p=None) -> float | None:
     p = p or path(r)
     if not p:
         return None
-    gross = exitlab.simulate(p[0], params or exits.active())
+    gross = exitlab.simulate(p[0], params or exits.for_mint(r.get("mint") or ""))
     if gross is None:
         return None
     return gross / exitlab.TICKET_USD * 100 - p[1]
