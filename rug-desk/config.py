@@ -90,6 +90,9 @@ FACTS = {                   # the rug filter. code only, no model
     "farm_wallets": 15,         # this many holders with the same bag (within 1%)...
     "farm_pct": 3,              # ...holding this % of supply together -> holder_farm (Helius only)
     "min_liquidity_usd": 15000, # the live graduates that ran on Oct 19 (KIBI, SPORE, Mimi) had $20-30k pools
+    "soft_liq_floor_usd": 8000, # thin_pool's floor if the shadow book ever waives it: never under this
+    "shadow_pool_per_run": 3,   # SCOUT follows this many pool-rule kills per run in shadow (6 h each)
+    "shadow_max_ghosts": 300,   # ...while VIGIE prices fewer ghosts than this
     "max_ticket_share": 0.02,   # your ticket is never more than 2% of the pool (~2% price impact)
     # backtest on 523 graduations (backtest.py, two separate windows on Oct 19): entering at 15 min with the
     # pool rules lost -20.7% a trade (median -46%), on both windows. waiting 60 min and buying only above

@@ -42,6 +42,52 @@ if "--trades" in sys.argv:
         print(f"ouvert : {o['t']} {m[:20]} mise {o['usd']:.2f} $")
     sys.exit(0)
 
+if "--entonnoir" in sys.argv:
+    # where the tokens die, from the first source to the buy, and what each kill rule is worth in shadow.
+    #   python3 diag.py --entonnoir        (last 24 h)      python3 diag.py --entonnoir 48
+    import shadow
+    nums = [a for a in sys.argv[1:] if a.replace(".", "").isdigit()]
+    H = float(nums[0]) if nums else 24
+    since = time.time() - H * 3600
+    runs = []
+    try:
+        with open(os.path.join(DATA, "funnel.jsonl")) as f:
+            runs = [r for r in (json.loads(x) for x in f if x.strip()) if r.get("t", 0) >= since]
+    except (OSError, ValueError):
+        pass
+    print(f"== entonnoir, {H:.0f} dernières heures")
+    if runs:
+        n = len(runs)
+        avg = lambda k: sum(r.get(k) or 0 for r in runs) / n
+        print(f"SCOUT : {n} passages · par passage : {avg('leads'):.0f} pistes ({avg('graduates'):.0f} graduations, "
+              f"{avg('evm_new'):.0f} nouveaux pools EVM, {avg('trending'):.0f} tendance, {avg('jupiter_top'):.0f} Jupiter, "
+              f"{avg('feeds_and_search'):.0f} listes/recherche) · {sum(r.get('shadowed') or 0 for r in runs)} suivis en fantôme")
+        for lane in ("early", "momentum"):
+            tot = Counter()
+            for r in runs:
+                tot.update(r.get(lane) or {})
+            print(f"  {lane} : " + " · ".join(f"{k} {v / n:.1f}" for k, v in tot.most_common(12)) + "  (moyenne par passage)")
+    else:
+        print("SCOUT : pas encore de funnel.jsonl (le desk doit tourner avec ce code)")
+    cut = time.strftime("%Y-%m-%d %H:%M", time.localtime(since))
+    ch = [r for r in rows(LOG) if r["time"] >= cut and r["stage"] != "limits"]
+    print(f"GARDE : {len(ch)} verdicts · {sum(r['verdict'] in ('PASS', 'BUY') for r in ch)} PASS")
+    by = Counter((r.get("lane") or "?", r["stage"], r["reason"][:40]) for r in ch if r["verdict"] == "SKIP")
+    for (lane, stage, reason), k in by.most_common(15):
+        print(f"  {k:3d} x {lane:8s} {stage:6s} {reason}")
+    tr = [t for t in rows(TRADES) if t["time"] >= cut and t["action"] == "open"]
+    print(f"ACHATS : {len(tr)}")
+    r = shadow.results()
+    w = shadow.waived()
+    print(f"FANTÔME (6 h rejouées, sorties et coûts du desk) : {r['waiting']} en cours · tous {r['all']}")
+    print("  raison · n · moyenne nette % · gagnants · 1re moitié · 2e moitié · borne basse · état")
+    for d in r["reasons"]:
+        state = ("LEVÉE" if d["reason"] in w else "dure (jamais levée)" if d["reason"] in shadow.HARD
+                 else f"levée à n {shadow.WAIVE_MIN_N}, moy. ≥ {shadow.WAIVE_MIN_MEAN}, 2 moitiés et borne > 0")
+        print(f"  {d['reason'][:22]:22s} {d['n']:4d} {d['mean']:+7.1f} {d['win']:5.0%} {d['half1'] or 0:+7.1f} "
+              f"{d['half2'] or 0:+7.1f} {d['low'] if d['low'] is not None else '-':>7} · {state}")
+    sys.exit(0)
+
 if "--pos" in sys.argv:
     # every open position as VIGIE sees it now: why it is still open. reads the book and the price paths
     import exits, paths

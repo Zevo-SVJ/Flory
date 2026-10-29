@@ -14,7 +14,8 @@ HOURS = 6
 TICKET = 40.0
 STAGES = ("pool", "facts", "deep", "pass")          # "limits" (book full, already open) is no verdict on the token
 # at the pool stage only GARDE's own kills: a thin or fresh pool pasted in the dashboard is no verdict either
-POOL_KILLS = ("below_graduation", "copycat", "serial_farm", "stale_data", "falling_knife")
+POOL_KILLS = ("below_graduation", "copycat", "serial_farm", "stale_data", "falling_knife",
+              "thin_pool", "fake_cap", "dead_volume", "micro_trades")   # the last four: SCOUT's sample (scan.py)
 
 
 def _rows() -> list[dict]:

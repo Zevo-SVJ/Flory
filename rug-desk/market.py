@@ -98,21 +98,32 @@ def pool(mint: str) -> dict | None:
     return pools([mint])[mint]
 
 
-def market_kill(m: dict | None) -> str | None:
+# the pool rules a launch can be wrong about: SCOUT follows a sample of what they kill in shadow (scan.py), and
+# one whose shadow buys clearly made money stops applying to launches by itself (shadow.waived). the rest
+# (no pool, too fresh, nobody can sell, falling knife) are never waived
+SOFT_POOL = ("thin_pool", "fake_cap", "dead_volume", "micro_trades")
+
+
+def market_kill(m: dict | None, skip=()) -> str | None:
+    """The first pool rule this token breaks. `skip`: soft pool reasons waived for launches."""
     if not m:                                                    return "no_pool"
     if m["price"] <= 0:                                          return "no_price"
-    if m["liq_usd"] < FACTS["min_liquidity_usd"]:                return "thin_pool"
+    skip = set(skip) & set(SOFT_POOL) if lane(m) == "early" else set()
+    floor = FACTS["soft_liq_floor_usd"] if "thin_pool" in skip else FACTS["min_liquidity_usd"]
+    if m["liq_usd"] < floor:                                     return "thin_pool"
     # gas paid twice on a small ticket: on Ethereum a $25 ticket loses 12% before the price moves
     if 2 * chains.CHAINS.get(m.get("chain") or "solana", chains.CHAINS["solana"])["tx_usd"] > \
             FACTS.get("max_fixed_cost_pct", 5) / 100 * TICKET_USD:   return "fees_eat_ticket"
     if TICKET_USD / m["liq_usd"] > FACTS["max_ticket_share"]:    return "ticket_too_big"
     cap_x = MOMENTUM["max_mcap_liq"] if lane(m) == "momentum" else FACTS["max_mcap_liq"]
-    if (m.get("mcap") or 0) > cap_x * m["liq_usd"]:              return "fake_cap"
-    if m["buys_1h"] + m["sells_1h"] >= 100 and m.get("avg_trade_1h", 1e9) < FACTS["min_avg_trade_usd"]:
+    if (m.get("mcap") or 0) > cap_x * m["liq_usd"] and "fake_cap" not in skip:   return "fake_cap"
+    if m["buys_1h"] + m["sells_1h"] >= 100 and m.get("avg_trade_1h", 1e9) < FACTS["min_avg_trade_usd"] \
+            and "micro_trades" not in skip:
         return "micro_trades"
     # a launch must trade 5% of its pool an hour; a deep survivor's pool can't turn that fast, its
     # volume is judged against its own recent hours instead (momentum_kill)
-    if lane(m) == "early" and (m.get("vol_1h") or 0) < FACTS["min_turnover_1h"] * m["liq_usd"]:
+    if lane(m) == "early" and (m.get("vol_1h") or 0) < FACTS["min_turnover_1h"] * m["liq_usd"] \
+            and "dead_volume" not in skip:
         return "dead_volume"
     if m["age_min"] is None or m["age_min"] < FACTS["min_age_min"]:
         return "too_fresh"

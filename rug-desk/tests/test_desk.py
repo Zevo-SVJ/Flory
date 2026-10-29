@@ -1436,6 +1436,36 @@ class BacktestAlive(Base):
 
 class Shadow(Base):
     """GARDE's kills bought in shadow and replayed: the measure of the filter's value."""
+    def test_soft_pool_rules_can_be_waived_for_launches_only(self):
+        import market
+        m = {"price": 1.0, "liq_usd": 10000, "chain": "solana", "mcap": 500000, "buys_1h": 50, "sells_1h": 50,
+             "avg_trade_1h": 40, "vol_1h": 5000, "age_min": 120, "chg_1h": 5, "chg_5m": 0}
+        self.assertEqual(market.market_kill(m), "thin_pool")
+        self.assertEqual(market.market_kill(m, {"thin_pool"}), "fake_cap")      # 50x its pool
+        self.assertIsNone(market.market_kill(m, {"thin_pool", "fake_cap"}))
+        self.assertEqual(market.market_kill({**m, "liq_usd": 7000}, {"thin_pool", "fake_cap"}), "thin_pool")  # the floor
+        self.assertEqual(market.market_kill({**m, "age_min": 30}, set(market.SOFT_POOL)), "too_fresh")      # never waived
+        old = {**m, "age_min": 10000, "liq_usd": 200000, "mcap": 400000}
+        self.assertEqual(market.market_kill({**old, "liq_usd": 20000}, {"thin_pool"}), "thin_pool")     # survivors: no waiver
+
+    def test_scout_follows_a_few_soft_pool_kills_in_shadow(self):
+        import scan, shadow, paths
+        for f in (shadow.FILE, paths.GHOSTS):
+            if os.path.exists(f):
+                os.remove(f)
+        base = {"price": 1.0, "liq_usd": 12000, "chain": "solana", "mcap": 100000, "buys_1h": 50, "sells_1h": 50,
+                "avg_trade_1h": 40, "vol_1h": 5000, "age_min": 120, "chg_1h": 5, "symbol": "T"}
+        live = {f"Mint{i}": dict(base) for i in range(6)}
+        live["Fresh"] = {**base, "age_min": 10}
+        live["Tiny"] = {**base, "liq_usd": 3000}
+        n = scan.sample_shadow(live, set())
+        self.assertEqual(n, config.FACTS["shadow_pool_per_run"])
+        got = {r["mint"]: r["reason"] for r in shadow._rows()}
+        self.assertNotIn("Fresh", got)
+        self.assertNotIn("Tiny", got)
+        self.assertEqual(set(got.values()), {"thin_pool"})
+        self.assertEqual(scan.sample_shadow(live, set()), config.FACTS["shadow_pool_per_run"])   # the next ones, never twice
+
     def test_a_kill_is_followed_once_and_scored_after_6h(self):
         import shadow, paths
         for f in (shadow.FILE, paths.GHOSTS):
@@ -1446,7 +1476,7 @@ class Shadow(Base):
         self.assertFalse(shadow.note(MINT, v))                     # a retried kill is the same token
         self.assertIn(MINT, paths.ghosts())
         self.assertFalse(shadow.note("Other", {**v, "stage": "limits", "reason": "max_open"}))
-        self.assertFalse(shadow.note("Thin", {**v, "stage": "pool", "reason": "thin_pool"}))
+        self.assertFalse(shadow.note("Fresh", {**v, "stage": "pool", "reason": "too_fresh"}))
         self.assertEqual(shadow.results()["waiting"], 1)
         rows = shadow._rows()
         t0 = time.time() - 7 * 3600

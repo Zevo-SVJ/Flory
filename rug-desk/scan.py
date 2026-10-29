@@ -119,8 +119,33 @@ def gt_trending() -> list[str]:
     return out
 
 
+FUNNEL = os.path.join(os.path.dirname(LOG), "funnel.jsonl")   # one line per SCOUT run: python3 diag.py --entonnoir
+
+
+def sample_shadow(live: dict, waived: set) -> int:
+    """Launches killed by a soft pool rule never reach GARDE, so nothing said whether those rules protect.
+    a few per run are followed 6 h in shadow like GARDE's kills: the shadow book judges each rule, and
+    one that clearly cost money stops applying by itself (shadow.waived). nothing is bought."""
+    import shadow, paths
+    if len(paths.ghosts()) >= FACTS["shadow_max_ghosts"]:
+        return 0
+    done = {r["mint"] for r in shadow._rows()}
+    n = 0
+    for m, p in live.items():
+        if n >= FACTS["shadow_pool_per_run"]:
+            break
+        k = market_kill(p, waived) if p else None
+        if (m in done or k not in market.SOFT_POOL or market.lane(p) != "early"
+                or (p.get("age_min") or 0) < FACTS["min_age_min"] or (p.get("liq_usd") or 0) < FACTS["soft_liq_floor_usd"]):
+            continue
+        n += shadow.note(m, {"verdict": "SKIP", "stage": "pool", "reason": k, "symbol": p.get("symbol"),
+                             "price": p.get("price"), "liq_usd": p.get("liq_usd")})
+    return n
+
+
 def leads() -> list[str]:
-    done, out, errors = _done(), [], []
+    import shadow
+    done, out, errors, waived = _done(), [], [], shadow.waived()
     for src in SOURCES:
         try:
             r = requests.get(f"https://api.dexscreener.com/{src}", timeout=15)
@@ -134,7 +159,7 @@ def leads() -> list[str]:
             if k and k not in done and k not in out:
                 out.append(k)
     live = market.pools(out)
-    trending = [(live[m] or {}).get("symbol") for m in out if live.get(m) and not market_kill(live[m])]
+    trending = [(live[m] or {}).get("symbol") for m in out if live.get(m) and not market_kill(live[m], waived)]
     found = searched(trending)
     if len(errors) == len(SOURCES) and not found:
         raise RuntimeError("; ".join(errors))
@@ -178,7 +203,7 @@ def leads() -> list[str]:
     funnel = {"early": {}, "momentum": {}}
     for m in out:
         p = live.get(m)
-        k = market_kill(p) or "→ GARDE"
+        k = market_kill(p, waived) or "→ GARDE"
         f = funnel[market.lane(p) if p else "early"]
         f[k] = f.get(k, 0) + 1
     by_chain = {}
@@ -187,7 +212,17 @@ def leads() -> list[str]:
     last_funnel = {"leads": len(out), "graduates": len(graduates), "evm_new": len(fresh_evm), "chains": by_chain,
                    "trending": len(trend), "jupiter_top": len(top),
                    "feeds_and_search": n_feeds_search_grads - len(graduates), **funnel}
-    ok = [m for m in out if not market_kill(live[m])]
+    try:
+        shadowed = sample_shadow({m: live.get(m) for m in out}, waived)
+    except Exception:
+        shadowed = 0                           # the sample is a bonus: SCOUT never fails for it
+    last_funnel["shadowed"] = shadowed
+    try:
+        with open(FUNNEL, "a") as f:
+            f.write(json.dumps({"t": round(time.time()), **last_funnel}) + "\n")
+    except OSError:
+        pass
+    ok = [m for m in out if not market_kill(live[m], waived)]
     # best pools first, and the two lanes take turns, so momentum's big volumes never crowd out launches
     # SCOUT's self-review ranks its sources by what their tokens earned (coach source_rank, guarded):
     # the best sources first, then by volume. a source is never dropped, only looked at later

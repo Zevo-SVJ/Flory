@@ -192,7 +192,7 @@ def decide() -> list[dict]:
                 out.append({"kind": "kill", "text": f"${sym} X said BUY but skipped (limits): {g}", "symbol": sym})
                 continue
             m = pool(mint)                     # the price moved while ECHO read: buy at today's pool, not the PASS one
-            if (k := market_kill(m)):
+            if (k := market_kill(m, __import__("shadow").waived())):
                 out.append({"kind": "kill", "text": f"${sym} X said BUY but the pool changed: {k}", "symbol": sym})
                 continue
             # momentum check: the wait for ECHO can be long. a token that fell hard or turned to

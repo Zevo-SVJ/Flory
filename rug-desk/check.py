@@ -129,7 +129,7 @@ def check(mint: str) -> dict:
             "socials": len(mm.get("socials") or []) if m else None}
     seen.update({"price": (m or {}).get("price"), "liq_usd": (m or {}).get("liq_usd"), "age_min": (m or {}).get("age_min"),
             "lane": market.lane(m) if m else None})
-    if (k := market_kill(m)):
+    if (k := market_kill(m, waived)):
         return {"stage": "pool", "verdict": "SKIP", "reason": k, "symbol": (m or {}).get("symbol"), **seen}
     import chains
     evm = chains.is_evm(mint)
