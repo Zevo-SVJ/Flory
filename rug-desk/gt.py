@@ -11,6 +11,9 @@ from config import DATA
 BUDGET = 9                  # calls per rolling minute, every process together (10 is the wall)
 BACKGROUND = 4              # the backtest never takes more: SCOUT always has 5 a minute
 COOL_S = 60                 # one 429 and nobody calls for a minute
+# Oct 29: 429s at ~6 calls a minute, well under the budget: SCOUT fired its 6 reads (new pools x4, trending
+# x2) within seconds and the 6th, trending 1 h, was refused run after run. the limit also counts bursts
+GAP_S = 4                   # seconds between two calls, every process together
 FILE = os.path.join(DATA, "gt_calls.json")
 
 
@@ -28,6 +31,7 @@ def _slot(background: bool, wait_max: float) -> bool:
             now = time.time()
             calls = [c for c in st.get("calls", []) if now - c[0] < 60]
             free = (now >= st.get("cool", 0) and len(calls) < BUDGET
+                    and (not calls or now - max(c[0] for c in calls) >= GAP_S)
                     and (not background or sum(1 for c in calls if c[1]) < BACKGROUND))
             if free:
                 calls.append([now, background])

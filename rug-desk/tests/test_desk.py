@@ -2173,12 +2173,15 @@ class Sources20(Base):
         if os.path.exists(gt.FILE):
             os.remove(gt.FILE)
         self.addCleanup(lambda: os.path.exists(gt.FILE) and os.remove(gt.FILE))
-        with mock.patch.object(gt, "BUDGET", 3), mock.patch.object(gt, "BACKGROUND", 1):
+        with mock.patch.object(gt, "GAP_S", 0), mock.patch.object(gt, "BUDGET", 3), mock.patch.object(gt, "BACKGROUND", 1):
             self.assertTrue(gt._slot(True, 0))             # the backtest takes its share...
             self.assertFalse(gt._slot(True, 0))            # ...and no more
             self.assertTrue(gt._slot(False, 0))            # SCOUT still has room
             self.assertTrue(gt._slot(False, 0))
             self.assertFalse(gt._slot(False, 0))           # the wall, for everyone
+        os.remove(gt.FILE)
+        self.assertTrue(gt._slot(False, 0))
+        self.assertFalse(gt._slot(False, 0))               # a burst: the next call waits GAP_S
         os.remove(gt.FILE)
         gt.cool(60)                                        # a 429: nobody calls for a minute
         self.assertFalse(gt._slot(False, 0))
