@@ -4,7 +4,7 @@
 #   - the DexScreener search, a rotating set of words, kept to PumpSwap pools in the age window.
 #     it finds survivors the paid lists miss (6 vs 3 on the first live test)
 # the filter decides the rest.
-import csv, json, os, time
+import csv, json, os, random, time
 import requests
 from config import LOG, SCHEDULE, FACTS
 import check, market, grads, sources, chains, evmnew, gt
@@ -130,14 +130,23 @@ def sample_shadow(live: dict, waived: set) -> int:
     if len(paths.ghosts()) >= FACTS["shadow_max_ghosts"]:
         return 0
     done = {r["mint"] for r in shadow._rows()}
-    n = 0
+    by = {}                                  # per rule, so thin pools (most of the kills) don't take every slot
     for m, p in live.items():
+        k = market_kill(p, waived) if p else None
+        if (m not in done and k in market.SOFT_POOL and market.lane(p) == "early"
+                and (p.get("age_min") or 0) >= FACTS["min_age_min"] and (p.get("liq_usd") or 0) >= FACTS["soft_liq_floor_usd"]):
+            by.setdefault(k, []).append(m)
+    for ms in by.values():
+        random.shuffle(ms)
+    n, turn = 0, []
+    while any(by.values()):
+        for k in list(by):
+            if by[k]:
+                turn.append((k, by[k].pop()))
+    for k, m in turn:
         if n >= FACTS["shadow_pool_per_run"]:
             break
-        k = market_kill(p, waived) if p else None
-        if (m in done or k not in market.SOFT_POOL or market.lane(p) != "early"
-                or (p.get("age_min") or 0) < FACTS["min_age_min"] or (p.get("liq_usd") or 0) < FACTS["soft_liq_floor_usd"]):
-            continue
+        p = live[m]
         n += shadow.note(m, {"verdict": "SKIP", "stage": "pool", "reason": k, "symbol": p.get("symbol"),
                              "price": p.get("price"), "liq_usd": p.get("liq_usd")})
     return n
@@ -211,7 +220,7 @@ def leads() -> list[str]:
         by_chain[chains.split(m)[0]] = by_chain.get(chains.split(m)[0], 0) + 1
     last_funnel = {"leads": len(out), "graduates": len(graduates), "evm_new": len(fresh_evm), "chains": by_chain,
                    "trending": len(trend), "jupiter_top": len(top),
-                   "feeds_and_search": n_feeds_search_grads - len(graduates), **funnel}
+                   "feeds_and_search": n_feeds_search_grads - len(graduates) - len(fresh_evm), **funnel}
     try:
         shadowed = sample_shadow({m: live.get(m) for m in out}, waived)
     except Exception:

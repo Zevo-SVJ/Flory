@@ -1455,7 +1455,7 @@ class Shadow(Base):
                 os.remove(f)
         base = {"price": 1.0, "liq_usd": 12000, "chain": "solana", "mcap": 100000, "buys_1h": 50, "sells_1h": 50,
                 "avg_trade_1h": 40, "vol_1h": 5000, "age_min": 120, "chg_1h": 5, "symbol": "T"}
-        live = {f"Mint{i}": dict(base) for i in range(6)}
+        live = {f"Mint{i}": dict(base) for i in range(10)}
         live["Fresh"] = {**base, "age_min": 10}
         live["Tiny"] = {**base, "liq_usd": 3000}
         n = scan.sample_shadow(live, set())
@@ -1465,6 +1465,9 @@ class Shadow(Base):
         self.assertNotIn("Tiny", got)
         self.assertEqual(set(got.values()), {"thin_pool"})
         self.assertEqual(scan.sample_shadow(live, set()), config.FACTS["shadow_pool_per_run"])   # the next ones, never twice
+        live["Cap"] = {**base, "liq_usd": 20000, "mcap": 900000}            # a rarer rule still gets its turn
+        self.assertGreaterEqual(scan.sample_shadow(live, set()), 1)
+        self.assertIn("fake_cap", {r["reason"] for r in shadow._rows()})
 
     def test_a_kill_is_followed_once_and_scored_after_6h(self):
         import shadow, paths

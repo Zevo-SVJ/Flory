@@ -86,6 +86,21 @@ if "--entonnoir" in sys.argv:
                  else f"levée à n {shadow.WAIVE_MIN_N}, moy. ≥ {shadow.WAIVE_MIN_MEAN}, 2 moitiés et borne > 0")
         print(f"  {d['reason'][:22]:22s} {d['n']:4d} {d['mean']:+7.1f} {d['win']:5.0%} {d['half1'] or 0:+7.1f} "
               f"{d['half2'] or 0:+7.1f} {d['low'] if d['low'] is not None else '-':>7} · {state}")
+    # the same, per chain, for the rules worth a closer look: a rule can protect on one chain and cost on another
+    import chains, statistics as st
+    per = {}
+    for row in shadow._rows():
+        if time.time() < float(row["t"]) + shadow.HOURS * 3600:
+            continue
+        x = shadow.replay(row)
+        if x is not None:
+            per.setdefault((row["reason"], chains.split(row["mint"])[0]), []).append(min(x, shadow.CAP_PCT))
+    print("PAR CHAÎNE (n ≥ 10) : raison · chaîne · n · moyenne · médiane · gagnants · 1re / 2e moitié")
+    for (reason, chain), xs in sorted(per.items(), key=lambda kv: -len(kv[1])):
+        if len(xs) >= 10:
+            h = len(xs) // 2
+            print(f"  {reason[:22]:22s} {chain:9s} {len(xs):4d} {st.mean(xs):+7.1f} {st.median(xs):+7.1f} "
+                  f"{sum(x > 0 for x in xs) / len(xs):5.0%} {st.mean(xs[:h]):+7.1f} / {st.mean(xs[h:]):+7.1f}")
     sys.exit(0)
 
 if "--pos" in sys.argv:
