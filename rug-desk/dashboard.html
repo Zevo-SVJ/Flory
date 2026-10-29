@@ -489,7 +489,11 @@ function drawChart() {
   const t1 = now, t0 = S.range_s ? now - S.range_s : pts[0][0];
   const before = pts[0][0] > t0 + 1 ? pts[0][0] : null;     // the desk wasn't logging yet
   const vals = pts.map(p => p[1]);
-  const vmin = Math.min(...vals), vmax = Math.max(...vals);
+  let vmin = Math.min(...vals), vmax = Math.max(...vals);
+  // the axis never spans less than 5% of the bankroll ($50 on $1,000): an $8 move drawn over the whole
+  // height looked like a crash (Oct 29). a real crash still fills the chart
+  const minSpan = Math.abs(base) * 0.05;
+  if (vmax - vmin < minSpan) { const mid = (vmax + vmin) / 2; vmin = mid - minSpan / 2; vmax = mid + minSpan / 2; }
   const padv = Math.max((vmax - vmin) * 0.05, 0.25);
   const lo = vmin - padv, hi = vmax + padv;
   const L = 2, R = 12, T = 30, B = 26;
