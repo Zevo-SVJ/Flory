@@ -92,30 +92,33 @@ gt_error = None
 
 
 def gt_trending() -> list[str]:
-    """GeckoTerminal's trending Solana pools over 5 min and 1 h (free, no key, ~10 calls a minute):
-    the tokens moving now, whatever their age. the momentum lane's main source."""
+    """GeckoTerminal's trending pools over 5 min and 1 h (free, no key, ~10 calls a minute):
+    the tokens moving now, whatever their age. a read that fails costs only its own list."""
     global gt_error
-    out = []
-    try:
-        for d in ("5m", "1h"):
+    out, failed = [], []
+    for d in ("5m", "1h"):
+        try:
             r = gt.get(GT, params={"duration": d, "page": 1})          # the shared budget (gt.py)
             r.raise_for_status()
-            for p in r.json().get("data") or []:
-                rel = p.get("relationships") or {}
-                net = ((rel.get("network") or {}).get("data") or {}).get("id") or ""
-                bid = ((rel.get("base_token") or {}).get("data") or {}).get("id") or ""
-                chain = chains.GT_TO_CHAIN.get(net)
-                name = ((p.get("attributes") or {}).get("name") or "").split(" / ")[0].strip().lower()
-                if not chain or not bid.startswith(net + "_") or name in chains.NOT_MEMES:
-                    continue
-                k = chains.key(chain, bid[len(net) + 1:])
-                if k not in NOT_MEMES and k not in out:
-                    out.append(k)
-        gt_error = None
-        sources.record("geckoterminal", True, f"{len(out)} tokens en tendance")
-    except Exception as e:
-        gt_error = f"GeckoTerminal trending unreadable: {e}"[:200]
-        sources.record("geckoterminal", False, str(e))
+            rows = r.json().get("data") or []
+        except Exception as e:
+            failed.append(f"{d}: {str(e)[:90]}")
+            continue
+        for p in rows:
+            rel = p.get("relationships") or {}
+            net = ((rel.get("network") or {}).get("data") or {}).get("id") or ""
+            bid = ((rel.get("base_token") or {}).get("data") or {}).get("id") or ""
+            chain = chains.GT_TO_CHAIN.get(net)
+            name = ((p.get("attributes") or {}).get("name") or "").split(" / ")[0].strip().lower()
+            if not chain or not bid.startswith(net + "_") or name in chains.NOT_MEMES:
+                continue
+            k = chains.key(chain, bid[len(net) + 1:])
+            if k not in NOT_MEMES and k not in out:
+                out.append(k)
+    gt_error = f"GeckoTerminal trending unreadable: {'; '.join(failed)}"[:200] if len(failed) == 2 else None
+    sources.record("geckoterminal", len(failed) < 2,
+                   f"{len(out)} tokens en tendance" + (f" (raté {failed[0]})" if len(failed) == 1 else "")
+                   if len(failed) < 2 else "; ".join(failed))
     return out
 
 
