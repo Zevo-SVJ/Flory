@@ -12,6 +12,7 @@
 #
 #   python3 snipelab.py run        in a Terminal tab of its own, leave it open (it reconnects by itself)
 #   python3 snipelab.py report     the result so far
+#   python3 snipelab.py sonde      90 s: does PumpPortal send the trades of the launches we follow?
 #
 # data: PumpPortal's free public websocket (one connection, new tokens + the trades of the followed ones).
 import asyncio, json, os, random, statistics, sys, time
@@ -57,6 +58,7 @@ class Lab:
         self.tracked: dict[str, dict] = {}
         self.blacklist = ruggers.known()
         self.counts: dict[str, int] = {}
+        self.msgs: dict[str, int] = {}       # every message by type: 0 trades means the trade stream is not coming
 
     def on_create(self, ev: dict, now: float) -> str | None:
         """Returns the mint to subscribe to, or None."""
@@ -169,6 +171,10 @@ async def run():
                             ev = json.loads(msg)
                         except ValueError:
                             ev = {}
+                        kind = ev.get("txType") or ("message" if "message" in ev or "errors" in ev else "other")
+                        lab.msgs[kind] = lab.msgs.get(kind, 0) + 1
+                        if kind in ("message", "other") and lab.msgs[kind] <= 3:
+                            print(f"[{time.strftime('%H:%M:%S')}] PumpPortal dit : {str(msg)[:200]}", flush=True)
                         if ev.get("txType") == "create":
                             m = lab.on_create(ev, now)
                             if m:
@@ -183,7 +189,8 @@ async def run():
                     if now - last_note > 600:
                         r = report()
                         print(f"[{time.strftime('%H:%M:%S')}] {r['entered']} entrées · "
-                              f"{r.get('mean_net_pct', '-')} % net moyen · {r['verdict']} · lancements vus : {lab.counts}",
+                              f"{r.get('mean_net_pct', '-')} % net moyen · {r['verdict']} · lancements vus : {lab.counts} · "
+                              f"messages reçus : {lab.msgs}",
                               flush=True)
                         last_note = now
         except Exception as e:
@@ -192,8 +199,39 @@ async def run():
             backoff = min(60, backoff * 2)
 
 
+async def probe(seconds: int = 90):
+    """Does the trade stream come? subscribes to the first 3 launches' trades and prints every message that
+    is not a launch. a few buys and sells per token within a minute is normal; nothing means no trades."""
+    import websockets
+    subs, kinds, t_end = [], {}, time.time() + seconds
+    async with websockets.connect(URL, ping_interval=20, ping_timeout=20, max_size=2 ** 22) as ws:
+        await ws.send(json.dumps({"method": "subscribeNewToken"}))
+        while time.time() < t_end:
+            try:
+                msg = await asyncio.wait_for(ws.recv(), timeout=2.0)
+            except asyncio.TimeoutError:
+                continue
+            try:
+                ev = json.loads(msg)
+            except ValueError:
+                ev = {}
+            k = ev.get("txType") or "autre"
+            kinds[k] = kinds.get(k, 0) + 1
+            if k == "create" and len(subs) < 3:
+                subs.append(ev["mint"])
+                await ws.send(json.dumps({"method": "subscribeTokenTrade", "keys": [ev["mint"]]}))
+                print(f"abonné aux trades de {ev.get('symbol')} {ev['mint']}", flush=True)
+            elif k != "create":
+                print(f"{k} : {str(msg)[:160]}", flush=True)
+    print(f"en {seconds} s : {kinds}")
+    print("VERDICT :", "les trades arrivent" if kinds.get("buy", 0) + kinds.get("sell", 0) else
+          "AUCUN trade reçu : le flux des trades ne vient pas (voir les messages ci-dessus)")
+
+
 if __name__ == "__main__":
-    if sys.argv[1:] == ["run"]:
+    if sys.argv[1:] == ["sonde"]:
+        asyncio.run(probe())
+    elif sys.argv[1:] == ["run"]:
         print("sniper à blanc : rien n'est jamais acheté. Ctrl+C pour arrêter.", flush=True)
         try:
             asyncio.run(run())

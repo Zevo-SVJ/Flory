@@ -7,6 +7,14 @@ from collections import Counter
 from config import LOG, TRADES, EVENTS, DATA, MIN_SCORE, DAILY_LOSS_HALT_USD, FACTS, AUDIT
 import book
 
+def rows(path):
+    try:
+        with open(path, newline="") as f:
+            return list(csv.DictReader(f))
+    except OSError:
+        return []
+
+
 if "--trades" in sys.argv:
     # every trade since the start, one line each, for an outside review: when, where, why it was bought,
     # how it ended. reads trades.csv and checks.csv only
@@ -189,14 +197,6 @@ if "--pos" in sys.argv:
 H = float(sys.argv[1]) if len(sys.argv) > 1 else 6
 since = time.time() - H * 3600
 cut = time.strftime("%Y-%m-%d %H:%M", time.localtime(since))
-
-
-def rows(path):
-    try:
-        with open(path, newline="") as f:
-            return list(csv.DictReader(f))
-    except OSError:
-        return []
 
 
 print(f"== les {H:.0f} dernières heures (depuis {cut})")
