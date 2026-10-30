@@ -390,6 +390,24 @@ class ExitByChain(unittest.TestCase):
         self.assertEqual(exits.for_mint(chains.key("bsc", "0x" + "ab" * 20), b), b)
 
 
+class LpOpen(unittest.TestCase):
+    def test_an_unlocked_lp_opens_only_on_its_chain_and_only_while_the_shadow_book_pays(self):
+        import shadow
+        rows = [("lp_unlocked", x, "robinhood:0x" + "%040d" % i) for i, x in enumerate([-5, 30, -3, 20, -4, 25] * 20)]
+        shadow._lp_open.clear(); shadow._res["v"] = None
+        with mock.patch.object(shadow, "results", lambda: {"rows": rows}):
+            self.assertTrue(shadow.lp_open_ok("robinhood"))
+            self.assertFalse(shadow.lp_open_ok("bsc"))                      # not a chain it was shown on
+        shadow._lp_open.clear(); shadow._res["v"] = None
+        luck = [("lp_unlocked", x, "robinhood:0x" + "%040d" % i) for i, x in enumerate([-5] * 115 + [900] * 5)]
+        with mock.patch.object(shadow, "results", lambda: {"rows": luck}):
+            self.assertFalse(shadow.lp_open_ok("robinhood"))                # five lucky tokens are not a case
+        shadow._lp_open.clear(); shadow._res["v"] = None
+        with mock.patch.object(shadow, "results", lambda: {"rows": rows[:60]}):
+            self.assertFalse(shadow.lp_open_ok("robinhood"))                # too few
+        shadow._lp_open.clear(); shadow._res["v"] = None
+
+
 class SnipeLab(unittest.TestCase):
     def setUp(self):
         import snipelab
@@ -1528,9 +1546,10 @@ class Waiver(Base):
             {"reason": "low_score", "n": 12, "mean": 30.0, "half1": 20.0, "half2": 40.0},   # too few
             {"reason": "whale", "n": 40, "mean": 20.0, "half1": 20.0, "half2": 20.0},       # hard
             {"reason": "lp_unverified", "n": 30, "mean": -12.0, "half1": -10.0, "half2": -14.0}]}
-        shadow._waived["t"] = 0
+        shadow._waived["t"], shadow._res["v"] = 0, None
         with mock.patch.object(shadow, "results", return_value=res):
             self.assertEqual(shadow.waived(), {"bundle_same_sol"})
+        shadow._res["v"] = None
         shadow._waived.update(t=0, v=set())
 
     def test_fact_kill_passes_over_a_lifted_reason_and_applies_the_rest(self):

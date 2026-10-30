@@ -183,7 +183,13 @@ def check(mint: str) -> dict:
     except Exception:
         pass
     smart.snapshot(mint, token.get("all_owners") or token.get("wallets"))
-    if (k := fact_kill(token, market.lane(m), waived)) and not _model_override(k, seen):
+    # Robinhood Chain: an unlocked LP is bought small while the shadow book keeps showing it pays (config LP_OPEN)
+    lp_open = (PAPER and market.lane(m) == "early" and token.get("lp_burned_pct") is not None
+               and token["lp_burned_pct"] < FACTS["min_lp_locked_pct"] and shadow.lp_open_ok(chains_split(mint)))
+    if lp_open:
+        seen["lp_open"] = True
+    if (k := fact_kill(token, market.lane(m), set(waived) | ({"lp_unlocked"} if lp_open else set()))) \
+            and not _model_override(k, seen):
         return {"stage": "facts", "verdict": "SKIP", "reason": k,
                 "symbol": m["symbol"] or token["symbol"], **seen}
     if k:
@@ -199,6 +205,11 @@ def check(mint: str) -> dict:
             return {"stage": "deep", "verdict": "SKIP", "reason": deep["kill"], "symbol": sym, **seen,
                     "score": sc["score"]}
     usd, tier, sig = size.ticket({"score": sc["score"]}, m, token)
+    if lp_open and tier == "base":             # a hot one stays refused (hot_skip); the rest, its own small tier
+        equity = PAPER_BANKROLL_USD + book.realized()
+        usd = round(max(min(equity * SIZING["lp_open"] / 100, m["liq_usd"] * FACTS["max_ticket_share"], book.cash()),
+                        min(TICKET_USD, book.cash())), 2)
+        tier = "lp_open"
     if held:                                   # the pool soft kill held above: applied unless the model expects a profit
         exp = _expected(seen, held)
         if exp is None or exp < __import__("learn").OVERRIDE_PCT:

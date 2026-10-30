@@ -61,7 +61,14 @@ SIZING = {"base": 4, "strong": 4, "max": 4,
           # OFF since Oct 19 23:30: AUDIT's 6 h re-price had the full passes scored under 55 at -85% median,
           # 75% of them down 50% or more (n=8), against -16% for those scored 55+ (n=11). the score protects.
           # the floor above MIN_SCORE switches the tier off; lower it to test again
-          "explore": 2, "explore_min_score": 101}
+          "explore": 2, "explore_min_score": 101,
+          # Oct 30: tokens killed only for an unlocked LP, replayed in shadow: Robinhood +16.2% a trade over 212
+          # (both halves +9.9 / +22.5, 42% winners), BSC -6.6% over 32. on Robinhood Chain the launchpads
+          # leave the LP unlocked and a pull shows in the replay (pool drained, sold at what is left). those
+          # tokens are now bought small, every other check and the score still applying, only while the
+          # shadow book keeps the case: shadow.lp_open_ok() (n, mean without its 5 best, both halves)
+          "lp_open": 2}
+LP_OPEN = {"chains": ("robinhood",), "min_n": 100, "drop_best": 5}   # paper only: live.py trades BSC alone
 MAX_OPEN = 40               # safety net only: cash runs out first (1000 / 25 = 40)
 MAX_ENTRIES_PER_DAY = 40
 DAILY_LOSS_HALT_USD = 250   # realized loss today hits this -> no new entries until tomorrow

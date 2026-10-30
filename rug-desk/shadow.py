@@ -95,6 +95,41 @@ WAIVE_MIN_MEAN = 5.0        # net % per trade, after costs, and positive on both
 _waived = {"t": 0.0, "v": set()}
 
 
+_lp_open = {}
+_res = {"t": 0.0, "v": None}
+
+
+def cached_results() -> dict:
+    """results(), at most once every 10 min for the whole desk: each call replays thousands of paths."""
+    if _res["v"] is None or time.time() - _res["t"] > 600:
+        _res["v"], _res["t"] = results(), time.time()
+    return _res["v"]
+
+
+def lp_open_ok(chain: str) -> bool:
+    """Does an unlocked LP still pay on this chain? the shadow tokens killed for it: at least min_n of them,
+    positive on average once their drop_best best are taken out, and on both halves. cached 10 min."""
+    from config import LP_OPEN
+    if chain not in LP_OPEN["chains"]:
+        return False
+    hit = _lp_open.get(chain)
+    if hit and time.time() - hit[0] < 600:
+        return hit[1]
+    import chains
+    try:
+        xs = [x for reason, x, mint in cached_results()["rows"]
+              if reason == "lp_unlocked" and chains.split(mint)[0] == chain]
+    except Exception:
+        xs = []
+    ok = False
+    if len(xs) >= LP_OPEN["min_n"]:
+        h = len(xs) // 2
+        ok = (statistics.mean(sorted(xs)[:-LP_OPEN["drop_best"]]) > 0
+              and statistics.mean(xs[:h]) > 0 and statistics.mean(xs[h:]) > 0)
+    _lp_open[chain] = (time.time(), ok)
+    return ok
+
+
 def waived_from(r: dict) -> set:
     """The soft reasons results() `r` lifts: shadow buys that made money, clearly and on both halves."""
     return {d["reason"] for d in r["reasons"]
@@ -109,7 +144,7 @@ def waived() -> set:
     on both halves. a reason that protects (shadow buys lose) stays. cached 10 min."""
     if time.time() - _waived["t"] > 600:
         try:
-            _waived["v"] = waived_from(results())
+            _waived["v"] = waived_from(cached_results())
         except Exception:
             _waived["v"] = set()
         _waived["t"] = time.time()
