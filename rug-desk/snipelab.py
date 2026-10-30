@@ -12,10 +12,14 @@
 #
 #   python3 snipelab.py run        in a Terminal tab of its own, leave it open (it reconnects by itself)
 #   python3 snipelab.py report     the result so far
-#   python3 snipelab.py sonde      90 s: does PumpPortal send the trades of the launches we follow?
+#   python3 snipelab.py sonde      90 s: do the prices of the launches we follow come in?
 #
-# data: PumpPortal's free public websocket (one connection, new tokens + the trades of the followed ones).
-import asyncio, json, os, random, statistics, sys, time
+# data: PumpPortal's free public websocket for the launches. its trade stream needs an API key funded with
+# 0.02 SOL (Oct 30: 4,334 launches followed, 0 trades received), so the price comes from the chain instead:
+# each followed launch's bonding-curve account, watched on the Helius websocket (SOLANA_RPC in .env). the
+# account changes on every buy and sell, and its reserves are the curve's price, the same numbers
+# PumpPortal's trades carried.
+import asyncio, base64, json, os, random, statistics, struct, sys, time
 from config import DATA, SNIPE
 import ruggers
 
@@ -34,6 +38,28 @@ def price(ev: dict) -> float | None:
     except (TypeError, ValueError):
         pass
     return None
+
+
+def curve(data_b64: str) -> dict | None:
+    """A pump.fun bonding-curve account -> the reserves PumpPortal's trade events carried (SOL and whole
+    tokens, 6 decimals). layout: 8-byte discriminator, then u64 virtual token reserves, virtual SOL
+    reserves, real token reserves, real SOL reserves, total supply, then the bool "complete"."""
+    try:
+        raw = base64.b64decode(data_b64)
+        vtok, vsol = struct.unpack_from("<QQ", raw, 8)
+        complete = bool(raw[48]) if len(raw) > 48 else False
+    except Exception:
+        return None
+    if not vtok or not vsol:
+        return None
+    return {"vSolInBondingCurve": vsol / 1e9, "vTokensInBondingCurve": vtok / 1e6, "complete": complete}
+
+
+def ws_url() -> str | None:
+    """The Helius websocket, from the RPC URL in .env. None without Helius: the public RPC drops sockets."""
+    import facts
+    u = facts.RPC_URL or ""
+    return u.replace("https://", "wss://", 1) if "helius" in u else None
 
 
 def launch_kill(ev: dict, blacklist: set) -> str | None:
@@ -70,7 +96,8 @@ class Lab:
         if why or len(self.tracked) >= SNIPE["max_tracked"] or self.rng.random() > 1 / SNIPE["sample_every"]:
             return None
         self.tracked[mint] = {"mint": mint, "symbol": ev.get("symbol"), "dev": ev.get("traderPublicKey"),
-                              "t0": now, "launch_px": price(ev), "entry": None, "pts": []}
+                              "curve": ev.get("bondingCurveKey"), "t0": now, "launch_px": price(ev),
+                              "entry": None, "pts": []}
         return mint
 
     def on_trade(self, ev: dict, now: float):
@@ -150,49 +177,95 @@ def report(rs: list[dict] | None = None) -> dict:
 
 
 async def run():
+    """Two sockets: PumpPortal says what launches, Helius says what each followed curve does."""
     import websockets
+    hel = ws_url()
+    if not hel:
+        print("pas de Helius dans .env (SOLANA_RPC) : le sniper à blanc ne peut pas lire les prix", flush=True)
+        return
     lab, backoff = Lab(), 2
     while True:
         try:
-            async with websockets.connect(URL, ping_interval=20, ping_timeout=20, max_size=2 ** 22) as ws:
-                await ws.send(json.dumps({"method": "subscribeNewToken"}))
-                if lab.tracked:
-                    await ws.send(json.dumps({"method": "subscribeTokenTrade", "keys": list(lab.tracked)}))
-                print(f"[{time.strftime('%H:%M:%S')}] connecté à PumpPortal, {len(lab.tracked)} token(s) suivis", flush=True)
-                backoff, last_note = 2, time.time()
-                while True:
-                    try:
-                        msg = await asyncio.wait_for(ws.recv(), timeout=1.0)
-                    except asyncio.TimeoutError:
-                        msg = None
-                    now = time.time()
-                    if msg:
+            async with websockets.connect(URL, ping_interval=20, ping_timeout=20, max_size=2 ** 22) as pp, \
+                    websockets.connect(hel, ping_interval=20, ping_timeout=20, max_size=2 ** 22) as hs:
+                await pp.send(json.dumps({"method": "subscribeNewToken"}))
+                lab.tracked.clear()               # their curves were watched on the old socket: start over
+                pending, subs, mints, req = {}, {}, {}, [0]
+
+                async def watch(mint):
+                    req[0] += 1
+                    pending[req[0]] = mint
+                    await hs.send(json.dumps({"jsonrpc": "2.0", "id": req[0], "method": "accountSubscribe",
+                                              "params": [lab.tracked[mint]["curve"],
+                                                         {"encoding": "base64", "commitment": "confirmed"}]}))
+
+                async def launches():
+                    async for msg in pp:
                         try:
                             ev = json.loads(msg)
                         except ValueError:
-                            ev = {}
-                        kind = ev.get("txType") or ("message" if "message" in ev or "errors" in ev else "other")
+                            continue
+                        kind = ev.get("txType") or "message"
                         lab.msgs[kind] = lab.msgs.get(kind, 0) + 1
-                        if kind in ("message", "other") and lab.msgs[kind] <= 3:
-                            print(f"[{time.strftime('%H:%M:%S')}] PumpPortal dit : {str(msg)[:200]}", flush=True)
-                        if ev.get("txType") == "create":
-                            m = lab.on_create(ev, now)
-                            if m:
-                                await ws.send(json.dumps({"method": "subscribeTokenTrade", "keys": [m]}))
-                        elif ev.get("txType") in ("buy", "sell"):
-                            lab.on_trade(ev, now)
-                    done = lab.due(now)
-                    for m in done:
-                        save(lab.finish(m))
-                    if done:
-                        await ws.send(json.dumps({"method": "unsubscribeTokenTrade", "keys": done}))
-                    if now - last_note > 600:
-                        r = report()
-                        print(f"[{time.strftime('%H:%M:%S')}] {r['entered']} entrées · "
-                              f"{r.get('mean_net_pct', '-')} % net moyen · {r['verdict']} · lancements vus : {lab.counts} · "
-                              f"messages reçus : {lab.msgs}",
-                              flush=True)
-                        last_note = now
+                        if kind == "create":
+                            m = lab.on_create(ev, time.time())
+                            if m and lab.tracked[m].get("curve"):
+                                await watch(m)
+                            elif m:
+                                lab.tracked.pop(m, None)
+
+                async def curves():
+                    async for msg in hs:
+                        try:
+                            ev = json.loads(msg)
+                        except ValueError:
+                            continue
+                        if "id" in ev and ev["id"] in pending:
+                            m = pending.pop(ev["id"])
+                            if "result" in ev and m in lab.tracked:
+                                subs[ev["result"]], mints[m] = m, ev["result"]
+                            elif "error" in ev and lab.msgs.get("helius_error", 0) < 3:
+                                print(f"[{time.strftime('%H:%M:%S')}] Helius dit : {str(ev['error'])[:160]}", flush=True)
+                            lab.msgs["helius_error" if "error" in ev else "subscribed"] = \
+                                lab.msgs.get("helius_error" if "error" in ev else "subscribed", 0) + 1
+                            continue
+                        p = ev.get("params") or {}
+                        m = subs.get(p.get("subscription"))
+                        data = (((p.get("result") or {}).get("value") or {}).get("data") or [None])[0]
+                        c = curve(data) if m and data else None
+                        if c:
+                            lab.msgs["curve"] = lab.msgs.get("curve", 0) + 1
+                            lab.on_trade({"mint": m, **c}, time.time())
+
+                async def clock():
+                    last_note = time.time()
+                    while True:
+                        await asyncio.sleep(1)
+                        now = time.time()
+                        for m in lab.due(now):
+                            save(lab.finish(m))
+                            sid = mints.pop(m, None)
+                            if sid is not None:
+                                subs.pop(sid, None)
+                                req[0] += 1
+                                await hs.send(json.dumps({"jsonrpc": "2.0", "id": req[0], "method": "accountUnsubscribe",
+                                                          "params": [sid]}))
+                        if now - last_note > 600:
+                            r = report()
+                            print(f"[{time.strftime('%H:%M:%S')}] {r['entered']} entrées · {r.get('mean_net_pct', '-')} % net moyen · "
+                                  f"{r['verdict']} · lancements vus : {lab.counts} · messages : {lab.msgs}", flush=True)
+                            last_note = now
+
+                print(f"[{time.strftime('%H:%M:%S')}] connecté à PumpPortal (lancements) et Helius (prix)", flush=True)
+                backoff = 2
+                tasks = [asyncio.create_task(x()) for x in (launches, curves, clock)]
+                done, rest = await asyncio.wait(tasks, return_when=asyncio.FIRST_EXCEPTION)
+                for t in rest:
+                    t.cancel()
+                for t in done:
+                    if t.exception():
+                        raise t.exception()
+                raise RuntimeError("un flux s'est fermé")
         except Exception as e:
             print(f"[{time.strftime('%H:%M:%S')}] flux coupé ({str(e)[:100]}), reconnexion dans {backoff} s", flush=True)
             await asyncio.sleep(backoff)
@@ -200,32 +273,39 @@ async def run():
 
 
 async def probe(seconds: int = 90):
-    """Does the trade stream come? subscribes to the first 3 launches' trades and prints every message that
-    is not a launch. a few buys and sells per token within a minute is normal; nothing means no trades."""
+    """Do the prices come? follows the first 3 launches' bonding curves on Helius for `seconds` and prints
+    every update. a few per token within a minute is normal; nothing means no prices."""
     import websockets
-    subs, kinds, t_end = [], {}, time.time() + seconds
-    async with websockets.connect(URL, ping_interval=20, ping_timeout=20, max_size=2 ** 22) as ws:
-        await ws.send(json.dumps({"method": "subscribeNewToken"}))
+    hel = ws_url()
+    if not hel:
+        print("VERDICT : pas de Helius dans .env (SOLANA_RPC), le sniper ne peut pas lire les prix")
+        return
+    n, subs, t_end = {}, {}, time.time() + seconds
+    async with websockets.connect(URL, ping_interval=20, ping_timeout=20, max_size=2 ** 22) as pp, \
+            websockets.connect(hel, ping_interval=20, ping_timeout=20, max_size=2 ** 22) as hs:
+        await pp.send(json.dumps({"method": "subscribeNewToken"}))
         while time.time() < t_end:
-            try:
-                msg = await asyncio.wait_for(ws.recv(), timeout=2.0)
-            except asyncio.TimeoutError:
-                continue
-            try:
+            for ws in (pp, hs):
+                try:
+                    msg = await asyncio.wait_for(ws.recv(), timeout=0.5)
+                except asyncio.TimeoutError:
+                    continue
                 ev = json.loads(msg)
-            except ValueError:
-                ev = {}
-            k = ev.get("txType") or "autre"
-            kinds[k] = kinds.get(k, 0) + 1
-            if k == "create" and len(subs) < 3:
-                subs.append(ev["mint"])
-                await ws.send(json.dumps({"method": "subscribeTokenTrade", "keys": [ev["mint"]]}))
-                print(f"abonné aux trades de {ev.get('symbol')} {ev['mint']}", flush=True)
-            elif k != "create":
-                print(f"{k} : {str(msg)[:160]}", flush=True)
-    print(f"en {seconds} s : {kinds}")
-    print("VERDICT :", "les trades arrivent" if kinds.get("buy", 0) + kinds.get("sell", 0) else
-          "AUCUN trade reçu : le flux des trades ne vient pas (voir les messages ci-dessus)")
+                if ev.get("txType") == "create" and len(subs) < 3 and ev.get("bondingCurveKey"):
+                    subs[len(subs) + 1] = ev.get("symbol")
+                    await hs.send(json.dumps({"jsonrpc": "2.0", "id": len(subs), "method": "accountSubscribe",
+                                              "params": [ev["bondingCurveKey"], {"encoding": "base64", "commitment": "confirmed"}]}))
+                    print(f"suivi de {ev.get('symbol')} (courbe {ev['bondingCurveKey'][:8]}…)", flush=True)
+                elif "error" in ev:
+                    print("Helius dit :", str(ev["error"])[:200], flush=True)
+                elif ev.get("method") == "accountNotification":
+                    c = curve(ev["params"]["result"]["value"]["data"][0])
+                    n["prix"] = n.get("prix", 0) + 1
+                    if c:
+                        print(f"  prix {c['vSolInBondingCurve'] / c['vTokensInBondingCurve']:.3e} SOL · courbe {c['vSolInBondingCurve']:.1f} SOL", flush=True)
+    print(f"en {seconds} s : {n.get('prix', 0)} mises à jour de prix pour {len(subs)} lancements suivis")
+    print("VERDICT :", "les prix arrivent : relance  python3 snipelab.py run" if n.get("prix") else
+          "AUCUN prix reçu (voir les messages ci-dessus)")
 
 
 if __name__ == "__main__":

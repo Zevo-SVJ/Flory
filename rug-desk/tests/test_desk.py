@@ -427,6 +427,16 @@ class SnipeLab(unittest.TestCase):
         self.assertAlmostEqual(row["delay_s"], 3.0)
         self.assertAlmostEqual(e, 33.0 / 1e9)
 
+    def test_the_curve_account_gives_the_price_the_trades_gave(self):
+        import snipelab, base64, struct
+        raw = b"\x00" * 8 + struct.pack("<QQQQQ", 800_000_000 * 10**6, 33 * 10**9, 0, 0, 10**15) + b"\x00" + b"\x11" * 32
+        c = snipelab.curve(base64.b64encode(raw).decode())
+        self.assertAlmostEqual(c["vSolInBondingCurve"], 33.0)
+        self.assertAlmostEqual(c["vTokensInBondingCurve"], 8e8)
+        self.assertFalse(c["complete"])
+        self.assertAlmostEqual(snipelab.price(c), 33.0 / 8e8)              # same units as a launch event
+        self.assertIsNone(snipelab.curve("not base64!"))
+
     def test_report_applies_the_rule(self):
         import snipelab
         self.assertIn("pas encore", snipelab.report([{"entered": True, "net_pct": 5, "delay_s": 3,
