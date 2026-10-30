@@ -2,7 +2,7 @@
 # why did the desk buy nothing? every stage of the last hours, from the desk's own files, in one page.
 #   python3 diag.py        (last 6 h)      python3 diag.py 24      (last 24 h)
 # reads only: no network call, nothing written.
-import csv, json, os, sys, time
+import csv, json, os, statistics, sys, time
 from collections import Counter
 from config import LOG, TRADES, EVENTS, DATA, MIN_SCORE, DAILY_LOSS_HALT_USD, FACTS, AUDIT
 import book
@@ -40,6 +40,71 @@ if "--trades" in sys.argv:
     print("\n".join(lines))
     for m, o in opened.items():
         print(f"ouvert : {o['t']} {m[:20]} mise {o['usd']:.2f} $")
+    sys.exit(0)
+
+if "--pourquoi" in sys.argv:
+    # where the money went, trade by trade, under the rules in force: chain, exit, how high each trade went
+    # before it closed (a loser that was up 30%+ is an exit problem, one never up 10% an entry problem), and
+    # what the exit engine replayed on the same recorded path would have made: real vs replay is the
+    # execution gap (fills, stale prices, sales VIGIE made that the engine would not).
+    #   python3 diag.py --pourquoi
+    import chains, exits, exitlab, paths
+    from config import RULES_SINCE, EXIT
+    B_SINCE = "2026-10-26 05:03"          # the "regles B" exits took over
+    ts = lambda s: time.mktime(time.strptime(s, "%Y-%m-%d %H:%M"))
+    opened, done = {}, []
+    for t in book.trades():
+        if t["action"] == "open":
+            opened[t["mint"]] = {"t": t["time"], "usd": float(t["usd"] or 0), "pnl": 0.0, "why": [], "sym": t["symbol"]}
+        elif t["mint"] in opened:
+            o = opened[t["mint"]]
+            o["pnl"] += float(t["pnl"])
+            o["why"].append(t["reason"].split(" ")[0][:18])
+            if t["action"] == "close":
+                o["closed"] = t["time"]
+                done.append((t["mint"], opened.pop(t["mint"])))
+    done = [(m, o) for m, o in done if o["t"] >= RULES_SINCE]
+    print(f"== {len(done)} trades clôturés depuis {RULES_SINCE} (règles actuelles)")
+    print("ouvert           chaîne     token        mise   réel %   haut %   bas %  durée  rejoué actif % / config %  sortie")
+    agg, rr = {}, []
+    for m, o in done:
+        chain = chains.split(m)[0]
+        t0, t1 = ts(o["t"]), ts(o["closed"])
+        path = paths.load(m, since=t0 - 60)
+        inside = [p for p in path if p["t"] <= t1 + 60]
+        real = 100 * o["pnl"] / max(o["usd"], 1e-9)
+        hi = lo = rep_a = rep_c = None
+        if len(inside) >= 2 and inside[0]["price"] > 0:
+            e = inside[0]["price"]
+            hi = 100 * (max(p["price"] for p in inside) / e - 1)
+            lo = 100 * (min(p["price"] for p in inside) / e - 1)
+        if len(path) >= 10:
+            c = chains.costs(m)
+            cost = 2 * (c["fee_pct"] + c.get("mev_pct", 0)) + 2 * c["tx_usd"] / max(o["usd"], 1) * 100
+            f = exits.features(path)
+            ga, gc = exitlab.simulate(f, exits.for_mint(m)), exitlab.simulate(f, dict(EXIT))
+            rep_a = ga / exitlab.TICKET_USD * 100 - cost if ga is not None else None
+            rep_c = gc / exitlab.TICKET_USD * 100 - cost if gc is not None else None
+            if rep_a is not None:
+                rr.append((real, rep_a))
+        fmt = lambda x: f"{x:+7.0f}" if x is not None else "      -"
+        print(f"{o['t']} {chain:9s} ${o['sym'][:11]:11s} {o['usd']:6.1f} {real:+7.1f} {fmt(hi)} {fmt(lo)} {(t1 - t0) / 3600:5.1f}h "
+              f"{fmt(rep_a)} / {fmt(rep_c)}  {'+'.join(o['why'])}")
+        tag = "gagnant" if o["pnl"] > 0 else ("perdant, était à +30 % ou plus" if hi is not None and hi >= 30
+                                              else "perdant, jamais au-dessus de +10 %" if hi is not None and hi < 10
+                                              else "perdant, entre +10 et +30 %")
+        for k in (f"chaîne {chain}", f"période {'avant' if o['t'] < B_SINCE else 'après'} le 26/10 05:03 (sorties B)",
+                  f"sortie {o['why'][-1]}", f"type : {tag}", f"mois/jour {o['t'][:10]}"):
+            a = agg.setdefault(k, [0, 0.0, 0])
+            a[0] += 1; a[1] += o["pnl"]; a[2] += o["pnl"] > 0
+    print("\n== où va l'argent : n · PnL $ · gagnants")
+    for k, (n, pnl, w) in sorted(agg.items()):
+        print(f"  {k:52s} {n:3d} {pnl:+9.2f} {w:3d}")
+    if rr:
+        gap = [a - b for a, b in rr]
+        print(f"\n== réel contre rejoué (même trajet, même profil, coûts compris), {len(rr)} trades : "
+              f"réel {statistics.mean(a for a, _ in rr):+.1f} % · rejoué {statistics.mean(b for _, b in rr):+.1f} % · "
+              f"écart moyen {statistics.mean(gap):+.1f} pts (négatif = le desk exécute moins bien que son propre moteur)")
     sys.exit(0)
 
 if "--entonnoir" in sys.argv:
