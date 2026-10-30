@@ -95,17 +95,21 @@ WAIVE_MIN_MEAN = 5.0        # net % per trade, after costs, and positive on both
 _waived = {"t": 0.0, "v": set()}
 
 
+def waived_from(r: dict) -> set:
+    """The soft reasons results() `r` lifts: shadow buys that made money, clearly and on both halves."""
+    return {d["reason"] for d in r["reasons"]
+            if d["reason"] not in HARD and not d["reason"].startswith("danger:")
+            and d["n"] >= WAIVE_MIN_N and d["mean"] >= WAIVE_MIN_MEAN
+            and (d.get("half1") or 0) > 0 and (d.get("half2") or 0) > 0
+            and (d.get("low") or -1) > 0}          # and above zero beyond its own noise
+
+
 def waived() -> set:
     """Soft kill reasons the desk stops applying by itself: their shadow buys made money, clearly and
     on both halves. a reason that protects (shadow buys lose) stays. cached 10 min."""
     if time.time() - _waived["t"] > 600:
         try:
-            r = results()
-            _waived["v"] = {d["reason"] for d in r["reasons"]
-                            if d["reason"] not in HARD and not d["reason"].startswith("danger:")
-                            and d["n"] >= WAIVE_MIN_N and d["mean"] >= WAIVE_MIN_MEAN
-                            and (d.get("half1") or 0) > 0 and (d.get("half2") or 0) > 0
-                            and (d.get("low") or -1) > 0}      # and above zero beyond its own noise
+            _waived["v"] = waived_from(results())
         except Exception:
             _waived["v"] = set()
         _waived["t"] = time.time()
@@ -121,9 +125,9 @@ def results() -> dict:
             continue
         x = replay(r)
         if x is not None:
-            done.append((r["reason"], min(x, CAP_PCT)))
+            done.append((r["reason"], min(x, CAP_PCT), r["mint"]))
     by = {}
-    for reason, x in done:                  # in kill order, so each reason's list splits into two halves
+    for reason, x, _ in done:               # in kill order, so each reason's list splits into two halves
         by.setdefault(reason, []).append(x)
     mean = lambda xs: round(statistics.mean(xs), 1) if xs else None
     def low(xs):                            # one-sided 90% lower bound of the mean
@@ -134,6 +138,6 @@ def results() -> dict:
                        "half1": mean(xs[:len(xs) // 2]), "half2": mean(xs[len(xs) // 2:]), "low": low(xs)} if xs else None
     import edge
     st = edge.stats()
-    return {"waiting": waiting, "all": stat([x for _, x in done]),
+    return {"waiting": waiting, "all": stat([x for _, x, _ in done]), "rows": done,
             "reasons": sorted(({"reason": k, **stat(v)} for k, v in by.items()), key=lambda d: -d["n"]),
             "bought": {"n": st["n"], "mean": st.get("mean_pct")}}

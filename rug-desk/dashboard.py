@@ -157,7 +157,8 @@ def shadow_state() -> dict | None:
     if time.time() - _shadow["t"] > 120:
         import shadow
         try:
-            _shadow["v"] = {**shadow.results(), "waived": sorted(shadow.waived())}
+            r = shadow.results()
+            _shadow["v"] = {**{k: v for k, v in r.items() if k != "rows"}, "waived": sorted(shadow.waived_from(r))}
         except Exception:
             _shadow["v"] = None
         _shadow["t"] = time.time()
