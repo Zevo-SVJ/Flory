@@ -1,0 +1,340 @@
+# facts.py
+# checks 1-9, without Rugcheck (its domain went dark in October 2026).
+# two free sources, both read as facts, never as opinions:
+#   - the Solana chain itself (public RPC): authorities, pool LP burn, who owns each holder wallet
+#   - GoPlus token security (free, no key): Token-2022 traps and the top 10 holders
+import base64, struct, time
+import requests
+from config import FACTS, SOLANA_RPC
+import ruggers, env, sources
+
+GOPLUS = "https://api.gopluslabs.io/api/v1/solana/token_security"
+SYSTEM_PROGRAM = "11111111111111111111111111111111"
+PUMPSWAP = "pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA"
+B58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+
+# GoPlus flags that are a hard kill when their status is "1". each one is a way the dev keeps
+# control of your tokens after you buy.
+TRAPS = {
+    "closable": "mint_closable",                    # mint can be closed
+    "balance_mutable_authority": "balance_editable",  # permanent delegate: can move or burn your tokens
+    "transfer_fee_upgradable": "fee_upgradable",    # can add a sell tax later
+    "transfer_hook_upgradable": "hook_upgradable",  # can add code that blocks your sell later
+    "default_account_state_upgradable": "freeze_by_default_upgradable",
+}
+
+
+def _b58(b: bytes) -> str:
+    n, s = int.from_bytes(b, "big"), ""
+    while n:
+        n, r = divmod(n, 58)
+        s = B58[r] + s
+    return "1" * (len(b) - len(b.lstrip(b"\0"))) + s
+
+
+chain_holders_error = None      # last failure of the on-chain holder read, shown by GARDE
+RPC_URL = env.get("SOLANA_RPC") or SOLANA_RPC   # a private RPC URL in .env (Helius, QuickNode...) wins
+
+
+def _rpc(method: str, params: list | dict):
+    """One RPC call. A 429 (rate limit) is retried twice with a pause: the public endpoint throttles
+    hard, and a skipped check costs a token we could have traded."""
+    for attempt in range(3):
+        r = requests.post(RPC_URL, timeout=20,
+                          json={"jsonrpc": "2.0", "id": 1, "method": method, "params": params})
+        throttled = r.status_code == 429 or ('"code":429' in (getattr(r, "text", "") or "").replace(" ", "")[:200])
+        if throttled and attempt < 2:
+            time.sleep(1.5 * (attempt + 1))
+            continue
+        r.raise_for_status()
+        d = r.json()
+        if "error" in d:
+            raise RuntimeError(f"solana rpc {method}: {d['error']}")
+        return d["result"]
+
+
+def _goplus(mint: str) -> dict:
+    r = requests.get(GOPLUS, params={"contract_addresses": mint}, timeout=12)
+    r.raise_for_status()
+    d = r.json()
+    res = (d.get("result") or {}).get(mint)
+    if d.get("code") != 1 or not res:
+        raise RuntimeError(f"goplus: {d.get('code')} {d.get('message')}")
+    return res
+
+
+def _holders_chain(mint: str) -> list[dict]:
+    """GoPlus sometimes returns no holder list for a young token. The same top 10, read from the chain:
+    the 10 biggest token accounts, each one's owner, and its share of the supply (GoPlus format)."""
+    largest = _rpc("getTokenLargestAccounts", [mint])["value"][:10]
+    supply = int(_rpc("getTokenSupply", [mint])["value"]["amount"])
+    if not largest or not supply:
+        return []
+    accts = _rpc("getMultipleAccounts", [[a["address"] for a in largest], {"encoding": "jsonParsed"}])["value"]
+    out = []
+    for a, acc in zip(largest, accts):
+        owner = (((acc or {}).get("data") or {}).get("parsed") or {}).get("info", {}).get("owner")
+        if owner and int(a["amount"]):
+            out.append({"account": owner, "percent": str(int(a["amount"]) / supply)})
+    return out
+
+
+def _das_accounts(mint: str, cap_pages: int = 3) -> list[dict] | None:
+    """Every token account of the mint with a balance, up to 3000. Helius only (DAS getTokenAccounts,
+    1000 a page): the public RPC has no such call. None off Helius."""
+    if "helius" not in RPC_URL:
+        return None
+    out = []
+    for page in range(1, cap_pages + 1):
+        res = _rpc("getTokenAccounts", {"mint": mint, "limit": 1000, "page": page})
+        accs = res.get("token_accounts") or []
+        out += [a for a in accs if int(a.get("amount") or 0) > 0]
+        if len(accs) < 1000:
+            break
+    return out
+
+
+def _holder_count(mint: str, cap_pages: int = 3) -> int | None:
+    """Holder count when GoPlus has none: 3 pages reach 3000, where the score's holder points are full."""
+    accs = _das_accounts(mint, cap_pages)
+    return None if accs is None else len(accs)
+
+
+def holder_farm(accounts: list[dict], supply: int, skip: set[str]) -> tuple[int, float]:
+    """The biggest group of holders with the same bag (within 1%): (wallets, % of supply).
+    Organic buyers pay different prices, so their bags differ. A farm buys the same amount from hundreds
+    of fresh wallets, each too small for any top 10: FOMO (Oct 19) had hundreds of wallets holding 0.46M
+    tokens each, which all sold in the same second. dust under 0.01% of supply is ignored."""
+    if not supply:
+        return 0, 0.0
+    bags = sorted(int(a["amount"]) for a in accounts
+                  if a.get("owner") not in skip and int(a["amount"]) >= supply * 0.0001)
+    best_n, best_sum, i, run = 0, 0, 0, 0
+    for j, b in enumerate(bags):
+        run += b
+        while b > bags[i] * 1.01:
+            run -= bags[i]
+            i += 1
+        if j - i + 1 > best_n:
+            best_n, best_sum = j - i + 1, run
+    return best_n, round(best_sum / supply * 100, 2)
+
+
+def pool_vaults(pair: str) -> list[str] | None:
+    """The two token accounts a PumpSwap pool keeps its reserves in: [token vault, SOL vault]."""
+    a = _rpc("getAccountInfo", [pair, {"encoding": "base64"}])["value"]
+    if not a or a["owner"] != PUMPSWAP:
+        return None
+    d = base64.b64decode(a["data"][0])
+    return [_b58(d[139:171]), _b58(d[171:203])]
+
+
+def reserves(vaults: list[str]) -> list[float | None]:
+    """Balances of many vaults in one call, None where unreadable. VIGIE reads every position's pool this way."""
+    if not vaults:
+        return []
+    out = []
+    for i in range(0, len(vaults), 100):
+        for x in _rpc("getMultipleAccounts", [vaults[i:i + 100], {"encoding": "jsonParsed"}])["value"]:
+            try:
+                out.append(float(x["data"]["parsed"]["info"]["tokenAmount"]["uiAmount"] or 0))
+            except (TypeError, KeyError):
+                out.append(None)
+    return out
+
+
+def pool_reserves(pair: str) -> tuple[float, float] | None:
+    """(tokens, SOL) sitting in a PumpSwap pool right now, read from its two vaults on chain.
+    DexScreener can lag a pool by minutes; the chain cannot. None if not a PumpSwap pool."""
+    vaults = pool_vaults(pair)                             # pool_base_token_account, pool_quote_token_account
+    if not vaults:
+        return None
+    amt = reserves(vaults)
+    return None if None in amt else (amt[0], amt[1])
+
+
+def pool_chain(mint: str, pair: str, dex: str) -> dict:
+    """Read the pool account on chain: how much LP is burned, and who created the token.
+    PumpSwap only for now: anything else stays None (unverified)."""
+    out = {"lp_burned_pct": None, "dev": None}
+    if dex != "pumpswap":
+        return out
+    a = _rpc("getAccountInfo", [pair, {"encoding": "base64"}])["value"]
+    if not a or a["owner"] != PUMPSWAP:
+        return out
+    d = base64.b64decode(a["data"][0])
+    if _b58(d[43:75]) != mint:                            # not this token's pool
+        return out
+    if len(d) >= 243:
+        out["dev"] = _b58(d[211:243])                     # coin_creator: the wallet that launched the token
+    lp_mint = _b58(d[107:139])
+    minted = struct.unpack("<Q", d[203:211])[0]           # LP ever minted, recorded by the pool
+    if minted:
+        live = int(_rpc("getTokenSupply", [lp_mint])["value"]["amount"])  # LP still in existence
+        out["lp_burned_pct"] = round((1 - live / minted) * 100, 2)
+    return out
+
+
+def dev_pct(mint: str, dev: str | None) -> float | None:
+    """Check 8: how much of the supply the creator wallet still holds."""
+    if not dev:
+        return None
+    accounts = _rpc("getTokenAccountsByOwner", [dev, {"mint": mint}, {"encoding": "jsonParsed"}])["value"]
+    held = sum(int(a["account"]["data"]["parsed"]["info"]["tokenAmount"]["amount"]) for a in accounts)
+    supply = int(_rpc("getTokenSupply", [mint])["value"]["amount"])
+    return round(held / supply * 100, 3) if supply else None
+
+
+def _ladder(pcts: list[float]) -> int:
+    """Longest run of big holders whose bags are within 2% of each other: one hand, many wallets."""
+    big = [p for p in pcts if p >= FACTS["ladder_min_pct"]]
+    best = run = 1 if big else 0
+    for a, b in zip(big, big[1:]):
+        run = run + 1 if abs(a - b) <= 0.02 * max(a, b) else 1
+        best = max(best, run)
+    return best
+
+
+def _same_sol(lamports: list[int]) -> int:
+    """Biggest group of holder wallets with the exact same SOL balance (10 lamports apart at most)."""
+    xs = sorted(lamports)
+    best = 1 if xs else 0
+    i = 0
+    for j in range(len(xs)):
+        while xs[j] - xs[i] > 10:
+            i += 1
+        best = max(best, j - i + 1)
+    return best
+
+
+def report(mint: str, pool: dict) -> dict:
+    acc = _rpc("getAccountInfo", [mint, {"encoding": "jsonParsed"}])["value"]
+    info = (((acc or {}).get("data") or {}).get("parsed") or {}).get("info") or {}
+    if not info:
+        raise RuntimeError("mint account not found on chain")
+    g = _goplus(mint)
+    status = lambda k: str((g.get(k) or {}).get("status", "")) if isinstance(g.get(k), dict) else ""
+
+    # GoPlus sometimes lists the top holders with empty addresses (MOMO, Oct 19): unusable, and sent to
+    # the RPC they failed the whole check as a "source down". without addresses, read them from the chain
+    holders = [h for h in g.get("holders") or [] if h.get("account")]
+    source = "goplus"
+    if not holders:                    # GoPlus blind on this token: read the holders from the chain
+        global chain_holders_error
+        try:
+            holders, source = _holders_chain(mint), "chain"
+            chain_holders_error = None
+        except Exception as e:         # the public RPC refuses this call (429): a private RPC is needed
+            holders, chain_holders_error = [], str(e)[:160]
+    count = g.get("holder_count")
+    farm_n, farm_pct, top30, all_owners = 0, 0.0, [], []
+    try:                                    # the whole holder list (Helius): farms hide below the top 10
+        accs = _das_accounts(mint)
+        if accs is not None:
+            sources.record("helius_das", True, f"{len(accs)} holders lus")
+    except Exception as e:
+        accs = None
+        sources.record("helius_das", False, str(e))
+    if accs is not None:
+        count = count or len(accs)
+        supply_raw = int(_rpc("getTokenSupply", [mint])["value"]["amount"])
+        farm_n, farm_pct = holder_farm(accs, supply_raw, {pool.get("pair")})
+        all_owners = sorted({a["owner"] for a in accs if a.get("owner") != pool.get("pair")
+                             and supply_raw and int(a["amount"]) >= supply_raw * 0.0001})
+        if supply_raw and len(accs) < 3000:   # the 30 biggest holders, only from a complete list
+            big = sorted((a for a in accs if a.get("owner") != pool.get("pair")), key=lambda a: -int(a["amount"]))[:30]
+            top30 = [(a["owner"], int(a["amount"]) / supply_raw * 100) for a in big]
+            if not holders:
+                # GoPlus and getTokenLargestAccounts both came back empty, but Helius gave the whole list:
+                # the top 10 is in it. "no_holders" killed 31 of 46 tokens one night, UHI (+631%) among them
+                by_owner = {}
+                for a in accs:
+                    by_owner[a["owner"]] = by_owner.get(a["owner"], 0) + int(a["amount"])
+                holders = [{"account": o, "percent": str(n / supply_raw)}
+                           for o, n in sorted(by_owner.items(), key=lambda kv: -kv[1])[:10]]
+                source = "helius_das"
+    owners = [h["account"] for h in holders]
+    kinds = _rpc("getMultipleAccounts", [owners, {"encoding": "base64",
+                 "dataSlice": {"offset": 0, "length": 0}}])["value"] if owners else []
+    wallets = []        # pool vaults and lockers are program-owned accounts: they are not whales
+    for h, k in zip(holders, kinds):
+        if k is None or k["owner"] == SYSTEM_PROGRAM:
+            wallets.append({"pct": float(h["percent"]) * 100, "lamports": (k or {}).get("lamports", 0),
+                            "address": h["account"]})
+    pcts = sorted((w["pct"] for w in wallets), reverse=True)
+    # GoPlus lists 10 holders. each slot taken by a pool is filled with the smallest wallet we saw,
+    # so the top 10 is never under-counted
+    top10 = sum(pcts) + (10 - len(pcts)) * (pcts[-1] if pcts else 0) if pcts else None
+
+    traps = [name for key, name in TRAPS.items() if status(key) == "1"]
+    if status("non_transferable") == "1" or g.get("non_transferable") == "1":
+        traps.append("non_transferable")
+    if g.get("transfer_hook"):
+        traps.append("transfer_hook")
+    if any(str(v) not in ("0", "", "None") for v in (g.get("transfer_fee") or {}).values()):
+        traps.append("transfer_fee")
+    if str(g.get("default_account_state")) not in ("1", "None"):
+        traps.append("frozen_by_default")
+
+    chain = pool_chain(mint, pool.get("pair"), pool.get("dex"))
+    return {
+        "mint": mint,
+        "symbol": ((g.get("metadata") or {}).get("symbol")) or pool.get("symbol"),
+        "mint_authority": info.get("mintAuthority") or (status("mintable") == "1" or None),
+        "freeze_authority": info.get("freezeAuthority") or (status("freezable") == "1" or None),
+        "danger": traps,
+        "dex": pool.get("dex"),
+        "lp_burned_pct": chain["lp_burned_pct"],
+        "dev": chain["dev"],
+        "dev_pct": dev_pct(mint, chain["dev"]) if chain["dev"] else None,
+        "top10_pct": round(top10, 2) if top10 is not None else None,
+        "max_wallet_pct": round(pcts[0], 2) if pcts else None,
+        "same_sol_wallets": _same_sol([w["lamports"] for w in wallets]),
+        "ladder_wallets": _ladder(pcts),
+        "holders": count,
+        "farm_wallets": farm_n,             # biggest group of identical bags, and its share of supply
+        "farm_pct": farm_pct,
+        "holders_source": source if holders else None,
+        "wallets": [w["address"] for w in wallets],      # top holder wallets, for the smart-wallet memory
+        # (wallet, % of supply), biggest first, for cluster.py. the top 30 with Helius, else the top 10
+        "all_owners": all_owners,           # every holder above 0.01% (Helius), for the factory-wallet memory
+        "holder_pcts": top30 or [(w["address"], w["pct"]) for w in sorted(wallets, key=lambda w: -w["pct"])],
+        "not_checked": ["risk_score", "insider_graph"],
+    }
+
+
+def fact_kill(t: dict, lane: str = "early", skip: frozenset | set = frozenset()) -> str | None:
+    """Plain comparisons. First failure wins, the reason gets logged.
+    momentum lane: a survivor's LP often sits on Raydium or Meteora, where no burn can be read and no
+    creator is recorded; its deep, old pool stands in for those two checks, and its holder limits are wider.
+    skip: soft reasons the shadow book showed cost money (shadow.waived()): passed over, the rest still apply."""
+    from config import MOMENTUM
+    mom = lane == "momentum"
+    top10_max = MOMENTUM["max_top10_pct"] if mom else FACTS["max_top10_pct"]
+    wallet_max = MOMENTUM["max_wallet_pct"] if mom else FACTS["max_wallet_pct"]
+    gt = lambda v, limit: v is not None and v > limit
+    checks = [
+        ("dev_rugged_before", lambda: t.get("dev") and t["dev"] in ruggers.known()),
+        ("mint_open", lambda: t["mint_authority"]),
+        ("freeze_open", lambda: t["freeze_authority"]),
+        ("danger:" + (t["danger"] or [""])[0], lambda: t["danger"]),
+        ("lp_unverified", lambda: t["lp_burned_pct"] is None and not mom),
+        # a survivor's liquidity belongs to many providers (CASHCAT on Robinhood Chain: 139, 123 days old):
+        # no single hand pulls it. the LP lock is a launch check, like the burn it reads on Solana
+        ("lp_unlocked", lambda: not mom and t["lp_burned_pct"] is not None
+                                and t["lp_burned_pct"] < FACTS["min_lp_locked_pct"]),
+        ("dev_unknown", lambda: t["dev_pct"] is None and not mom),
+        ("dev_holds", lambda: gt(t["dev_pct"], FACTS["max_dev_pct"])),
+        ("no_holders", lambda: t["top10_pct"] is None),
+        ("top10_heavy", lambda: gt(t["top10_pct"], top10_max)),
+        ("whale", lambda: gt(t["max_wallet_pct"], wallet_max)),
+        ("bundle_same_sol", lambda: t["same_sol_wallets"] >= FACTS["bundle_same_sol"]),
+        ("bundle_ladder", lambda: t["ladder_wallets"] >= FACTS["bundle_ladder"]),
+        # airdrops make identical bags too
+        ("holder_farm", lambda: not mom and (t.get("farm_wallets") or 0) >= FACTS["farm_wallets"]
+                                and (t.get("farm_pct") or 0) >= FACTS["farm_pct"]),
+    ]
+    for reason, failed in checks:
+        if reason not in skip and failed():
+            return reason
+    return None
