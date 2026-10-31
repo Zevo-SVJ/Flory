@@ -151,16 +151,48 @@ def waived() -> set:
     return _waived["v"]
 
 
+MEMO = os.path.join(DATA, "shadow_replays.json")
+
+
+def _profile_sig(mint: str) -> str:
+    import exits, hashlib, json
+    return hashlib.md5(json.dumps(exits.for_mint(mint), sort_keys=True, default=str).encode()).hexdigest()[:12]
+
+
 def results() -> dict:
-    """Shadows whose 6 h are over, per kill reason and in all, next to what the desk's real buys made."""
-    now, done, waiting = time.time(), [], 0
+    """Shadows whose 6 h are over, per kill reason and in all, next to what the desk's real buys made.
+    a finished shadow's replay never changes while the exit profile stays the same: it is kept in MEMO
+    (Oct 31: replaying 3,000+ paths every 10 min held SCOUT and AUDIT 4 min a turn, worse every day)."""
+    import json, atomic
+    try:
+        with open(MEMO) as f:
+            memo = json.load(f)
+    except (OSError, ValueError):
+        memo = {}
+    now, done, waiting, sigs, fresh = time.time(), [], 0, {}, 0
     for r in sorted(_rows(), key=lambda r: float(r["t"])):
         if now < float(r["t"]) + HOURS * 3600:
             waiting += 1
             continue
-        x = replay(r)
+        chain = r["mint"].split(":")[0] if ":" in r["mint"] else "solana"
+        sig = sigs.get(chain) or sigs.setdefault(chain, _profile_sig(r["mint"]))
+        hit = memo.get(r["mint"])
+        if hit and hit[0] == sig:
+            x = hit[1]
+        else:
+            x = replay(r)
+            memo[r["mint"]] = [sig, x]
+            fresh += 1
         if x is not None:
             done.append((r["reason"], min(x, CAP_PCT), r["mint"]))
+    if fresh:
+        try:
+            tmp = atomic.tmp(MEMO)
+            with open(tmp, "w") as f:
+                json.dump(memo, f)
+            os.replace(tmp, MEMO)
+        except OSError:
+            pass
     by = {}
     for reason, x, _ in done:               # in kill order, so each reason's list splits into two halves
         by.setdefault(reason, []).append(x)

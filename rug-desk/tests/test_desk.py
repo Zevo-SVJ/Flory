@@ -1464,6 +1464,27 @@ class BacktestAlive(Base):
 
 class Shadow(Base):
     """GARDE's kills bought in shadow and replayed: the measure of the filter's value."""
+    def test_a_finished_shadow_is_replayed_once(self):
+        import shadow
+        for f in (shadow.FILE, shadow.MEMO):
+            if os.path.exists(f):
+                os.remove(f)
+        with open(shadow.FILE, "w", newline="") as f:
+            w = csv.DictWriter(f, fieldnames=shadow.FIELDS)
+            w.writeheader()
+            w.writerow({"t": round(time.time() - 7 * 3600), "mint": "MemoMint", "symbol": "M", "stage": "facts",
+                        "reason": "top10_heavy", "price": 1.0, "liq": 50000})
+        calls = []
+        with mock.patch.object(shadow, "replay", lambda r: calls.append(r) or 12.0):
+            self.assertEqual(shadow.results()["all"]["mean"], 12.0)
+            self.assertEqual(shadow.results()["all"]["mean"], 12.0)
+        self.assertEqual(len(calls), 1)                                   # the second read came from the memo
+        with mock.patch.object(shadow, "_profile_sig", lambda m: "other"), \
+                mock.patch.object(shadow, "replay", lambda r: calls.append(r) or -3.0):
+            self.assertEqual(shadow.results()["all"]["mean"], -3.0)       # new exits: replayed again
+        for f in (shadow.FILE, shadow.MEMO):
+            os.remove(f)
+
     def test_soft_pool_rules_can_be_waived_for_launches_only(self):
         import market
         m = {"price": 1.0, "liq_usd": 10000, "chain": "solana", "mcap": 500000, "buys_1h": 50, "sells_1h": 50,
