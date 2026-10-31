@@ -205,7 +205,8 @@ if "--risque" in sys.argv:
             alerts.append(f"le pool a perdu {-dl:.0f} % depuis l'achat (VIGIE vend à -40 %)")
         if m["sells_1h"] > 2 * max(1, m["buys_1h"]) and m["sells_1h"] >= 20:
             alerts.append("deux fois plus de ventes que d'achats sur l'heure")
-        if (k := market.market_kill(m)) and k not in ("dead_volume",):
+        # only the pool rules that say danger: no_momentum, overextended or dead_volume say "not a buy now"
+        if (k := market.market_kill(m)) and k not in ("dead_volume", "no_momentum", "overextended"):
             alerts.append(f"le pool échouerait aujourd'hui à GARDE : {k}")
         try:
             t = facts_evm.report(mint, m) if chains.is_evm(mint) else facts.report(mint, m)
@@ -225,7 +226,9 @@ if "--risque" in sys.argv:
                 tax = float((j.get("simulationResult") or {}).get("sellTax") or 0)
                 hp = (j.get("honeypotResult") or {}).get("isHoneypot")
                 print(f"  simulation achat-revente : {'HONEYPOT' if hp else 'revente possible'} · taxe à la revente {tax:.0f} %")
-                if hp or tax > 10:
+                if hp and m["sells_1h"] >= 10:      # real wallets are selling: the simulation is what fails
+                    print(f"  honeypot.is dit honeypot, mais {m['sells_1h']} vraies ventes cette heure : probable faux positif")
+                elif hp or tax > 10:
                     alerts.append("la revente est bloquée ou taxée au-delà de 10 %")
             except Exception as e:
                 print(f"  simulation achat-revente indisponible ({type(e).__name__})")
