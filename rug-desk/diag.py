@@ -177,6 +177,62 @@ if "--entonnoir" in sys.argv:
     print("== fin")
     sys.exit(0)
 
+if "--risque" in sys.argv:
+    # every open position checked again NOW, as GARDE would check a new token: the pool against the entry,
+    # the flows of the last hour, the contract and the holders read fresh, and on BSC a real buy-then-sell
+    # simulation (honeypot.is). nothing is sold: VIGIE keeps applying the exits.
+    #   python3 diag.py --risque
+    import chains, facts, market, facts_evm, requests
+    b = book.load()
+    print(f"== {len(b)} position(s) ouverte(s), relues maintenant")
+    for mint, pos in b.items():
+        chain = chains.split(mint)[0]
+        try:
+            m = market.pool(mint)
+        except Exception as e:
+            print(f"\n{pos['symbol']} ({chain}) : DexScreener illisible ({e})"); continue
+        if not m:
+            print(f"\n{pos['symbol']} ({chain}) : AUCUN POOL trouvé : vérifie-le à la main"); continue
+        alerts = []
+        pct = (m["price"] / pos["entry"] - 1) * 100
+        liq0 = pos.get("liq0") or 0
+        dl = (m["liq_usd"] / liq0 - 1) * 100 if liq0 else None
+        since = f" ({dl:+.0f} % depuis l'achat)" if dl is not None else ""
+        print(f"\n{pos['symbol']} ({chain}) · ouvert il y a {(time.time() - pos['opened']) / 3600:.1f} h · {pct:+.1f} % · "
+              f"pool {m['liq_usd']:,.0f} ${since}")
+        print(f"  1 h : {m['buys_1h']} achats / {m['sells_1h']} ventes · prix 5 min {m['chg_5m']:+.1f} % · 1 h {m['chg_1h']:+.1f} %")
+        if dl is not None and dl <= -25:
+            alerts.append(f"le pool a perdu {-dl:.0f} % depuis l'achat (VIGIE vend à -40 %)")
+        if m["sells_1h"] > 2 * max(1, m["buys_1h"]) and m["sells_1h"] >= 20:
+            alerts.append("deux fois plus de ventes que d'achats sur l'heure")
+        if (k := market.market_kill(m)) and k not in ("dead_volume",):
+            alerts.append(f"le pool échouerait aujourd'hui à GARDE : {k}")
+        try:
+            t = facts_evm.report(mint, m) if chains.is_evm(mint) else facts.report(mint, m)
+            k = facts.fact_kill(t, market.lane(m))
+            print(f"  contrat et holders : top 10 {t.get('top10_pct')} % · plus gros wallet {t.get('max_wallet_pct')} % · "
+                  f"dev {t.get('dev_pct')} % · LP verrouillée {t.get('lp_burned_pct')} % · alertes {t.get('danger') or 'aucune'}")
+            if k and not (k == "lp_unlocked" and chain == "robinhood"):
+                alerts.append(f"GARDE le refuserait aujourd'hui : {k}")
+            elif k == "lp_unlocked":
+                print("  LP non verrouillée : attendu, c'est un achat lp_open (Robinhood)")
+        except Exception as e:
+            alerts.append(f"contrat illisible ({str(e)[:80]})")
+        if chain == "bsc":
+            try:
+                j = requests.get("https://api.honeypot.is/v2/IsHoneypot", params={"address": chains.split(mint)[1], "chainID": 56},
+                                 timeout=20).json()
+                tax = float((j.get("simulationResult") or {}).get("sellTax") or 0)
+                hp = (j.get("honeypotResult") or {}).get("isHoneypot")
+                print(f"  simulation achat-revente : {'HONEYPOT' if hp else 'revente possible'} · taxe à la revente {tax:.0f} %")
+                if hp or tax > 10:
+                    alerts.append("la revente est bloquée ou taxée au-delà de 10 %")
+            except Exception as e:
+                print(f"  simulation achat-revente indisponible ({type(e).__name__})")
+        print("  => " + ("RISQUE : " + " · ".join(alerts) if alerts else "rien d'anormal maintenant"))
+    print("\nrien n'est vendu par cette commande : VIGIE applique les sorties toutes les 20 s (pool -40 %, stop, temps).")
+    sys.exit(0)
+
 if "--pos" in sys.argv:
     # every open position as VIGIE sees it now: why it is still open. reads the book and the price paths
     import exits, paths
