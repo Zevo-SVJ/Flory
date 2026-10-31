@@ -303,6 +303,10 @@ def run(mint: str) -> dict:
         "organic", "organic_vol", "dev_mints", "cluster_pct", "fresh_pct", "bundlers_pct", "insiders_pct",
         "snipers_pct", "factory_wallets")})
     enter = v["verdict"] == "BUY" or (v["verdict"] == "PASS" and PAPER and PAPER_BUY_ON_PASS)
+    from config import NO_BUY_CHAINS
+    if enter and chains_split(mint) in NO_BUY_CHAINS:
+        v["action"] = f"not bought: chain off ({chains_split(mint)}), followed in shadow as a pass"
+        return v
     if enter and v.get("expected") is not None and v["expected"] < 0:
         v["action"] = f"not bought: the model expects {v['expected']:+.1f}% per trade"
         return v

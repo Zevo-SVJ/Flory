@@ -175,6 +175,12 @@ EXIT = {
     "time_stop_hours": 6,                   # not up 20% after 6 hours -> out, dead money
     "time_stop_min_pct": 20,
 }
+# chains whose tokens GARDE still judges and the shadow book still follows, but the paper desk no longer buys.
+# Oct 31, Skide's call: Solana after graduation was 0 wins in 4 trades under the rules in force (-$121: fone,
+# HOTBOT, LMAO, iCat -99.7% dumped by a wallet farm), and every Solana group in the shadow book loses. its
+# passes stay shadowed as "pass" (diag.py --entonnoir, PAR CHAÎNE): they say when to buy there again.
+# Solana launches themselves are tested by the dry sniper (snipelab.py)
+NO_BUY_CHAINS = ("solana",)
 # a chain whose tokens behave apart gets its own exits. Oct 28: on 322 replayed pump.fun graduations the
 # config exits (stop -35%, early ladder, lock, trail, 6 h clock) beat "regles B" for every one of the 11
 # entry rules on the same tokens, by 3 to 24 points per trade: Solana graduates that fall keep falling,

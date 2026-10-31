@@ -7,6 +7,7 @@ os.environ["RUG_DESK_DATA"] = tempfile.mkdtemp()
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import config, book, check, watch, report  # noqa: E402
+config.NO_BUY_CHAINS = ()          # the tests buy Solana mints; ChainOff tests the switch itself
 book.COSTS = False      # the exact-number tests below check the rules; Costs tests the fees on their own
 
 MINT = "Mint111111111111111111111111111111111111111"
@@ -388,6 +389,26 @@ class ExitByChain(unittest.TestCase):
         b = {"stop_pct": -50}
         self.assertEqual(exits.for_mint(MINT, b)["stop_pct"], config.EXIT["stop_pct"])     # a Solana mint
         self.assertEqual(exits.for_mint(chains.key("bsc", "0x" + "ab" * 20), b), b)
+
+
+class ChainOff(unittest.TestCase):
+    @mock.patch.object(config, "NO_BUY_CHAINS", ("solana",))
+    def test_a_solana_pass_is_not_bought_and_is_shadowed_as_a_pass(self):
+        import shadow
+        v = {"verdict": "PASS", "stage": "judge", "reason": "ok", "price": 1.0, "liq_usd": 30000, "symbol": "S",
+             "score": 70}
+        with mock.patch.object(check, "check", lambda m: dict(v)), mock.patch.object(check, "log", lambda r: None), \
+                mock.patch.object(check.market, "sol_regime", lambda: {}), mock.patch("dossier.add", lambda *a, **k: None), \
+                mock.patch.object(check.book, "open_position") as buy:
+            out = check.run("SoLMint111")
+        buy.assert_not_called()
+        self.assertIn("chain off", out["action"])
+        for f in (shadow.FILE,):
+            if os.path.exists(f):
+                os.remove(f)
+        self.assertTrue(shadow.note("SoLMint111", out))
+        self.assertEqual(shadow._rows()[-1]["reason"], "pass")
+        os.remove(shadow.FILE)
 
 
 class LpOpen(unittest.TestCase):
