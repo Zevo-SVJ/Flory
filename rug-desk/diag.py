@@ -72,7 +72,10 @@ if "--pourquoi" in sys.argv:
                 o["closed"] = t["time"]
                 done.append((t["mint"], opened.pop(t["mint"])))
     done = [(m, o) for m, o in done if o["t"] >= RULES_SINCE]
-    print(f"== {len(done)} trades clôturés depuis {RULES_SINCE} (règles actuelles)")
+    import edge
+    down = {t["mint"] + t["opened"] for t in edge.outages()}
+    print(f"== {len(done)} trades clôturés depuis {RULES_SINCE} (règles actuelles) · "
+          f"[PANNE] = le desk était arrêté pendant le trade : hors verdict")
     print("ouvert           chaîne     token        mise   réel %   haut %   bas %  durée  rejoué actif % / config %  sortie")
     agg, rr = {}, []
     for m, o in done:
@@ -97,7 +100,7 @@ if "--pourquoi" in sys.argv:
                 rr.append((real, rep_a))
         fmt = lambda x: f"{x:+7.0f}" if x is not None else "      -"
         print(f"{o['t']} {chain:9s} ${o['sym'][:11]:11s} {o['usd']:6.1f} {real:+7.1f} {fmt(hi)} {fmt(lo)} {(t1 - t0) / 3600:5.1f}h "
-              f"{fmt(rep_a)} / {fmt(rep_c)}  {'+'.join(o['why'])}")
+              f"{fmt(rep_a)} / {fmt(rep_c)}  {'+'.join(o['why'])}" + ("  [PANNE]" if m + o["t"] in down else ""))
         tag = "gagnant" if o["pnl"] > 0 else ("perdant, était à +30 % ou plus" if hi is not None and hi >= 30
                                               else "perdant, jamais au-dessus de +10 %" if hi is not None and hi < 10
                                               else "perdant, entre +10 et +30 %")

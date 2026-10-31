@@ -391,6 +391,23 @@ class ExitByChain(unittest.TestCase):
         self.assertEqual(exits.for_mint(chains.key("bsc", "0x" + "ab" * 20), b), b)
 
 
+class Outages(unittest.TestCase):
+    def test_a_trade_the_desk_could_not_follow_leaves_the_verdict_and_a_rug_stays(self):
+        import edge, paths
+        t0 = time.mktime(time.strptime("2026-10-22 10:00", "%Y-%m-%d %H:%M"))
+        for i in range(30):                                   # 10 min watched, then the Mac sleeps 80 h
+            paths.append("OutMint", {"t": t0 + 20 * i, "price": 1.0, "liq": 1, "b5": None, "s5": None, "v5": None})
+        paths.append("OutMint", {"t": t0 + 80 * 3600, "price": 0.5, "liq": 1, "b5": None, "s5": None, "v5": None})
+        for i in range(30):                                   # a rug, watched to the end
+            paths.append("RugMint", {"t": t0 + 20 * i, "price": 1.0 if i < 29 else 0.003, "liq": 1,
+                                     "b5": None, "s5": None, "v5": None})
+        down = {"mint": "OutMint", "opened": "2026-10-22 10:00", "closed": time.strftime("%Y-%m-%d %H:%M", time.localtime(t0 + 80 * 3600))}
+        rug = {"mint": "RugMint", "opened": "2026-10-22 10:00", "closed": "2026-10-22 10:09"}
+        self.assertTrue(edge.outage(down))
+        self.assertFalse(edge.outage(rug))
+        self.assertTrue(edge.outage({**rug, "mint": "NeverPriced", "closed": "2026-10-22 13:00"}))   # 3 h, no price
+
+
 class ChainOff(unittest.TestCase):
     @mock.patch.object(config, "NO_BUY_CHAINS", ("solana",))
     def test_a_solana_pass_is_not_bought_and_is_shadowed_as_a_pass(self):
@@ -1780,10 +1797,11 @@ class RulesRegime(Base):
             f.write("time,mint,symbol,action,usd,pnl,reason\n")
             f.write("2026-10-19 10:00,OLD,O,open,40,0,entry\n2026-10-19 11:00,OLD,O,close,0,-20,stop\n")
             f.write("2026-10-20 10:00,base:0xnew,N,open,40,0,entry\n2026-10-20 11:00,base:0xnew,N,close,0,8,trail\n")
-        self.assertEqual([t["mint"] for t in edge.closed()], ["base:0xnew"])
-        self.assertEqual(len(edge.closed(None)), 2)
-        import chains
-        self.assertEqual(edge.split(lambda t: chains.split(t["mint"])[0])[0], {"group": "base", "n": 1, "mean_pct": 20.0, "total": 8.0})
+        with mock.patch.object(edge, "outage", lambda t: False):                  # no price paths in this test
+            self.assertEqual([t["mint"] for t in edge.closed()], ["base:0xnew"])
+            self.assertEqual(len(edge.closed(None)), 2)
+            import chains
+            self.assertEqual(edge.split(lambda t: chains.split(t["mint"])[0])[0], {"group": "base", "n": 1, "mean_pct": 20.0, "total": 8.0})
         os.remove(config.TRADES)
 
     def test_backtest_main_block_comes_after_every_function_it_calls(self):

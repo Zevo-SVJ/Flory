@@ -1006,7 +1006,9 @@ function drawTop() {
   $("trendSub").className = "sub " + (TE == null ? "" : sign(TE - TT.bankroll));
   $("pnl").textContent = usd(S.pnl); $("pnl").className = "big " + sign(S.pnl);
   $("pnlCard").classList.toggle("neg", S.pnl < 0);
-  $("pnlSub").textContent = `${pct(S.pnl / S.bankroll * 100)} · réalisé ${usd(S.realized)} · latent ${usd(S.unrealized)}`;
+  const [outN, outPnl] = S.outages || [0, 0];
+  $("pnlSub").textContent = `${pct(S.pnl / S.bankroll * 100)} · réalisé ${usd(S.realized)} · latent ${usd(S.unrealized)}`
+    + (outN ? ` · hors pannes ${usd(S.realized - outPnl)} (${outN} trade${outN > 1 ? "s" : ""} pendant une coupure du desk)` : "");
   $("pnlSub").className = "sub " + sign(S.pnl);
   $("posCount").textContent = String(S.open.length);
   $("posSub").textContent = `${plain(S.open.reduce((s, p) => s + (p.cost ?? S.ticket), 0))} engagés · cash libre ${plain(S.cash)}`;

@@ -15,9 +15,33 @@ MAX_DRAWDOWN_SHARE = 0.30
 MAX_TICKET_SHARE = 0.05     # never more than 5% of the bankroll on one memecoin, whatever Kelly says
 
 
-def closed(since: str | None = "rules") -> list[dict]:
+# a trade the desk could not follow is no evidence about its rules: the Mac asleep, out of battery or the
+# desk stopped while a position was open (fone and HOTBOT, Oct 21-25: 89 h held on a 6 h time stop). the
+# test is mechanical, the same for winners and losers: a hole of OUTAGE_GAP_MIN or more in the position's
+# own price record (VIGIE writes one every 20 s). such trades stay in trades.csv and in the balance; the
+# go-live verdict and the "hors pannes" figures leave them out. a rug the rules let through is not an
+# outage: it is what the rules cost, and it stays in
+OUTAGE_GAP_MIN = 15
+
+
+def outage(t: dict) -> bool:
+    """True when the desk was not watching this position for OUTAGE_GAP_MIN or more while it was open."""
+    import paths
+    t0 = time.mktime(time.strptime(t["opened"], "%Y-%m-%d %H:%M"))
+    t1 = time.mktime(time.strptime(t["closed"], "%Y-%m-%d %H:%M")) + 60
+    if t1 - t0 < OUTAGE_GAP_MIN * 60:
+        return False                          # too short for a hole that long (an ECHO scam sale, a fast stop)
+    pts = [p["t"] for p in paths.load(t["mint"], since=t0 - 60, until=t1)]
+    if not pts:
+        return True
+    marks = [t0] + pts + [max(t1 - 60, pts[-1])]
+    return max(b - a for a, b in zip(marks, marks[1:])) >= OUTAGE_GAP_MIN * 60
+
+
+def closed(since: str | None = "rules", outages: bool = False) -> list[dict]:
     """Every fully closed position opened since `since` (the current rules; None = all time), in the order
-    they closed: {mint, usd staked, pnl, opened, closed}."""
+    they closed: {mint, usd staked, pnl, opened, closed}. outages=True keeps the trades the desk could not
+    follow (outage()); by default they are left out."""
     if not os.path.exists(TRADES):
         return []
     with open(TRADES, newline="") as f:
@@ -31,7 +55,13 @@ def closed(since: str | None = "rules") -> list[dict]:
             if r["action"] == "close":
                 out.append({**live.pop(r["mint"]), "closed": r["time"]})
     since = RULES_SINCE if since == "rules" else since
-    return [t for t in out if not since or t["opened"] >= since]
+    out = [t for t in out if not since or t["opened"] >= since]
+    return out if outages else [t for t in out if not outage(t)]
+
+
+def outages(since: str | None = "rules") -> list[dict]:
+    """The closed trades left out of the verdict because the desk was down while they were open."""
+    return [t for t in closed(since, outages=True) if outage(t)]
 
 
 def per_trade() -> list[float]:

@@ -152,6 +152,24 @@ def learn_state() -> dict:
         {"lessons": [learn.explain(l) for l in m.get("lessons", [])], "min": learn.MIN_TRAIN + learn.MIN_TEST}
 
 
+_outages = {"t": 0.0, "v": (0, 0.0)}
+
+
+def outage_state() -> tuple[int, float]:
+    """(n, pnl) of the trades closed since the balance restart that the desk could not follow (edge.outage),
+    cached 5 min: each check reads a price path."""
+    if time.time() - _outages["t"] > 300:
+        try:
+            since = book.reset_info().get("time")
+            ts = edge.outages(since=None)
+            ts = [t for t in ts if not since or t["closed"] >= since]
+            _outages["v"] = (len(ts), round(sum(t["pnl"] for t in ts), 2))
+        except Exception:
+            pass
+        _outages["t"] = time.time()
+    return _outages["v"]
+
+
 def shadow_state() -> dict | None:
     """GARDE's kills bought in shadow, replayed: cached 2 min (each replay reads a price path)."""
     if time.time() - _shadow["t"] > 120:
@@ -272,6 +290,7 @@ def state(range_key: str = "auto", series: str = "memes") -> dict:
         "now": now, "paper": PAPER, "judge": JUDGE, "ticket": TICKET_USD,
         "alive": main_ok or vigie_ok, "busy": vigie_ok and not main_ok,
         "bankroll": PAPER_BANKROLL_USD, "balance": balance, "realized": realized, "unrealized": unrealized,
+        "outages": outage_state(),
         "pnl": balance - PAPER_BANKROLL_USD, "today": book.today_pnl(), "loss_limit": DAILY_LOSS_HALT_USD,
         "cash": book.cash(positions), "marks_age": now - marks.get("t", 0),
         "wins": wins, "losses": len(closed) - wins, "mega_pct": MEGA_PROFIT_PCT,
