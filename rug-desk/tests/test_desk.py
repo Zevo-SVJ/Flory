@@ -1507,21 +1507,27 @@ class Shadow(Base):
         for f in (shadow.FILE, shadow.MEMO):
             if os.path.exists(f):
                 os.remove(f)
+        shadow._memo.update(v=None, dirty=False)
         with open(shadow.FILE, "w", newline="") as f:
             w = csv.DictWriter(f, fieldnames=shadow.FIELDS)
             w.writeheader()
             w.writerow({"t": round(time.time() - 7 * 3600), "mint": "MemoMint", "symbol": "M", "stage": "facts",
                         "reason": "top10_heavy", "price": 1.0, "liq": 50000})
         calls = []
-        with mock.patch.object(shadow, "replay", lambda r: calls.append(r) or 12.0):
+        with mock.patch.object(shadow, "replay", lambda r, p=None: calls.append(r) or 12.0):
             self.assertEqual(shadow.results()["all"]["mean"], 12.0)
             self.assertEqual(shadow.results()["all"]["mean"], 12.0)
         self.assertEqual(len(calls), 1)                                   # the second read came from the memo
+        shadow._memo.update(v=None)                                       # a new process reads the file
+        with mock.patch.object(shadow, "replay", lambda r, p=None: calls.append(r) or 99.0):
+            self.assertEqual(shadow.results()["all"]["mean"], 12.0)
+        self.assertEqual(len(calls), 1)
         with mock.patch.object(shadow, "_profile_sig", lambda m: "other"), \
-                mock.patch.object(shadow, "replay", lambda r: calls.append(r) or -3.0):
+                mock.patch.object(shadow, "replay", lambda r, p=None: calls.append(r) or -3.0):
             self.assertEqual(shadow.results()["all"]["mean"], -3.0)       # new exits: replayed again
         for f in (shadow.FILE, shadow.MEMO):
             os.remove(f)
+        shadow._memo.update(v=None, dirty=False)
 
     def test_soft_pool_rules_can_be_waived_for_launches_only(self):
         import market
@@ -1960,6 +1966,7 @@ class Coach(Base):
     def shadows(self, n, price_fn, reason="pass"):
         """n shadowed tokens 7 h old, each with a 6 h price path from price_fn(token, step)."""
         import shadow, paths
+        shadow._memo.update(v={}, dirty=False)           # new paths under the same mints: forget old replays
         t0 = time.time() - 7 * 3600
         with open(shadow.FILE, "w", newline="") as f:
             w = csv.DictWriter(f, fieldnames=shadow.FIELDS)

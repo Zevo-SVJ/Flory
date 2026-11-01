@@ -18,18 +18,17 @@ HOLD_S = 6 * 3600
 
 
 def lessons(reasons: tuple | None = None) -> list[dict]:
-    """Shadows whose 6 h are over, oldest first, with their path loaded once: {row, path, y}."""
+    """Shadows whose 6 h are over, oldest first: {row, y}. replays come from shadow's memo, so no price
+    path is read twice (each review asks for them; reading 5,000 paths each time took AUDIT 15 min)."""
     import shadow
     out = []
     for r in sorted(shadow._rows(), key=lambda r: float(r["t"])):
         if time.time() < float(r["t"]) + HOLD_S or (reasons and r["reason"] not in reasons):
             continue
-        p = shadow.path(r)
-        if not p:
-            continue
-        y = shadow.replay(r, p=p)
+        y = shadow.replay_cached(r)
         if y is not None:
-            out.append({"row": r, "path": p, "y": max(-100.0, min(200.0, y))})
+            out.append({"row": r, "y": max(-100.0, min(200.0, y))})
+    shadow.memo_flush()
     return out
 
 
@@ -38,10 +37,11 @@ def profiles() -> dict:
     return {"config": dict(EXIT), **{n: {**EXIT, **o} for n, o in exitlab.PROFILES.items()}}
 
 
-def _net(path, params) -> float | None:
-    import exitlab
-    g = exitlab.simulate(path[0], params)
-    return None if g is None else max(-100.0, min(200.0, g / exitlab.TICKET_USD * 100 - path[1]))
+def _net(d: dict, params) -> float | None:
+    """One lesson replayed with another exit profile, net and clipped like its y."""
+    import shadow
+    x = shadow.replay_cached(d["row"], params)
+    return None if x is None else max(-100.0, min(200.0, x))
 
 
 # ---------------------------------------------------------------- VIGIE
@@ -50,12 +50,12 @@ def vigie(balance: float | None) -> dict:
     cands = profiles()
     active = coach.get("exit_profile", "config")
     act = cands.get(active, cands["config"])
-    base = [_net(d["path"], act) for d in data]
+    base = [_net(d, act) for d in data]
     best, best_res, best_mean = None, None, None
     for name, params in cands.items():
         if name == active:
             continue
-        diffs = [n - b for n, b in ((_net(d["path"], params), b) for d, b in zip(data, base)) if n is not None and b is not None]
+        diffs = [n - b for n, b in ((_net(d, params), b) for d, b in zip(data, base)) if n is not None and b is not None]
         res = coach.paired(diffs, k=len(cands) - 1)
         if res.get("mean") is not None and (best_mean is None or res["mean"] > best_mean):
             best, best_res, best_mean = name, res, res["mean"]
@@ -65,7 +65,7 @@ def vigie(balance: float | None) -> dict:
     if data and best:
         bp = cands[best]
         for d, b in zip(data, base):
-            o = _net(d["path"], bp)
+            o = _net(d, bp)
             if b is not None and o is not None and o - b >= 30:
                 gaps.append((o - b, d["row"]["symbol"], b, o))
     mistakes = [f"{len(gaps)} sorties à plus de 30 points de ce que « {best} » aurait fait"
@@ -82,7 +82,7 @@ def _test_exit(entry) -> dict:
     cands = profiles()
     new, old = cands.get(entry["new"]), cands.get(entry["old"] or "config", cands["config"])
     data = [d for d in lessons(("pass",)) if float(d["row"]["t"]) > entry["t"]]
-    diffs = [a - b for a, b in ((_net(d["path"], new), _net(d["path"], old)) for d in data) if a is not None and b is not None]
+    diffs = [a - b for a, b in ((_net(d, new), _net(d, old)) for d in data) if a is not None and b is not None]
     return coach.paired(diffs)
 
 

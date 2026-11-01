@@ -85,7 +85,7 @@ def dataset() -> list[dict]:
         t = float(s["t"])
         if time.time() < t + shadow.HOURS * 3600:
             continue
-        y = shadow.replay(s)
+        y = shadow.replay_cached(s)
         if y is None:
             continue
         stamp = time.strftime("%Y-%m-%d %H:%M", time.localtime(t + 60))
@@ -96,6 +96,7 @@ def dataset() -> list[dict]:
         if s["reason"] == "low_score":
             r["reason"] = "low_score"
         out.append({"x": features(r), "y": max(CLIP[0], min(CLIP[1], y)), "t": t})
+    shadow.memo_flush()
     return out
 
 
