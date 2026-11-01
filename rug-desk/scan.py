@@ -159,13 +159,15 @@ def sample_shadow(live: dict, waived: set) -> int:
         p = live[m]
         n += shadow.note(m, {"verdict": "SKIP", "stage": "pool", "reason": "too_fresh", "symbol": p.get("symbol"),
                              "price": p.get("price"), "liq_usd": p.get("liq_usd")})
+    soft = 0
     for k, m in turn:
-        if n >= FACTS["shadow_pool_per_run"] + FACTS["shadow_fresh_per_run"]:
+        if soft >= FACTS["shadow_pool_per_run"]:
             break
         p = live[m]
         if shadow.note(m, {"verdict": "SKIP", "stage": "pool", "reason": k, "symbol": p.get("symbol"),
                            "price": p.get("price"), "liq_usd": p.get("liq_usd")}):
             n += 1
+            soft += 1
             study_next.append(m)
     return n
 

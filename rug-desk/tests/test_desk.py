@@ -1587,7 +1587,7 @@ class Shadow(Base):
         self.assertFalse(shadow.note(MINT, v))                     # a retried kill is the same token
         self.assertIn(MINT, paths.ghosts())
         self.assertFalse(shadow.note("Other", {**v, "stage": "limits", "reason": "max_open"}))
-        self.assertFalse(shadow.note("Fresh", {**v, "stage": "pool", "reason": "too_fresh"}))
+        self.assertFalse(shadow.note("NoPool", {**v, "stage": "pool", "reason": "no_pool"}))
         self.assertEqual(shadow.results()["waiting"], 1)
         rows = shadow._rows()
         t0 = time.time() - 7 * 3600
