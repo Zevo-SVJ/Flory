@@ -149,8 +149,18 @@ def sample_shadow(live: dict, waived: set) -> int:
         for k in list(by):
             if by[k]:
                 turn.append((k, by[k].pop()))
+    # entering earlier, where the bots are fewer: launches under min_age_min on the EVM chains where the
+    # shadow book pays (FACTS fresh_chains), followed apart under "too_fresh". data only: the age rule stays
+    fresh = [m for m, p in live.items() if p and m not in done and market_kill(p, waived) == "too_fresh"
+             and p.get("chain") in FACTS["fresh_chains"] and (p.get("age_min") or 0) >= 5
+             and (p.get("liq_usd") or 0) >= FACTS["soft_liq_floor_usd"] and (p.get("price") or 0) > 0]
+    random.shuffle(fresh)
+    for m in fresh[:FACTS["shadow_fresh_per_run"]]:
+        p = live[m]
+        n += shadow.note(m, {"verdict": "SKIP", "stage": "pool", "reason": "too_fresh", "symbol": p.get("symbol"),
+                             "price": p.get("price"), "liq_usd": p.get("liq_usd")})
     for k, m in turn:
-        if n >= FACTS["shadow_pool_per_run"]:
+        if n >= FACTS["shadow_pool_per_run"] + FACTS["shadow_fresh_per_run"]:
             break
         p = live[m]
         if shadow.note(m, {"verdict": "SKIP", "stage": "pool", "reason": k, "symbol": p.get("symbol"),

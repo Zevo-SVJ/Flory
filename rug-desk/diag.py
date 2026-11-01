@@ -186,6 +186,93 @@ if "--entonnoir" in sys.argv:
     print("== fin")
     sys.exit(0)
 
+if "--entree" in sys.argv or "--runners" in sys.argv:
+    # two questions about WHEN to buy, answered on the shadow book (every token followed 6 h after its verdict):
+    #   --entree   on BSC and Robinhood: buy now (as the desk does), or wait for confirmation (+10% with buyers
+    #              ahead, +25%, a new high after 30 min)? and the launches under 60 min ("too_fresh"): does
+    #              buying earlier pay there? same exits and costs everywhere, net % per trade
+    #   --runners  how often does a token really multiply (x2, x5, x10 at its 6 h peak), by market cap at the
+    #              verdict? the "300k to 10M" question. 6 h is the horizon of the record: runs over days are not seen
+    import chains, exits, exitlab, shadow, paths
+    def stat(xs):
+        if not xs:
+            return "      -"
+        s3 = sorted(xs)[:-3] if len(xs) > 3 else xs
+        return (f"{len(xs):4d} · moy {statistics.mean(xs):+6.1f} · méd {statistics.median(xs):+6.1f} · "
+                f"gagnants {sum(x > 0 for x in xs) / len(xs):4.0%} · sans top 3 {statistics.mean(s3):+6.1f}")
+    done = [r for r in shadow._rows() if time.time() >= float(r["t"]) + shadow.HOURS * 3600]
+    print(f"rejeu de {len(done)} tokens suivis en fantôme (1 à 3 min)…", flush=True)
+    if "--entree" in sys.argv:
+        def entry_at(f, rule):
+            p0, t0 = f[0]["price"], f[0]["t"]
+            hi = p0
+            for i, s in enumerate(f[1:], 1):
+                if s["t"] - t0 > 2 * 3600:
+                    return None
+                if rule == "+10% et acheteurs" and s["price"] >= 1.10 * p0 and (s.get("b5") or 0) > (s.get("s5") or 0):
+                    return i
+                if rule == "+25%" and s["price"] >= 1.25 * p0:
+                    return i
+                if rule == "plus haut après 30 min" and s["t"] - t0 >= 1800 and s["price"] > hi:
+                    return i
+                hi = max(hi, s["price"])
+            return None
+        rules = ["maintenant", "+10% et acheteurs", "+25%", "plus haut après 30 min"]
+        groups = {}
+        for r in done:
+            chain = chains.split(r["mint"])[0]
+            if chain not in ("bsc", "robinhood") or r["reason"] not in ("pass", "lp_unlocked", "too_fresh"):
+                continue
+            p = shadow.path(r)
+            if not p:
+                continue
+            feats, cost = p
+            prof = exits.for_mint(r["mint"])
+            for rule in rules:
+                i = 0 if rule == "maintenant" else entry_at(feats, rule)
+                key = (f"{r['reason']} · {chain}", rule)
+                groups.setdefault(key, {"n": 0, "xs": []})["n"] += 1
+                if i is None or len(feats) - i < 3:
+                    continue
+                g = exitlab.simulate(feats[i:], prof)
+                if g is not None:
+                    groups[key]["xs"].append(min(g / exitlab.TICKET_USD * 100 - cost, shadow.CAP_PCT))
+        print("== QUAND ACHETER (BSC, Robinhood) : groupe · règle d'entrée · entrés/suivis · résultat net %")
+        for (grp, rule), v in sorted(groups.items(), key=lambda kv: (kv[0][0], rules.index(kv[0][1]))):
+            print(f"  {grp:24s} {rule:24s} {len(v['xs']):4d}/{v['n']:<4d} {stat(v['xs'])}")
+    if "--runners" in sys.argv:
+        import check
+        mc = {}
+        for path_ in (LOG, check.STUDY):
+            for r in rows(path_):
+                try:
+                    mc[r["mint"]] = float(r["mcap_liq"]) * float(r["liq_usd"])
+                except (TypeError, ValueError, KeyError):
+                    pass
+        bands = [("< 100 k$", 0, 1e5), ("100-300 k$", 1e5, 3e5), ("300 k$-1 M$", 3e5, 1e6), ("1-3 M$", 1e6, 3e6), ("> 3 M$", 3e6, 1e18)]
+        by = {}
+        for r in done:
+            cap = mc.get(r["mint"])
+            if cap is None:
+                continue
+            pts = paths.load(r["mint"], since=float(r["t"]), until=float(r["t"]) + shadow.HOURS * 3600)
+            if len(pts) < 10 or float(r["price"]) <= 0:
+                continue
+            peak = max(p["price"] for p in exitlab.clean(pts)) / float(r["price"])
+            last = pts[-1]["price"] / float(r["price"])
+            band = next(n for n, lo, hi in bands if lo <= cap < hi)
+            by.setdefault((chains.split(r["mint"])[0], band), []).append((peak, last))
+        print("== MULTIPLICATEURS EN 6 H (sommet / prix au verdict) : chaîne · capitalisation au verdict · n · "
+              "x2 · x5 · x10 · encore x2 à 6 h · à moitié ou pire à 6 h")
+        for (chain, band), xs in sorted(by.items(), key=lambda kv: (kv[0][0], [b[0] for b in bands].index(kv[0][1]))):
+            if len(xs) < 10:
+                continue
+            f = lambda c: f"{100 * sum(c(p, l) for p, l in xs) / len(xs):5.1f} %"
+            print(f"  {chain:9s} {band:12s} {len(xs):5d} · {f(lambda p, l: p >= 2)} · {f(lambda p, l: p >= 5)} · "
+                  f"{f(lambda p, l: p >= 10)} · {f(lambda p, l: l >= 2)} · {f(lambda p, l: l <= 0.5)}")
+    print("== fin")
+    sys.exit(0)
+
 if "--risque" in sys.argv:
     # every open position checked again NOW, as GARDE would check a new token: the pool against the entry,
     # the flows of the last hour, the contract and the holders read fresh, and on BSC a real buy-then-sell
