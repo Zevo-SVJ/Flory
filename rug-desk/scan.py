@@ -125,6 +125,9 @@ def gt_trending() -> list[str]:
 FUNNEL = os.path.join(os.path.dirname(LOG), "funnel.jsonl")   # one line per SCOUT run: python3 diag.py --entonnoir
 
 
+study_next: list[str] = []      # this run's shadowed pool kills, for GARDE's study (agents.scout)
+
+
 def sample_shadow(live: dict, waived: set) -> int:
     """Launches killed by a soft pool rule never reach GARDE, so nothing said whether those rules protect.
     a few per run are followed 6 h in shadow like GARDE's kills: the shadow book judges each rule, and
@@ -150,8 +153,10 @@ def sample_shadow(live: dict, waived: set) -> int:
         if n >= FACTS["shadow_pool_per_run"]:
             break
         p = live[m]
-        n += shadow.note(m, {"verdict": "SKIP", "stage": "pool", "reason": k, "symbol": p.get("symbol"),
-                             "price": p.get("price"), "liq_usd": p.get("liq_usd")})
+        if shadow.note(m, {"verdict": "SKIP", "stage": "pool", "reason": k, "symbol": p.get("symbol"),
+                           "price": p.get("price"), "liq_usd": p.get("liq_usd")}):
+            n += 1
+            study_next.append(m)
     return n
 
 
@@ -224,6 +229,7 @@ def leads() -> list[str]:
     last_funnel = {"leads": len(out), "graduates": len(graduates), "evm_new": len(fresh_evm), "chains": by_chain,
                    "trending": len(trend), "jupiter_top": len(top),
                    "feeds_and_search": n_feeds_search_grads - len(graduates) - len(fresh_evm), **funnel}
+    study_next.clear()
     try:
         shadowed = sample_shadow({m: live.get(m) for m in out}, waived)
     except Exception:

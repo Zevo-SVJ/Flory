@@ -100,6 +100,8 @@ FACTS = {                   # the rug filter. code only, no model
     "soft_liq_floor_usd": 8000, # thin_pool's floor if the shadow book ever waives it: never under this
     "shadow_pool_per_run": 4,   # SCOUT follows this many pool-rule kills per run in shadow (6 h each)
     "shadow_max_ghosts": 500,   # ...while VIGIE prices fewer ghosts than this
+    "study_per_run": 3,         # ...and GARDE runs its other checks on this many of them, for the data only
+                                # (check.study: never bought, written to study.csv, read by learn.py)
     "max_ticket_share": 0.02,   # your ticket is never more than 2% of the pool (~2% price impact)
     # backtest on 523 graduations (backtest.py, two separate windows on Oct 19): entering at 15 min with the
     # pool rules lost -20.7% a trade (median -46%), on both windows. waiting 60 min and buying only above

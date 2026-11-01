@@ -76,10 +76,14 @@ def dataset() -> list[dict]:
     """(features, label, time) for every shadowed token whose 6 h are over, oldest first."""
     import shadow
     rows = {}
-    if os.path.exists(LOG):
-        with open(LOG, newline="") as f:
-            for r in csv.DictReader(f):
-                rows.setdefault(r["mint"], []).append(r)
+    import check                              # GARDE's verdicts, and its studies of pool-killed launches
+    for path in (LOG, check.STUDY):
+        if os.path.exists(path):
+            with open(path, newline="") as f:
+                for r in csv.DictReader(f):
+                    rows.setdefault(r["mint"], []).append(r)
+    for v in rows.values():
+        v.sort(key=lambda r: r["time"])
     out = []
     for s in sorted(shadow._rows(), key=lambda r: float(r["t"])):
         t = float(s["t"])

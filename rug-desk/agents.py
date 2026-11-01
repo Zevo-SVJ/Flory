@@ -171,7 +171,14 @@ def scout():
     set_agent("SCOUT", funnel=scan.last_funnel)
     for mint in leads:
         garde(mint)
-    return f"{len(leads)} lead(s) envoyé(s) à GARDE"
+    studied = 0                          # more tokens tested, none bought (check.study)
+    for mint in list(scan.study_next)[:FACTS.get("study_per_run", 0)]:
+        try:
+            check.study(mint)
+            studied += 1
+        except Exception:
+            pass                         # data only: a failed read costs nothing but the lesson
+    return f"{len(leads)} lead(s) envoyé(s) à GARDE" + (f", {studied} étudié(s) pour les données" if studied else "")
 
 
 def garde(mint: str):

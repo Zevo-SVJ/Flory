@@ -251,6 +251,21 @@ class Book(Base):
         self.assertIn(MINT, book.load())
         self.assertEqual(book.guard(MINT), "already_open")
 
+    def test_a_pool_killed_launch_is_studied_never_bought_and_kept_out_of_checks(self):
+        thin = ds_pairs(liq=9000)                                   # under the $15k floor: thin_pool
+        with net(ds=thin):
+            self.assertEqual(check.run(MINT)["reason"], "thin_pool")
+            n_checks = len(open(config.LOG).read().splitlines())
+            v = check.study(MINT)
+        self.assertEqual(v.get("pool_kill"), "thin_pool")           # the pool rule, then every other check
+        self.assertNotEqual(v["reason"], "thin_pool")
+        self.assertNotIn(MINT, book.load())
+        self.assertEqual(len(open(config.LOG).read().splitlines()), n_checks)
+        import csv as _c
+        rows = list(_c.DictReader(open(check.STUDY)))
+        self.assertEqual((rows[-1]["mint"], rows[-1]["pool_kill"]), (MINT, "thin_pool"))
+        os.remove(check.STUDY)
+
     def test_daily_loss_halt(self):
         book.record("A", "A", "close", 0, -config.DAILY_LOSS_HALT_USD, "stop")
         self.assertEqual(book.guard(MINT), "halted_daily_loss")

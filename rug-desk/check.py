@@ -22,7 +22,7 @@ FIELDS = ["time", "mint", "symbol", "stage", "verdict", "confidence", "reason", 
           # what learn.py learns from: the token as GARDE saw it at the verdict
           "chain", "vol_liq", "avg_trade", "chg_1h", "chg_5m", "buy_ratio", "mcap_liq", "socials",
           "top10", "max_wallet", "holders", "expected", "override", "dial",
-          "rc_score", "rc_danger", "rc_lp_locked"]
+          "rc_score", "rc_danger", "rc_lp_locked", "pool_kill"]
 
 
 def _migrate():
@@ -39,12 +39,15 @@ def _migrate():
             w.writerow({k: row.get(k) for k in FIELDS})
 
 
-def log(row: dict):
+STUDY = os.path.join(DATA, "study.csv")     # GARDE's verdicts on tokens the pool rules killed: data only
+
+
+def log(row: dict, path: str = LOG):
     os.makedirs(DATA, exist_ok=True)
-    new = not os.path.exists(LOG)
-    if not new:
+    new = not os.path.exists(path)
+    if not new and path == LOG:
         _migrate()
-    with open(LOG, "a", newline="") as f:
+    with open(path, "a", newline="") as f:
         w = csv.DictWriter(f, fieldnames=FIELDS)
         if new:
             w.writeheader()
@@ -103,13 +106,15 @@ def _model_override(reason: str, seen: dict) -> bool:
     return exp is not None and exp >= learn.OVERRIDE_PCT
 
 
-def check(mint: str) -> dict:
+def check(mint: str, study: bool = False) -> dict:
+    """GARDE's verdict on one token. study=True: a token the pool rules already killed goes through every
+    other check anyway, for the data (study()): no limits, no metered deep read, never bought."""
     import shadow
     waived = shadow.waived()             # soft kills the shadow book showed cost money: passed over
     x = pending.reads().get(mint)                                # ECHO already found a scam on X: never again
     if x and (x.get("verdict") or "").upper() == "SCAM":
         return {"stage": "limits", "verdict": "SKIP", "reason": "x_scam_before", "symbol": x.get("symbol")}
-    if (g := book.guard(mint)):                                  # limits, free
+    if not study and (g := book.guard(mint)):                    # limits, free
         return {"stage": "limits", "verdict": "SKIP", "reason": g}
 
     # pool first: same checks as the article, but most leads die here (thin or fresh pools)
@@ -129,8 +134,10 @@ def check(mint: str) -> dict:
             "socials": len(mm.get("socials") or []) if m else None}
     seen.update({"price": (m or {}).get("price"), "liq_usd": (m or {}).get("liq_usd"), "age_min": (m or {}).get("age_min"),
             "lane": market.lane(m) if m else None})
-    if (k := market_kill(m, waived)):
+    if (k := market_kill(m, waived)) and not (study and k not in ("no_pool", "no_price")):
         return {"stage": "pool", "verdict": "SKIP", "reason": k, "symbol": (m or {}).get("symbol"), **seen}
+    if k:
+        seen["pool_kill"] = k                  # study: the pool rule that killed it, the rest still checked
     import chains
     evm = chains.is_evm(mint)
     if market.lane(m) == "early" and not evm:                    # still under its graduation price: the
@@ -198,7 +205,7 @@ def check(mint: str) -> dict:
     v = judge(token, m)
     sym = m["symbol"] or token["symbol"]
     sc = score(m, token)
-    if sc["score"] >= MIN_SCORE and not evm:   # the deep read costs calls, and its sources are Solana's
+    if sc["score"] >= MIN_SCORE and not evm and not study:   # the deep read costs metered calls, Solana's only
         deep = deep_read(mint, token, skip=waived)
         seen.update(deep["logged"])
         if deep["kill"] and not _model_override(deep["kill"], seen):
@@ -286,6 +293,16 @@ def hot_skip(v: dict) -> str | None:
     if SIZING.get("skip_hot") and v.get("tier") in ("strong", "max"):
         return f"not bought: hot signals, already at the top of its hype ({', '.join(v.get('signals') or [])})"
     return None
+
+
+def study(mint: str) -> dict:
+    """More tokens tested, none bought: a launch the pool rules killed (and the shadow book follows) goes
+    through every other check of GARDE, and the verdict is written to study.csv, never to checks.csv:
+    the reports, the funnel and SCOUT's "already seen" list stay as they are. learn.py reads both files,
+    so each such token is a full lesson (holders, contract, score) instead of a pool reading only."""
+    v = check(mint, study=True)
+    log({"time": time.strftime("%Y-%m-%d %H:%M"), "mint": mint, **v}, STUDY)
+    return v
 
 
 def run(mint: str) -> dict:

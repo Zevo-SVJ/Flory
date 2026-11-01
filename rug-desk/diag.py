@@ -153,6 +153,15 @@ if "--entonnoir" in sys.argv:
         print(f"  {k:3d} x {lane:8s} {stage:6s} {reason}")
     tr = [t for t in rows(TRADES) if t["time"] >= cut and t["action"] == "open"]
     print(f"ACHATS : {len(tr)}")
+    import check as _check
+    st = [r for r in rows(_check.STUDY) if r["time"] >= cut]
+    if st:
+        would = sum(r["verdict"] in ("PASS", "BUY") for r in st)
+        print(f"ÉTUDE (tués par les règles de pool, testés quand même, jamais achetés) : {len(st)} · "
+              f"auraient passé tout le reste : {would}")
+        for (pk, reason), n in Counter((r.get("pool_kill") or "?", r["reason"][:30]) for r in st
+                                       if r["verdict"] == "SKIP").most_common(8):
+            print(f"  {n:3d} x {pk:13s} puis {reason}")
     print("rejeu des tokens suivis en fantôme, une seule fois (1 à 3 min, n'appuie sur rien)…", flush=True)
     r = shadow.results()
     w = shadow.waived_from(r)
