@@ -199,6 +199,15 @@ EXIT_BY_CHAIN = {"solana": "config"}
 EXIT_AUTOTUNE = False       # since Oct 20 VIGIE's self-review switches profiles (reviews.py, coach.py): it learns
                             # from every shadowed token, ten times the trades, under stricter guards
 
+# events whose date is known in advance: SCOUT searches their words on DexScreener every run while the window
+# is open, and tags what it finds with the event's name (its own line in SCOUT's source ranking and in the
+# shadow book). nothing is loosened: the copies die on copycat and serial_farm, the insiders on dev_holds and
+# top10 (GTAVI, Aug 2026: $25M cap on leaked footage, the leaker sold hours before Rockstar's reveal)
+EVENT_WATCH = {
+    "GTA VI": {"from": "2026-11-12", "to": "2026-11-30",          # release Nov 19, 2026
+               "words": ["gta", "gtavi", "gta6", "vicecity", "lucia", "leonida"]},
+}
+
 SCHEDULE = {                # used by agents.py: one entry per agent
     "vigie_every_s": 20,        # VIGIE: prices every open position, applies exits, logs the balance
     "scout_every_min": 3,       # SCOUT: pulls fresh leads (pump.fun graduations first), GARDE checks each one

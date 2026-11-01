@@ -85,6 +85,34 @@ def searched(trending: list[str] = ()) -> list[str]:
     return out
 
 
+def event_leads(today: str | None = None) -> dict[str, str]:
+    """{token key: event name} for the events whose window is open (config EVENT_WATCH): the same DexScreener
+    search and the same age, pool and DEX limits as searched()."""
+    from config import EVENT_WATCH
+    today = today or time.strftime("%Y-%m-%d")
+    out, now_ms = {}, time.time() * 1000
+    for name, ev in EVENT_WATCH.items():
+        if not ev["from"] <= today <= ev["to"]:
+            continue
+        for w in ev["words"]:
+            try:
+                r = requests.get(SEARCH, params={"q": w}, timeout=15)
+                r.raise_for_status()
+                pairs = (r.json() or {}).get("pairs") or []
+            except Exception:
+                continue
+            for p in pairs:
+                a, chain = (p.get("baseToken") or {}).get("address"), p.get("chainId")
+                if not a or not chains.supported(chain):
+                    continue
+                age_h = (now_ms - (p.get("pairCreatedAt") or 0)) / 3.6e6
+                ok_dex = p.get("dexId") == "pumpswap" if chain == "solana" else True
+                if (ok_dex and FACTS["min_age_min"] / 60 <= age_h
+                        and ((p.get("liquidity") or {}).get("usd") or 0) >= FACTS["min_liquidity_usd"]):
+                    out.setdefault(chains.key(chain, a), name)
+    return out
+
+
 GT = "https://api.geckoterminal.com/api/v2/networks/trending_pools"     # every network at once
 NOT_MEMES = {"So11111111111111111111111111111111111111112", "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
              "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB"}      # SOL, USDC, USDT
@@ -213,6 +241,9 @@ def leads() -> list[str]:
     import jup                                 # the most organic trading of the hour, per Jupiter
     top = [a for a in jup.top_organic("1h") if a not in done and a not in out and a not in NOT_MEMES]
     out += top
+    events = {k: n for k, n in event_leads().items() if k not in done and k not in out}
+    out += list(events)
+    src.update({m: f"événement {n}" for m, n in events.items()})
     src.update({m: "tendance GeckoTerminal" for m in trend})
     src.update({m: "top organique Jupiter" for m in top})
     # one batched pool read for every lead: most are bonding-curve tokens with no real pool yet.

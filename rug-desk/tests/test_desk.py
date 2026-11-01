@@ -443,6 +443,19 @@ class ChainOff(unittest.TestCase):
         os.remove(shadow.FILE)
 
 
+class EventWatch(unittest.TestCase):
+    def test_event_words_are_searched_only_inside_their_window(self):
+        import scan
+        born = (time.time() - 3 * 3600) * 1000
+        pair = {"baseToken": {"address": "0x" + "c" * 40}, "chainId": "bsc", "dexId": "pancakeswap",
+                "pairCreatedAt": born, "liquidity": {"usd": 40000}}
+        resp = mock.Mock(**{"raise_for_status.return_value": None, "json.return_value": {"pairs": [pair]}})
+        with mock.patch("requests.get", return_value=resp) as get:
+            self.assertEqual(scan.event_leads("2026-11-01"), {})
+            get.assert_not_called()
+            self.assertEqual(scan.event_leads("2026-11-19"), {"bsc:0x" + "c" * 40: "GTA VI"})
+
+
 class LpOpen(unittest.TestCase):
     def test_an_unlocked_lp_opens_only_on_its_chain_and_only_while_the_shadow_book_pays(self):
         import shadow
