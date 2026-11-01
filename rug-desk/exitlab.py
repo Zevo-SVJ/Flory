@@ -190,5 +190,27 @@ def speed_test(raw: list[list[dict]], params: dict) -> list[dict]:
     return out
 
 
+def activate(name: str, why: str) -> str:
+    """Put an exit profile in force by hand ("config" = config.py's EXIT), logged in the coach's journal
+    like any change, so VIGIE's review re-tests it. Nov 1: "regles B", chosen on Oct 26 on the trades it was
+    then replayed on, made -$40 on the trades that came after it (second half of 65), where the plain
+    config exits did better trade by trade: back to config."""
+    import coach
+    if name != "config" and name not in PROFILES:
+        return f"profil inconnu : {name} (config ou {', '.join(PROFILES)})"
+    t = coach.tuning()
+    old = t.get("exit_profile")
+    t["exit_profile"] = name
+    coach._write(coach.TUNING, t)
+    coach._log({"id": f"{int(time.time())}-Skide-exit_profile", "t": time.time(), "agent": "Skide",
+                "key": "exit_profile", "old": old, "new": name, "why": why, "evidence": {},
+                "status": "active", "balance": None})
+    return f"VIGIE applique maintenant les sorties « {name} » (avant : {old or 'config'})"
+
+
 if __name__ == "__main__":
+    import sys
+    if len(sys.argv) >= 3 and sys.argv[1] == "activer":
+        print(activate(sys.argv[2], " ".join(sys.argv[3:]) or "choix manuel"))
+        sys.exit(0)
     print(json.dumps(run(), indent=2))
