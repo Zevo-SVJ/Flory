@@ -115,7 +115,8 @@ def market_kill(m: dict | None, skip=()) -> str | None:
     if 2 * chains.CHAINS.get(m.get("chain") or "solana", chains.CHAINS["solana"])["tx_usd"] > \
             FACTS.get("max_fixed_cost_pct", 5) / 100 * TICKET_USD:   return "fees_eat_ticket"
     if TICKET_USD / m["liq_usd"] > FACTS["max_ticket_share"]:    return "ticket_too_big"
-    cap_x = MOMENTUM["max_mcap_liq"] if lane(m) == "momentum" else FACTS["max_mcap_liq"]
+    cap_x = MOMENTUM["max_mcap_liq"] if lane(m) == "momentum" else \
+        FACTS.get("max_mcap_liq_evm", FACTS["max_mcap_liq"]) if (m.get("chain") or "solana") != "solana" else FACTS["max_mcap_liq"]
     if (m.get("mcap") or 0) > cap_x * m["liq_usd"] and "fake_cap" not in skip:   return "fake_cap"
     if m["buys_1h"] + m["sells_1h"] >= 100 and m.get("avg_trade_1h", 1e9) < FACTS["min_avg_trade_usd"] \
             and "micro_trades" not in skip:

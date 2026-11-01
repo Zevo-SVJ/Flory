@@ -1544,6 +1544,14 @@ class Shadow(Base):
             os.remove(f)
         shadow._memo.update(v=None, dirty=False)
 
+    def test_an_evm_launch_worth_4x_its_pool_is_a_fake_cap_a_solana_one_is_not(self):
+        import market
+        m = {"price": 1.0, "liq_usd": 50000, "chain": "bsc", "mcap": 250000, "buys_1h": 50, "sells_1h": 50,
+             "avg_trade_1h": 40, "vol_1h": 9000, "age_min": 120, "chg_1h": 5, "chg_5m": 0}
+        self.assertEqual(market.market_kill(m), "fake_cap")                        # 5x on BSC
+        self.assertIsNone(market.market_kill({**m, "mcap": 150000}))                # 3x
+        self.assertIsNone(market.market_kill({**m, "chain": "solana"}))             # Solana keeps 12x
+
     def test_soft_pool_rules_can_be_waived_for_launches_only(self):
         import market
         m = {"price": 1.0, "liq_usd": 10000, "chain": "solana", "mcap": 500000, "buys_1h": 50, "sells_1h": 50,

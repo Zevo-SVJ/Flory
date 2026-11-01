@@ -119,6 +119,12 @@ FACTS = {                   # the rug filter. code only, no model
     # "National Oil Dividend Fund", "Ripple USD") showing $10M-$600M caps on $0.2-2M pools that trade
     # ~1% of their pool an hour. the tokens that really ran sat at caps 3-9x their pool, turnover 0.5-15x
     "max_mcap_liq": 12,         # market cap / pool liquidity above this -> fake_cap
+    # Nov 1 (diag --profil, every shadow token replayed with the desk's exits and costs): on the EVM chains a
+    # launch whose cap is 4-12x its pool lost on BSC (-13.1% a trade, n 69, halves -21.1/-5.4, -19.6 without
+    # its top 3) and on Robinhood (-7.2%, n 69, halves -5.6/-8.8, -16.1 without its top 3): the same on two
+    # chains and both halves. the lower ratios held up better. the shadow sample keeps following fake_cap,
+    # so the soft-rule waiver lifts this if it turns out wrong
+    "max_mcap_liq_evm": 4,
     "min_avg_trade_usd": 15,    # 100+ swaps in the hour averaging under this -> micro_trades (bot farm)
     "min_turnover_1h": 0.05,    # a pool that trades under 5% of its size an hour -> dead_volume (the clones: ~1%)
     "max_age_hours": 72,
