@@ -102,6 +102,9 @@ If `data/narratives.txt` is missing or older than 2 hours:
    drop the ones already flooded with copies.
 3. Overwrite `data/narratives.txt` with at most 10 lines, one word or ticker per line, best first.
    No sentences, no `$`, nothing else in the file.
+4. Found nothing early? Overwrite it anyway with the single line `# HH:MM rien de neuf` (the time now).
+   SCOUT skips lines starting with `#`; the file's new date says the scan ran, so the next one waits 2 h
+   instead of searching X again on every pass.
 
 SCOUT searches DexScreener for these words first on its next run.
 

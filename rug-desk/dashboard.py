@@ -118,11 +118,20 @@ def echo_status(waiting: dict, xreads: list[dict], now: float) -> dict:
                 "last": last}
     if waiting:
         return {"status": "work", "msg": f"{len(waiting)} PASS à lire", "last": last}
-    # with nothing to read, the narrative scan (every 2 h) is ECHO's only sign of life
+    # with nothing to read, ECHO's signs of life are its narrative scan (every 2 h) and its watch over the
+    # open positions (x_reads.csv): the latest of the two. Nov 1: a pass at 06:55 that found no new narrative
+    # showed "no X scan for 6 h" while ECHO was reading every 20 min
+    marks = []
     try:
-        quiet_h = (now - os.path.getmtime(os.path.join(DATA, "narratives.txt"))) / 3600
+        marks.append(os.path.getmtime(os.path.join(DATA, "narratives.txt")))
     except OSError:
-        quiet_h = None
+        pass
+    if last:
+        try:
+            marks.append(time.mktime(time.strptime(last, "%Y-%m-%d %H:%M")))
+        except ValueError:
+            pass
+    quiet_h = (now - max(marks)) / 3600 if marks else None
     if quiet_h is not None and quiet_h > 3:
         return {"status": "error", "msg": f"aucun scan X depuis {quiet_h:.0f} h : la boucle ECHO tourne-t-elle ?",
                 "last": last}
