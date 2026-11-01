@@ -240,6 +240,35 @@ if "--profil" in sys.argv:
     for name in ("tient", "chute"):
         c = Counter(r.get("reason") or "?" for r in g[name])
         print(f"  verdict GARDE des « {name} » : " + ", ".join(f"{k} {v}" for k, v in c.most_common(6)))
+    # the test that counts: money, not "held x2". every finished shadow of this chain, replayed with the desk's
+    # exits and costs, by its market cap / pool ratio at the verdict, all verdicts and the passes alone
+    bands = [("< 1", 0, 1), ("1-2", 1, 2), ("2-4", 2, 4), ("4-12", 4, 12), ("> 12", 12, 1e18)]
+    net = {}
+    for r in shadow._rows():
+        t = float(r["t"])
+        if chains.split(r["mint"])[0] != chain or time.time() < t + shadow.HOURS * 3600:
+            continue
+        stamp = time.strftime("%Y-%m-%d %H:%M", time.localtime(t + 60))
+        seen = [x for x in last.get(r["mint"], []) if x["time"] <= stamp]
+        ml = num(seen[-1], "mcap_liq") if seen else None
+        if ml is None:
+            continue
+        x = shadow.replay_cached(r)
+        if x is None:
+            continue
+        band = next(n for n, lo, hi in bands if lo <= ml < hi)
+        net.setdefault(band, []).append((t, min(x, shadow.CAP_PCT), r["reason"]))
+    shadow.memo_flush()
+    print(f"  RÉSULTAT NET (sorties et coûts du desk) par capitalisation / pool au verdict, {chain} :")
+    print("  tranche · n · moyenne · médiane · gagnants · sans top 3 · 1re / 2e moitié")
+    for name, _, _ in bands:
+        xs = [x for _, x, _ in sorted(net.get(name, []))]
+        if len(xs) < 10:
+            continue
+        h = len(xs) // 2
+        s3 = statistics.mean(sorted(xs)[:-3])
+        print(f"  {name:6s} {len(xs):5d} · {statistics.mean(xs):+6.1f} · {statistics.median(xs):+6.1f} · "
+              f"{sum(x > 0 for x in xs) / len(xs):4.0%} · {s3:+6.1f} · {statistics.mean(xs[:h]):+6.1f} / {statistics.mean(xs[h:]):+6.1f}")
     print("== fin")
     sys.exit(0)
 
