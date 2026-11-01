@@ -186,6 +186,63 @@ if "--entonnoir" in sys.argv:
     print("== fin")
     sys.exit(0)
 
+if "--profil" in sys.argv:
+    # what the tokens that ran had in common, at the verdict. for one chain (default bsc): every shadow token
+    # whose 6 h are over, sorted into "tient" (still x2 or more at 6 h), "chute" (half or worse at 6 h) and the
+    # rest; for each number GARDE logged at the verdict, the median of each group, and how well that number
+    # alone tells "tient" from "chute" (AUC: 0.5 = no better than a coin, 1 or 0 = perfect, 0.7+ = worth testing)
+    #   python3 diag.py --profil            python3 diag.py --profil robinhood
+    import chains, check, shadow, paths
+    chain = next((a for a in sys.argv[1:] if a in ("bsc", "robinhood", "base", "solana")), "bsc")
+    last = {}
+    for path_ in (LOG, check.STUDY):
+        for r in rows(path_):
+            last.setdefault(r["mint"], []).append(r)
+    feats = ["score", "top10", "max_wallet", "holders", "liq_usd", "mcap_liq", "vol_liq", "avg_trade", "buy_ratio",
+             "chg_1h", "chg_5m", "age_min", "socials", "rc_score"]
+    groups = {"tient": [], "chute": [], "autre": []}
+    for r in shadow._rows():
+        t = float(r["t"])
+        if chains.split(r["mint"])[0] != chain or time.time() < t + shadow.HOURS * 3600 or float(r["price"]) <= 0:
+            continue
+        stamp = time.strftime("%Y-%m-%d %H:%M", time.localtime(t + 60))
+        seen = [x for x in last.get(r["mint"], []) if x["time"] <= stamp]
+        pts = paths.load(r["mint"], since=t, until=t + shadow.HOURS * 3600)
+        if not seen or len(pts) < 10:
+            continue
+        end = pts[-1]["price"] / float(r["price"])
+        groups["tient" if end >= 2 else "chute" if end <= 0.5 else "autre"].append(seen[-1])
+    def num(r, k):
+        try:
+            return float(r[k])
+        except (TypeError, ValueError, KeyError):
+            return None
+    def auc(a, b):                      # chance that a "tient" token has the higher value than a "chute" one
+        if not a or not b:
+            return None
+        wins = sum((x > y) + 0.5 * (x == y) for x in a for y in b)
+        return wins / (len(a) * len(b))
+    g = groups
+    print(f"== {chain} : {len(g['tient'])} tiennent (x2+ à 6 h) · {len(g['chute'])} chutent (moitié ou pire) · "
+          f"{len(g['autre'])} entre les deux")
+    print("  donnée au verdict      médiane tient · médiane chute · médiane tous · AUC (0,5 = rien, ≥ 0,7 ou ≤ 0,3 = signal)")
+    out = []
+    for k in feats:
+        a = [v for v in (num(r, k) for r in g["tient"]) if v is not None]
+        b = [v for v in (num(r, k) for r in g["chute"]) if v is not None]
+        allv = [v for v in (num(r, k) for gr in g.values() for r in gr) if v is not None]
+        if len(a) < 5 or len(b) < 5:
+            continue
+        u = auc(a, b)
+        out.append((abs(u - 0.5), k, statistics.median(a), statistics.median(b), statistics.median(allv), u, len(a), len(b)))
+    for _, k, ma, mb, mall, u, na, nb in sorted(out, reverse=True):
+        print(f"  {k:20s} {ma:12.4g} · {mb:12.4g} · {mall:12.4g} · {u:.2f}  (n {na}/{nb})")
+    for name in ("tient", "chute"):
+        c = Counter(r.get("reason") or "?" for r in g[name])
+        print(f"  verdict GARDE des « {name} » : " + ", ".join(f"{k} {v}" for k, v in c.most_common(6)))
+    print("== fin")
+    sys.exit(0)
+
 if "--entree" in sys.argv or "--runners" in sys.argv:
     # two questions about WHEN to buy, answered on the shadow book (every token followed 6 h after its verdict):
     #   --entree   on BSC and Robinhood: buy now (as the desk does), or wait for confirmation (+10% with buyers
