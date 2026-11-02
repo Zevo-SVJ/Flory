@@ -172,11 +172,40 @@ def drafts(hours: float = 24) -> dict[str, list[dict]]:
     return out
 
 
+# when the day's post goes out: 9:30am New York, Tuesday-Thursday mornings lead every study (Buffer, 8.7M posts;
+# Sprout Social; SocialChamp), 9:30 ET is the crypto slot (US market open), Saturday is the weakest day.
+# antirug-bot/.env: ANTIRUG_POST_NY=09:30   ANTIRUG_SKIP_DAYS=Sat   (New York time, handles US daylight saving)
+WINDOW_MIN = 60             # POSTER.md runs every hour: the first run inside this window posts
+
+
+def post_time() -> tuple[bool, str]:
+    """(is it time to post, the next slot in Paris time)."""
+    from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+    ny, paris = ZoneInfo("America/New_York"), ZoneInfo("Europe/Paris")
+    hh, mm = (int(x) for x in (local.get("ANTIRUG_POST_NY") or "09:30").split(":"))
+    skip = {d.strip()[:3].lower() for d in (local.get("ANTIRUG_SKIP_DAYS") or "Sat").split(",") if d.strip()}
+    now = datetime.now(ny)
+    for day in range(0, 8):
+        slot = (now + timedelta(days=day)).replace(hour=hh, minute=mm, second=0, microsecond=0)
+        if slot.strftime("%a").lower() in skip:
+            continue
+        if slot <= now < slot + timedelta(minutes=WINDOW_MIN):
+            return True, slot.astimezone(paris).strftime("%a %d %H:%M")
+        if slot > now:
+            return False, slot.astimezone(paris).strftime("%a %d %H:%M")
+    return False, "?"
+
+
 if __name__ == "__main__":
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     h = float(args[0]) if args else 24
     d = drafts(h)
     if "--today" in sys.argv:                            # POSTER.md: the one post of the day, nothing else
+        due, slot = post_time()
+        if not due and "--now" not in sys.argv:
+            print(f"WAIT · next post {slot} Paris time (9:30am New York)")
+            sys.exit(0)
         if not d["en"]:
             print("NOTHING TO POST")
             sys.exit(0)

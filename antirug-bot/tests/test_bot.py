@@ -69,6 +69,28 @@ class Bot(unittest.TestCase):
         self.assertIn("Pro actifs", self.sent[-1][1])
 
 
+class Slot(unittest.TestCase):
+    def test_the_slot_is_930_new_york_and_never_saturday(self):
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+        ny = ZoneInfo("America/New_York")
+        class Fake(datetime):
+            t = None
+            @classmethod
+            def now(cls, tz=None):
+                return cls.t
+        import datetime as dt
+        with mock.patch.object(dt, "datetime", Fake):
+            Fake.t = datetime(2026, 11, 3, 9, 45, tzinfo=ny)              # a Tuesday, 9:45 New York
+            self.assertTrue(posts.post_time()[0])
+            Fake.t = datetime(2026, 11, 3, 11, 0, tzinfo=ny)
+            due, slot = posts.post_time()
+            self.assertFalse(due)
+            self.assertIn("15:30", slot)                                  # Wednesday 9:30 NY = 15:30 Paris
+            Fake.t = datetime(2026, 11, 7, 9, 45, tzinfo=ny)              # a Saturday
+            self.assertFalse(posts.post_time()[0])
+
+
 class Posts(unittest.TestCase):
     def test_drafts_come_from_the_audit_file_with_their_denominators(self):
         import config
