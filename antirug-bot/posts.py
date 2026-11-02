@@ -71,6 +71,5 @@ if __name__ == "__main__":
     d = drafts(h)
     if not d["en"]:
         print("pas encore de données sur cette période (rug-desk/data/audit.csv)")
-    for lang in ("en", "fr"):
-        for i, p in enumerate(d[lang], 1):
-            print(f"===== {lang.upper()} · brouillon {i} ({len(p)} caractères)\n{p}\n")
+    for i, p in enumerate(d["en"], 1):                  # English only: X's memecoin crowd reads English
+        print(f"===== draft {i} ({len(p)} characters)\n{p}\n")
