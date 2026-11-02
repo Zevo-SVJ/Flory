@@ -186,6 +186,39 @@ if "--entonnoir" in sys.argv:
     print("== fin")
     sys.exit(0)
 
+if "--longs" in sys.argv:
+    # the 7-day watch (longwatch.py): of the tokens judged at 150k-1M of market cap, how many reached x2, x5,
+    # x10, x20 within 1, 3 and 7 days (peak price over the verdict price), and where they are now
+    import longwatch, paths, exitlab
+    rs = longwatch.rows()
+    now = time.time()
+    print(f"== suivi 7 jours : {len(rs)} tokens entre 150 k$ et 1 M$ de capitalisation au verdict")
+    by = {}
+    for r in rs:
+        t0, p0 = float(r["t"]), float(r["price"])
+        pts = exitlab.clean(paths.load(r["mint"], since=t0, until=t0 + 7 * 86400))
+        if len(pts) < 10 or p0 <= 0:
+            continue
+        age_d = (now - t0) / 86400
+        for d_ in (1, 3, 7):
+            if age_d < d_:
+                continue
+            seg = [p["price"] for p in pts if p["t"] <= t0 + d_ * 86400]
+            for key in (f"{r['chain']} · {d_} j", f"tous · {d_} j", f"{'PASS' if r['verdict'] in ('PASS', 'BUY') else 'éliminés'} · {d_} j"):
+                by.setdefault(key, []).append((max(seg) / p0, seg[-1] / p0))
+    print("  groupe · n · x2 · x5 · x10 · x20 (au sommet) · encore x2 à la fin · à moitié ou pire à la fin")
+    for key in sorted(by):
+        xs = by[key]
+        f = lambda c: f"{100 * sum(c(a, b) for a, b in xs) / len(xs):5.1f} %"
+        print(f"  {key:22s} {len(xs):4d} · {f(lambda a, b: a >= 2)} · {f(lambda a, b: a >= 5)} · {f(lambda a, b: a >= 10)} · "
+              f"{f(lambda a, b: a >= 20)} · {f(lambda a, b: b >= 2)} · {f(lambda a, b: b <= 0.5)}")
+    best = sorted(((max(p["price"] for p in paths.load(r["mint"], since=float(r["t"]))) / float(r["price"]), r)
+                   for r in rs if paths.load(r["mint"], since=float(r["t"]))), key=lambda x: -x[0])[:5]
+    for m, r in best:
+        print(f"  meilleur : ${r['symbol']} ({r['chain']}) x{m:.1f} depuis {int(float(r['mcap'])):,} $ de cap · verdict {r['verdict']} {r['reason']}")
+    print("== fin")
+    sys.exit(0)
+
 if "--profil" in sys.argv:
     # what the tokens that ran had in common, at the verdict. for one chain (default bsc): every shadow token
     # whose 6 h are over, sorted into "tient" (still x2 or more at 6 h), "chute" (half or worse at 6 h) and the

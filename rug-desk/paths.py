@@ -46,10 +46,10 @@ def ghosts() -> dict:
     return {m: u for m, u in g.items() if u > now}
 
 
-def haunt(mint: str):
-    """Keep pricing a token for GHOST_HOURS after the desk sold it."""
+def haunt(mint: str, hours: float = GHOST_HOURS):
+    """Keep pricing a token for `hours` (GHOST_HOURS after a sale or a kill). never shortens a longer watch."""
     g = ghosts()
-    g[mint] = time.time() + GHOST_HOURS * 3600
+    g[mint] = max(g.get(mint, 0), time.time() + hours * 3600)
     os.makedirs(DATA, exist_ok=True)
     with open(GHOSTS, "w") as f:
         json.dump(g, f)

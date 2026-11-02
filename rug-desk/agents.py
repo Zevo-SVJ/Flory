@@ -192,6 +192,11 @@ def garde(mint: str):
     set_agent("GARDE", status="work", msg=f"vérifie {mint[:6]}…")
     v = check.run(mint)
     sym, reason = v.get("symbol") or mint[:6], v.get("reason") or ""
+    try:
+        import longwatch                 # 150k-1M caps followed 7 days, whatever the verdict (data only)
+        longwatch.note(mint, v)
+    except Exception:
+        pass
     src = next((s for s in ("facts", "dexscreener", "grok") if reason.startswith(f"{s} failed")), None)
     if src:
         if src not in down:

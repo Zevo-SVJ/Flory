@@ -443,6 +443,21 @@ class ChainOff(unittest.TestCase):
         os.remove(shadow.FILE)
 
 
+class LongWatch(Base):
+    def test_a_150k_to_1m_cap_is_followed_7_days_once(self):
+        import longwatch, paths
+        if os.path.exists(longwatch.FILE):
+            os.remove(longwatch.FILE)
+        v = {"verdict": "SKIP", "reason": "copycat", "price": 1.0, "liq_usd": 50000, "mcap_liq": 6, "chain": "bsc", "symbol": "L"}
+        self.assertTrue(longwatch.note("bsc:0x" + "3" * 40, v))                    # 300k
+        self.assertFalse(longwatch.note("bsc:0x" + "3" * 40, v))                   # once
+        self.assertFalse(longwatch.note("bsc:0x" + "4" * 40, {**v, "mcap_liq": 1}))   # 50k: out of range
+        self.assertGreater(paths.ghosts()["bsc:0x" + "3" * 40], time.time() + 6 * 86400)
+        paths.haunt("bsc:0x" + "3" * 40)                                           # a 6 h haunt never shortens it
+        self.assertGreater(paths.ghosts()["bsc:0x" + "3" * 40], time.time() + 6 * 86400)
+        os.remove(longwatch.FILE)
+
+
 class Confirm(Base):
     def test_lp_open_is_bought_only_on_a_rise_with_buyers_and_dropped_after_2h(self):
         import confirm, paths, shadow
