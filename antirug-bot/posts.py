@@ -209,7 +209,18 @@ if __name__ == "__main__":
         if not d["en"]:
             print("NOTHING TO POST")
             sys.exit(0)
-        x = d["en"][int(time.strftime("%j")) % len(d["en"])]     # a different format each day
+        x = dict(d["en"][int(time.strftime("%j")) % len(d["en"])])     # a different format each day
+        # link in the post or in the first reply? X said in Oct 2025 it no longer cuts posts with links; outside
+        # measures in 2026 still saw it, Premium accounts less. no source settles it: one day each, and X's own
+        # analytics (impressions, link clicks) decide after two weeks. posted.log keeps the mode of each day
+        url = link()
+        mode = "post" if (int(time.strftime("%j")) % 2 == 0 and url) else "reply"
+        body = x["post"].rsplit("\n\n", 1)[0] if "↓" in x["post"].rsplit("\n\n", 1)[-1] else x["post"]
+        if mode == "post":
+            x["post"] = body + f"\n\nfree bot, paste any CA:\n{url}"
+            x["reply"] = ""
+        else:
+            x["post"] = body + "\n\nfree bot in the replies 👇"
         attach = x["note"]
         if x.get("card"):                                   # the picture of the day, from the same numbers
             import card
@@ -218,7 +229,8 @@ if __name__ == "__main__":
                                os.path.join(local.HERE, f"card-{time.strftime('%Y-%m-%d')}.png"))
             if path:
                 attach = f"IMAGE {path}"
-        print(f"=== POST\n{x['post']}\n=== REPLY\n{x['reply']}\n=== ATTACH\n{attach}")
+        print(f"=== LINK {mode}\n=== POST\n{x['post']}\n=== REPLY\n{x['reply'] or '(none today: the link is in the post)'}"
+              f"\n=== ATTACH\n{attach}")
         sys.exit(0)
     if not d["en"]:
         print("pas encore de données sur cette période (rug-desk/data/audit.csv)")
