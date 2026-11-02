@@ -79,10 +79,15 @@ class Posts(unittest.TestCase):
             w.writerow([now, "a", "AAA", "facts", "SKIP", "dev_holds", 1, 0.02, -98, 6])
             w.writerow([now, "b", "BBB", "facts", "SKIP", "copycat", 1, 1, 0, 6])          # dead: not counted as moved
             w.writerow([now, "c", "CCC", "facts", "SKIP", "lp_unlocked", 1, 1.2, 20, 6])
+        with open(config.AUDIT, "a", newline="") as f:
+            csv.writer(f).writerow([now, "a", "AAA", "facts", "SKIP", "lp_unverified", 1, 0.02, -98, 6])   # same token again
+        os.environ["ANTIRUG_BOT_LINK"] = "t.me/TestRugBot"
         d = posts.drafts(24)
         self.assertIn("flagged 3 tokens", d["en"][0])
         self.assertIn("Of the 2 still trading, 1 lost 50%+", d["en"][0])
         self.assertIn("$AAA -98%", d["en"][0])
+        self.assertEqual(d["en"][0].count("$AAA"), 1)
+        self.assertIn("t.me/TestRugBot", d["en"][0])
         self.assertIn("a signalé 3 tokens", d["fr"][0])
 
 
