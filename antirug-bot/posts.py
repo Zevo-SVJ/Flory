@@ -44,7 +44,16 @@ def label(reason: str, lang: str) -> str:
     return (tgbot.LABELS if lang == "fr" else texts.EN).get(reason) or reason
 
 
-def drafts(hours: float = 24) -> dict[str, list[str]]:
+def _clock(ts: str) -> str:
+    """'2026-11-02 20:47' -> '8:47pm', the way the posts that work on X tell time."""
+    t = time.strptime(ts, "%Y-%m-%d %H:%M")
+    return time.strftime("%I:%M%p", t).lstrip("0").lower()
+
+
+def drafts(hours: float = 24) -> dict[str, list[dict]]:
+    """{"en": [{"post", "reply", "note"}]}: the post, the first reply that carries the link (X cuts the reach of
+    a post with a link in it), and what to do with it. same style as the memecoin posts that work: a caps hook
+    with an exact number, short lines, arrows, times, a question, the link below. every number is from the file."""
     rs = rows(hours)
     killed = []
     for r in rs:
@@ -60,13 +69,10 @@ def drafts(hours: float = 24) -> dict[str, list[str]]:
     moved = [(ch, r) for ch, r in killed if abs(ch) >= 1]           # still traded: a price that moved
     rank = lambda r: STRONG.index(r["reason"]) if r["reason"] in STRONG else len(STRONG)
     crashed = sorted([(ch, r) for ch, r in moved if ch <= -50], key=lambda x: (rank(x[1]), x[0]))
-    span = {"fr": "ces dernières 24 h" if hours <= 24 else f"ces {hours / 24:.0f} derniers jours",
-            "en": "in the last 24h" if hours <= 24 else f"in the last {hours / 24:.0f} days"}
-    out = {"fr": [], "en": []}
+    out = {"en": []}
     if not moved:
         return out
-    share = 100 * len(crashed) / len(moved)
-    ex, syms = [], set()                                             # three different tickers
+    ex, syms = [], set()                                             # different tickers, strongest reasons first
     for ch, r in crashed:
         if r["symbol"] not in syms:
             ex.append((ch, r))
@@ -74,28 +80,55 @@ def drafts(hours: float = 24) -> dict[str, list[str]]:
         if len(ex) == 3:
             break
     url = link()
-    for lang in ("fr", "en"):
-        lines = [f"${r['symbol']} {ch:+.0f}%" + (" · " if lang == "en" else " · ") + label(r["reason"], lang)
-                 for ch, r in ex]
-        if lang == "fr":
-            out[lang].append(f"Mon bot anti-rug a signalé {len(killed)} tokens {span[lang]}.\n\n"
-                             f"Sur les {len(moved)} qui tradaient encore, {len(crashed)} ont perdu plus de 50 % "
-                             f"dans les 6 h ({share:.0f} %).\n\nQuelques-uns :\n" + "\n".join(lines) +
-                             "\n\nColle n'importe quel CA, réponse en quelques secondes 👇")
-            if ex:
-                ch, r = ex[0]
-                out[lang].append(f"${r['symbol']} : signalé par le bot pour « {label(r['reason'], lang)} ».\n\n"
-                                 f"6 h plus tard : {ch:+.0f} %.\n\nAvant d'acheter un memecoin, 5 secondes de vérif.")
-        else:
-            out[lang].append(f"My anti-rug bot flagged {len(killed)} tokens {span[lang]}.\n\n"
-                             f"Of the {len(moved)} still trading, {len(crashed)} lost 50%+ within 6h "
-                             f"({share:.0f}%).\n\nA few:\n" + "\n".join(lines) +
-                             "\n\nPaste any CA, answer in seconds 👇" + (f"\n{url}" if url else ""))
-            if ex:
-                ch, r = ex[0]
-                out[lang].append(f"${r['symbol']} got flagged by the bot: {label(r['reason'], lang)}.\n\n"
-                                 f"6h later: {ch:+.0f}%.\n\nBefore you ape a memecoin, 5 seconds of checking."
-                                 + (f"\n{url}" if url else ""))
+    reply = f"the bot: {url}\nfree, 3 checks a day. paste a CA, get the answer." if url else "the bot: (your t.me link)"
+    span = "IN 24 HOURS" if hours <= 24 else f"IN {hours / 24:.0f} DAYS"
+    lab = lambda r: label(r["reason"], "en")
+    # 1. the shock number
+    out["en"].append({"post": (
+        f"MY BOT FLAGGED {len(killed):,} MEMECOINS {span}.\n\n"
+        f"{len(crashed):,} of them lost 50%+ within 6 hours.\n\n"
+        "i didn't buy a single one.\n\n"
+        "here's what it checks in 5 seconds, every time:\n"
+        "→ can the dev pull the liquidity\n"
+        "→ is it a honeypot (buy yes, sell no)\n"
+        "→ bundled wallets holding the supply\n"
+        "→ devs who already rugged before\n"
+        "→ wallets from known rug factories\n\n"
+        "you paste a CA. it answers. that's it.\n\n"
+        f"be honest, how many of those {len(crashed):,} would you have aped?\n\n"
+        "bot in the reply ↓"), "reply": reply,
+        "note": f"denominator if asked: {len(moved):,} of the {len(killed):,} flagged had a price that moved in the 6 h "
+                f"(a drained pool counts as -100%)"})
+    # 2. the story with times, on the strongest real example
+    if ex:
+        ch, r = ex[0]
+        # audit.csv's time is the re-pricing, hours after the flag: the flag came `hours` before it
+        t1 = time.mktime(time.strptime(r["time"], "%Y-%m-%d %H:%M"))
+        flagged = time.strftime("%Y-%m-%d %H:%M", time.localtime(t1 - float(r.get("hours") or 6) * 3600))
+        later = _clock(r["time"])
+        out["en"].append({"post": (
+            f"{_clock(flagged)}: ${r['symbol']} is moving. people are aping.\n\n"
+            f"my bot looks at it for 5 seconds.\n🔴 HIGH RISK: {lab(r)}.\n\n"
+            f"{later}: ${r['symbol']} {ch:+.0f}%.\n\n"
+            "the chart looked fine. the wallets didn't.\n\n"
+            "check before you buy, not after ↓"), "reply": reply,
+            "note": "add a screenshot of the bot's answer on this CA: " + r["mint"]})
+    # 3. receipts, three tokens
+    if len(ex) >= 2:
+        lines = "\n".join(f"→ ${r['symbol']} {ch:+.0f}% · {lab(r)}" for ch, r in ex)
+        out["en"].append({"post": (
+            f"{len(ex)} COINS MY BOT FLAGGED {span}. 6 HOURS LATER:\n\n{lines}\n\n"
+            "every one of them had a chart that looked tradeable.\n\n"
+            "bookmark this before you ape your next coin.\n\nbot below ↓"), "reply": reply,
+            "note": "post with screenshots of the bot's answers on these CAs"})
+    # 4. the video
+    if ex:
+        ch, r = ex[0]
+        out["en"].append({"post": (
+            "5 seconds.\n\nthat's how long it takes to know if the coin you're about to ape is a rug.\n\n"
+            "free, 3 checks a day. link below ↓"), "reply": reply,
+            "note": f"film your screen: paste {r['mint']} (${r['symbol']}) in the bot, the answer comes back. "
+                    "attach the video (native, under 2:20)"})
     return out
 
 
@@ -104,5 +137,10 @@ if __name__ == "__main__":
     d = drafts(h)
     if not d["en"]:
         print("pas encore de données sur cette période (rug-desk/data/audit.csv)")
-    for i, p in enumerate(d["en"], 1):                  # English only: X's memecoin crowd reads English
-        print(f"===== draft {i} ({len(p)} characters)\n{p}\n")
+    for i, x in enumerate(d["en"], 1):                  # English only: X's memecoin crowd reads English
+        print(f"===== POST {i} ({len(x['post'])} characters)\n{x['post']}\n")
+        print(f"----- first reply (the link goes here, never in the post)\n{x['reply']}\n")
+        print(f"----- to do: {x['note']}\n")
+    if d["en"]:
+        print("rules: link in the first reply · post 3-7pm or 10pm-midnight Paris time · answer every reply in the "
+              "first hour · a native video beats text · never post a number you can't prove")

@@ -83,13 +83,16 @@ class Posts(unittest.TestCase):
             csv.writer(f).writerow([now, "a", "AAA", "facts", "SKIP", "lp_unverified", 1, 0.02, -98, 6])   # same token again
         os.environ["ANTIRUG_BOT_LINK"] = "t.me/TestRugBot"
         d = posts.drafts(24)
-        self.assertIn("flagged 3 tokens", d["en"][0])
-        self.assertIn("Of the 2 still trading, 1 lost 50%+", d["en"][0])
-        self.assertIn("$AAA -98%", d["en"][0])
-        self.assertEqual(d["en"][0].count("$AAA"), 1)
-        self.assertIn("t.me/TestRugBot", d["en"][0])
-        self.assertIn("a signalé 3 tokens", d["fr"][0])
-
+        first = d["en"][0]
+        self.assertIn("MY BOT FLAGGED 3 MEMECOINS IN 24 HOURS", first["post"])
+        self.assertIn("1 of them lost 50%+", first["post"])
+        self.assertNotIn("t.me", first["post"])                      # the link goes in the reply
+        self.assertIn("t.me/TestRugBot", first["reply"])
+        self.assertIn("2 of the 3 flagged", first["note"])
+        story = d["en"][1]["post"]
+        self.assertIn("$AAA", story)
+        self.assertIn("-98%", story)
+        self.assertEqual(len(d["en"]), 3)                           # shock, story, video: one crashed token, no receipts
 
 if __name__ == "__main__":
     unittest.main()
