@@ -132,6 +132,31 @@ def lp_open_ok(chain: str) -> bool:
 
 
 _confirm = {}
+_chain_ok = {}
+
+
+def chain_ok(chain: str) -> bool:
+    """Does a chain the desk stopped buying (config NO_BUY_CHAINS) pay again? its passes, followed in shadow:
+    20+ finished, positive on average and without the 3 best, both halves positive. cached 10 min.
+    Nov 2: CAPY passed on Solana at a $60k cap, was not bought (chain off) and was at $220k 5 min later."""
+    hit = _chain_ok.get(chain)
+    if hit and time.time() - hit[0] < 600:
+        return hit[1]
+    import chains
+    xs = []
+    for r in sorted(_rows(), key=lambda r: float(r["t"])):
+        if r["reason"] == "pass" and chains.split(r["mint"])[0] == chain and time.time() >= float(r["t"]) + HOURS * 3600:
+            x = replay_cached(r)
+            if x is not None:
+                xs.append(min(x, CAP_PCT))
+    memo_flush()
+    ok = False
+    if len(xs) >= 20:
+        h = len(xs) // 2
+        ok = (statistics.mean(xs) > 0 and statistics.mean(sorted(xs)[:-3]) > 0
+              and statistics.mean(xs[:h]) > 0 and statistics.mean(xs[h:]) > 0)
+    _chain_ok[chain] = (time.time(), ok)
+    return ok
 
 
 def confirm_entry(f: list[dict], rise: float = 1.10, wait_s: float = 2 * 3600) -> int | None:

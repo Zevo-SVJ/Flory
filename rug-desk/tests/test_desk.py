@@ -506,6 +506,19 @@ class EventTier(unittest.TestCase):
             self.assertIn("chain off", check.run("OtherSol111")["action"])     # not an event token: still off
 
 
+class ChainReopens(unittest.TestCase):
+    def test_a_chain_off_reopens_only_when_its_shadowed_passes_pay(self):
+        import shadow
+        rows = [{"t": str(time.time() - 8 * 3600), "mint": f"SolPass{i}", "reason": "pass"} for i in range(24)]
+        for xs, want in (([6, -2, 9, 4] * 6, True), ([40, -8, -8, -8] * 6, False), ([5] * 10, False)):
+            shadow._chain_ok.clear()
+            it = iter(xs)
+            with mock.patch.object(shadow, "_rows", lambda: rows[:len(xs)]), \
+                    mock.patch.object(shadow, "replay_cached", lambda r: next(it)):
+                self.assertEqual(shadow.chain_ok("solana"), want, xs[:4])
+        shadow._chain_ok.clear()
+
+
 class LpOpen(unittest.TestCase):
     def test_an_unlocked_lp_opens_only_on_its_chain_and_only_while_the_shadow_book_pays(self):
         import shadow

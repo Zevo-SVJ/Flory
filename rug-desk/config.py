@@ -192,6 +192,8 @@ EXIT = {
 # HOTBOT, LMAO, iCat -99.7% dumped by a wallet farm), and every Solana group in the shadow book loses. its
 # passes stay shadowed as "pass" (diag.py --entonnoir, PAR CHAÎNE): they say when to buy there again.
 # Solana launches themselves are tested by the dry sniper (snipelab.py)
+# a chain here buys again by itself as soon as its shadowed passes pay: shadow.chain_ok() (20+, positive on
+# average and without the 3 best, both halves), and stops again when they no longer do
 NO_BUY_CHAINS = ("solana",)
 # a chain whose tokens behave apart gets its own exits. Oct 28: on 322 replayed pump.fun graduations the
 # config exits (stop -35%, early ladder, lock, trail, 6 h clock) beat "regles B" for every one of the 11

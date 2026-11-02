@@ -327,7 +327,8 @@ def run(mint: str) -> dict:
         equity = PAPER_BANKROLL_USD + book.realized()           # its own small tier, any chain (config EVENT_WATCH)
         usd = min(equity * EVENT_TIER_PCT / 100, (v.get("liq_usd") or 0) * FACTS["max_ticket_share"], book.cash())
         v.update(ticket=round(max(usd, min(TICKET_USD, book.cash())), 2), tier="event", event=event)
-    if enter and chains_split(mint) in NO_BUY_CHAINS and not event:
+    import shadow
+    if enter and chains_split(mint) in NO_BUY_CHAINS and not event and not shadow.chain_ok(chains_split(mint)):
         v["action"] = f"not bought: chain off ({chains_split(mint)}), followed in shadow as a pass"
         return v
     if enter and v.get("expected") is not None and v["expected"] < 0:
