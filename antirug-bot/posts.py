@@ -3,7 +3,7 @@
 # (rug-desk/data/audit.csv). nothing is posted: you read, pick, post yourself. numbers are what the file says,
 # with their denominators, and the examples are real tokens with the reason they were flagged.
 #   python3 posts.py          last 24 h        python3 posts.py 168      last 7 days
-import csv, sys, time
+import csv, os, sys, time
 import local                                    # ../rug-desk on the path
 import texts
 
@@ -22,6 +22,20 @@ def rows(hours: float) -> list[dict]:
 STRONG = ["danger:honeypot", "nobody_can_sell", "danger:high_tax", "danger:cannot_sell_all", "dev_rugged_before",
           "serial_farm", "factory_wallets", "rug_funder", "bundle_same_sol", "bundle_ladder", "holder_farm",
           "dev_holds", "mint_open", "freeze_open", "lp_unlocked", "whale", "top10_heavy", "copycat", "fake_cap"]
+
+
+SHORT = {"danger:honeypot": "honeypot", "nobody_can_sell": "nobody can sell", "danger:high_tax": "hidden sell tax",
+         "danger:cannot_sell_all": "can't sell it all", "dev_rugged_before": "dev rugged before",
+         "serial_farm": "rug factory name", "factory_wallets": "rug factory wallets", "rug_funder": "funded by a rugger",
+         "bundle_same_sol": "bundled wallets", "bundle_ladder": "bundled wallets", "holder_farm": "wallet farm",
+         "dev_holds": "dev holds the supply", "mint_open": "dev can print tokens", "freeze_open": "dev can freeze you",
+         "lp_unlocked": "liquidity can be pulled", "whale": "one whale", "top10_heavy": "top 10 hold it all",
+         "copycat": "copy of a bigger coin", "fake_cap": "fake market cap", "danger:closed_source": "hidden contract code",
+         "lp_unverified": "unverifiable liquidity", "dev_unknown": "unknown dev", "micro_trades": "bot volume"}
+
+
+def short(reason: str) -> str:
+    return SHORT.get(reason) or reason.replace("danger:", "")
 
 
 def link() -> str:
@@ -117,7 +131,10 @@ def drafts(hours: float = 24) -> dict[str, list[dict]]:
         f"be honest, how many of those {len(crashed):,} would you have aped?\n\n"
         "bot in the reply ↓"), "reply": reply,
         "note": f"denominator if asked: {len(moved):,} of the {len(killed):,} flagged had a price that moved in the 6 h "
-                f"(a drained pool counts as -100%)"})
+                f"(a drained pool counts as -100%)",
+        "card": {"title": f"FLAGGED {len(killed):,} MEMECOINS\n{span.lower()}", "big": f"{len(crashed):,}",
+                 "big_note": "lost 50%+ within 6 hours",
+                 "rows": [(f"${r['symbol']} {ch:+.0f}%", short(r["reason"])) for ch, r in ex]}})
     # 2. the story with times, on the strongest real example
     if ex:
         ch, r = ex[0]
@@ -131,7 +148,9 @@ def drafts(hours: float = 24) -> dict[str, list[dict]]:
             f"{later}: ${r['symbol']} {ch:+.0f}%.\n\n"
             f"{culprit(r['reason'])}\n\n"
             "check before you buy, not after ↓"), "reply": reply,
-            "note": "add a screenshot of the bot's answer on this CA: " + bare(r["mint"])})
+            "note": "add a screenshot of the bot's answer on this CA: " + bare(r["mint"]),
+            "card": {"title": f"${r['symbol']}\nHIGH RISK", "big": f"{ch:+.0f}%", "big_note": "6 hours later",
+                     "rows": [("flagged:", short(r["reason"]))]}})
     # 3. receipts, three tokens
     if len(ex) >= 2:
         lines = "\n".join(f"→ ${r['symbol']} {ch:+.0f}% · {lab(r)}" for ch, r in ex)
@@ -139,7 +158,9 @@ def drafts(hours: float = 24) -> dict[str, list[dict]]:
             f"{len(ex)} COINS MY BOT FLAGGED {span}. 6 HOURS LATER:\n\n{lines}\n\n"
             "every one of them had a chart that looked tradeable.\n\n"
             "bookmark this before you ape your next coin.\n\nbot below ↓"), "reply": reply,
-            "note": "post with screenshots of the bot's answers on these CAs: " + " · ".join(bare(r["mint"]) for _, r in ex)})
+            "note": "post with screenshots of the bot's answers on these CAs: " + " · ".join(bare(r["mint"]) for _, r in ex),
+            "card": {"title": f"{len(ex)} COINS MY BOT FLAGGED\n6 hours later", "big": "",
+                     "rows": [(f"${r['symbol']} {ch:+.0f}%", short(r["reason"])) for ch, r in ex]}})
     # 4. the video
     if ex:
         ch, r = ex[0]
@@ -160,7 +181,15 @@ if __name__ == "__main__":
             print("NOTHING TO POST")
             sys.exit(0)
         x = d["en"][int(time.strftime("%j")) % len(d["en"])]     # a different format each day
-        print(f"=== POST\n{x['post']}\n=== REPLY\n{x['reply']}\n=== ATTACH\n{x['note']}")
+        attach = x["note"]
+        if x.get("card"):                                   # the picture of the day, from the same numbers
+            import card
+            url = link()
+            path = card.render({**x["card"], "footer": f"Anti-Rug Scanner · {url}" if url else "Anti-Rug Scanner"},
+                               os.path.join(local.HERE, f"card-{time.strftime('%Y-%m-%d')}.png"))
+            if path:
+                attach = f"IMAGE {path}"
+        print(f"=== POST\n{x['post']}\n=== REPLY\n{x['reply']}\n=== ATTACH\n{attach}")
         sys.exit(0)
     if not d["en"]:
         print("pas encore de données sur cette période (rug-desk/data/audit.csv)")

@@ -10,8 +10,11 @@ logged in to X in Chrome. Your job: publish ONE post a day for the Anti-Rug bot,
 2. Check `posted.log` in this folder: if today's date is already in it, stop (one post a day, no more).
 3. Open a new Chrome tab on https://x.com/compose/post (never use Skide's other tabs).
 4. Type the POST text exactly as printed, line breaks included. Do not add hashtags, emojis or words.
-5. If ATTACH asks for a screenshot or a video and there is no file named `attach-YYYY-MM-DD.png` (or .mp4) in this
-   folder, post without it: never make up an image.
+5. The image: if ATTACH says `IMAGE <path>`, put that picture in the clipboard with
+   `osascript -e 'set the clipboard to (read (POSIX file "<path>") as «class PNGf»)'`, click in the post box and
+   press Cmd+V; wait until the image preview shows. If a file `attach-YYYY-MM-DD.png` or `.mp4` is in this folder
+   (Skide's own screenshot or video), attach that one instead with the "Media" button. Otherwise post without
+   an image: never make one up.
 6. Click "Post". Wait until the post appears on the profile.
 7. Open that post and reply to it with the REPLY text exactly (it carries the bot's link: links go in the
    reply, never in the post).
@@ -28,6 +31,7 @@ logged in to X in Chrome. Your job: publish ONE post a day for the Anti-Rug bot,
 ## Launch (once, in a Terminal tab of its own)
 
     cd ~/Documents/rug-desk-run/antirug-bot
+    pip3 install pillow        # once: draws the picture of the day (card.py)
     claude --chrome
 
 then inside Claude Code:
