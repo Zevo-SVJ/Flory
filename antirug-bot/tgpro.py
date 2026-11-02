@@ -2,20 +2,13 @@
 # the anti-rug bot as a product: a free tier that shows what it does, a Pro pass paid in Telegram Stars.
 # Stars are Telegram's own currency for digital goods in bots (no card processor, no KYC on our side): the
 # user pays inside Telegram, the bot gets a successful_payment, the pass runs PRO_DAYS from then.
-#   .env (all optional): TG_FREE_PER_DAY=3   TG_PRO_STARS=500   TG_PRO_DAYS=30
+#   antirug-bot/.env (all optional): TG_FREE_PER_DAY=3   TG_PRO_STARS=500   TG_PRO_DAYS=30
 # Telegram requires a bot that takes payments to answer /paysupport and to show its terms (/terms).
 import json, os, time
-from config import DATA
-import atomic, env
+import local
 
-FILE = os.path.join(DATA, "tgpro.json")       # {user id: {"until": epoch, "paid": [charges]}, "_used": {...}}
-
-
-def _cfg(k: str, d: int) -> int:
-    try:
-        return int(env.get(k) or d)
-    except ValueError:
-        return d
+FILE = os.path.join(local.DATA, "tgpro.json")  # {user id: {"until": epoch, "paid": [charges]}, "_used": {...}}
+_cfg = local.num
 
 
 def free_per_day() -> int:
@@ -39,8 +32,8 @@ def _load() -> dict:
 
 
 def _save(s: dict):
-    os.makedirs(DATA, exist_ok=True)
-    tmp = atomic.tmp(FILE)
+    os.makedirs(local.DATA, exist_ok=True)
+    tmp = FILE + ".tmp"
     with open(tmp, "w") as f:
         json.dump(s, f)
     os.replace(tmp, FILE)
