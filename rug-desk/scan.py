@@ -85,6 +85,9 @@ def searched(trending: list[str] = ()) -> list[str]:
     return out
 
 
+event_mints: dict[str, str] = {}       # tokens found by an open event's search: {key: event}, read by check.run
+
+
 def event_leads(today: str | None = None) -> dict[str, str]:
     """{token key: event name} for the events whose window is open (config EVENT_WATCH): the same DexScreener
     search and the same age, pool and DEX limits as searched()."""
@@ -241,7 +244,9 @@ def leads() -> list[str]:
     import jup                                 # the most organic trading of the hour, per Jupiter
     top = [a for a in jup.top_organic("1h") if a not in done and a not in out and a not in NOT_MEMES]
     out += top
-    events = {k: n for k, n in event_leads().items() if k not in done and k not in out}
+    found_ev = event_leads()
+    event_mints.update(found_ev)
+    events = {k: n for k, n in found_ev.items() if k not in done and k not in out}
     out += list(events)
     src.update({m: f"événement {n}" for m, n in events.items()})
     src.update({m: "tendance GeckoTerminal" for m in trend})

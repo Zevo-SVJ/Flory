@@ -206,9 +206,15 @@ EXIT_AUTOTUNE = False       # since Oct 20 VIGIE's self-review switches profiles
 # shadow book). nothing is loosened: the copies die on copycat and serial_farm, the insiders on dev_holds and
 # top10 (GTAVI, Aug 2026: $25M cap on leaked footage, the leaker sold hours before Rockstar's reveal)
 EVENT_WATCH = {
-    "GTA VI": {"from": "2026-11-12", "to": "2026-11-30",          # release Nov 19, 2026
-               "words": ["gta", "gtavi", "gta6", "vicecity", "lucia", "leonida"]},
+    # opened Nov 2, not Nov 12: Skide's screenshots that evening showed the run already on (GTA6 +3,459% to
+    # $12.9M, GTA6CAT +3,328% to $10.7M, CYBERLEEK, Dacity), 17 days before the release
+    "GTA VI": {"from": "2026-11-02", "to": "2026-11-30",          # release Nov 19, 2026
+               "words": ["gta", "gtavi", "gta6", "vicecity", "vice", "lucia", "leonida", "rockstar", "cyberleek"]},
 }
+# a token found by an event's search may be bought on any chain, NO_BUY_CHAINS included, in its own small
+# tier ("event", % of the balance), every check still applying: an event is another population than the
+# chain's everyday launches, and the paper desk is where to learn what it is worth
+EVENT_TIER_PCT = 2
 
 SCHEDULE = {                # used by agents.py: one entry per agent
     "vigie_every_s": 20,        # VIGIE: prices every open position, applies exits, logs the balance

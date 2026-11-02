@@ -320,8 +320,14 @@ def run(mint: str) -> dict:
         "organic", "organic_vol", "dev_mints", "cluster_pct", "fresh_pct", "bundlers_pct", "insiders_pct",
         "snipers_pct", "factory_wallets")})
     enter = v["verdict"] == "BUY" or (v["verdict"] == "PASS" and PAPER and PAPER_BUY_ON_PASS)
-    from config import NO_BUY_CHAINS
-    if enter and chains_split(mint) in NO_BUY_CHAINS:
+    from config import NO_BUY_CHAINS, EVENT_TIER_PCT
+    import scan
+    event = scan.event_mints.get(mint)
+    if enter and event and v.get("tier") in (None, "base", "lp_open"):
+        equity = PAPER_BANKROLL_USD + book.realized()           # its own small tier, any chain (config EVENT_WATCH)
+        usd = min(equity * EVENT_TIER_PCT / 100, (v.get("liq_usd") or 0) * FACTS["max_ticket_share"], book.cash())
+        v.update(ticket=round(max(usd, min(TICKET_USD, book.cash())), 2), tier="event", event=event)
+    if enter and chains_split(mint) in NO_BUY_CHAINS and not event:
         v["action"] = f"not bought: chain off ({chains_split(mint)}), followed in shadow as a pass"
         return v
     if enter and v.get("expected") is not None and v["expected"] < 0:

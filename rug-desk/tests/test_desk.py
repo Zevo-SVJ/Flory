@@ -485,9 +485,25 @@ class EventWatch(unittest.TestCase):
                 "pairCreatedAt": born, "liquidity": {"usd": 40000}}
         resp = mock.Mock(**{"raise_for_status.return_value": None, "json.return_value": {"pairs": [pair]}})
         with mock.patch("requests.get", return_value=resp) as get:
-            self.assertEqual(scan.event_leads("2026-11-01"), {})
+            self.assertEqual(scan.event_leads("2026-11-01"), {})                   # before the window
             get.assert_not_called()
             self.assertEqual(scan.event_leads("2026-11-19"), {"bsc:0x" + "c" * 40: "GTA VI"})
+
+
+class EventTier(unittest.TestCase):
+    @mock.patch.object(config, "NO_BUY_CHAINS", ("solana",))
+    def test_an_event_token_is_bought_small_even_on_a_chain_off(self):
+        import scan
+        v = {"verdict": "PASS", "stage": "judge", "reason": "ok", "price": 1.0, "liq_usd": 60000, "symbol": "GTA",
+             "score": 70, "tier": "base"}
+        with mock.patch.object(check, "check", lambda m: dict(v)), mock.patch.object(check, "log", lambda r: None), \
+                mock.patch.object(check.market, "sol_regime", lambda: {}), mock.patch("dossier.add", lambda *a, **k: None), \
+                mock.patch("pending.add", lambda *a, **k: None), mock.patch.object(check.book, "open_position") as buy, \
+                mock.patch.dict(scan.event_mints, {"GtaMint111": "GTA VI"}):
+            out = check.run("GtaMint111")
+            self.assertEqual(out["tier"], "event")
+            buy.assert_called_once()
+            self.assertIn("chain off", check.run("OtherSol111")["action"])     # not an event token: still off
 
 
 class LpOpen(unittest.TestCase):
