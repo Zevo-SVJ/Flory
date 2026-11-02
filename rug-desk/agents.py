@@ -64,6 +64,12 @@ def vigie():
         if e["reason"] in RUG_EXITS:
             on_rug(e["mint"], e["symbol"], e["reason"])
         post(copy_sell(e) + "\n" + e["text"])
+    import confirm                       # lp_open tokens waiting for +10% with buyers (confirm.py)
+    for e in confirm.tick():
+        emit("GARDE", e["kind"], e["text"], symbol=e["symbol"], mint=e["mint"],
+             **({"price": e["price"]} if "price" in e else {}))
+        if e["kind"] == "buy":
+            post(e["text"])
     log_equity(marks)
     tmp = atomic.tmp(MARKS)        # live prices for the dashboard, so it never calls an API itself
     with open(tmp, "w") as f:
@@ -216,6 +222,8 @@ def garde(mint: str):
             emit("GARDE", "buy", f"BUY ${usd:.0f} ({v.get('tier', 'base')}) ${sym} @ {v['price']:.8g}"
                                  + (f" — {', '.join(v['signals'])}" if v.get("signals") else ""), symbol=sym, mint=mint,
                  price=v["price"])
+        elif action.startswith("to confirm"):
+            emit("GARDE", "info", f"${sym} {action}", symbol=sym, mint=mint)
         elif action.startswith("waiting"):
             emit("ECHO", "x", f"${sym} queued for the X read (score {v.get('score')})", symbol=sym, mint=mint)
         elif action.startswith("not bought"):

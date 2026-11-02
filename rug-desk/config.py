@@ -100,7 +100,9 @@ FACTS = {                   # the rug filter. code only, no model
     "soft_liq_floor_usd": 8000, # thin_pool's floor if the shadow book ever waives it: never under this
     "shadow_pool_per_run": 4,   # SCOUT follows this many pool-rule kills per run in shadow (6 h each)
     "shadow_max_ghosts": 500,   # ...while VIGIE prices fewer ghosts than this
-    "shadow_fresh_per_run": 2, # ...plus this many launches under min_age_min on fresh_chains (diag --entree)
+    # ...plus this many launches under min_age_min on fresh_chains. 0 since Nov 2: buying them lost on BSC
+    # (-70.1% a trade, n 172) and on Robinhood (-7.9%, n 344): the 60 min rule stays (diag --entree)
+    "shadow_fresh_per_run": 0,
     "fresh_chains": ("robinhood", "bsc"),
     "study_per_run": 3,         # ...and GARDE runs its other checks on this many of them, for the data only
                                 # (check.study: never bought, written to study.csv, read by learn.py)

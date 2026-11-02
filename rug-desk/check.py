@@ -354,6 +354,11 @@ def run(mint: str) -> dict:
         pending.add(mint, {**v, "flags": (v.get("flags") or "").split()})
         v["action"] = f"waiting for ECHO's X read (score {v['score']})"
         return v
+    if enter and PAPER and v.get("tier") == "lp_open" and shadow.confirm_ok(chains_split(mint)):
+        import confirm                   # bought only if it rises 10% with buyers within 2 h (confirm.py)
+        confirm.add(mint, v)
+        v["action"] = f"to confirm: bought if +10% with buyers within 2 h (lp_open, score {v.get('score')})"
+        return v
     if enter and PAPER:
         book.open_position(mint, v["symbol"], v["price"], v["liq_usd"], usd=v.get("ticket") or TICKET_USD,
                            vaults=v.get("vaults"), sol0=v.get("sol0"))

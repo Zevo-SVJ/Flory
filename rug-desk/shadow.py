@@ -131,6 +131,69 @@ def lp_open_ok(chain: str) -> bool:
     return ok
 
 
+_confirm = {}
+
+
+def confirm_entry(f: list[dict], rise: float = 1.10, wait_s: float = 2 * 3600) -> int | None:
+    """Index of the first tick within wait_s that is rise x the verdict price with more buys than sells."""
+    p0, t0 = f[0]["price"], f[0]["t"]
+    for i, s in enumerate(f[1:], 1):
+        if s["t"] - t0 > wait_s:
+            return None
+        if s["price"] >= rise * p0 and (s.get("b5") or 0) > (s.get("s5") or 0):
+            return i
+    return None
+
+
+def replay_confirmed(r: dict) -> tuple[bool, float | None]:
+    """(confirmed?, net %) for one finished shadow, buying at confirmation (confirm.py), kept in the memo."""
+    import exits, exitlab
+    sig = "confirm10:" + _profile_sig(r["mint"])
+    memo = _memo_load()
+    hit = (memo.get(r["mint"]) or {}).get(sig)
+    if hit is not None:
+        return tuple(hit)
+    p = path(r)
+    res = (False, None)
+    if p:
+        i = confirm_entry(p[0])
+        if i is not None and len(p[0]) - i >= 3:
+            g = exitlab.simulate(p[0][i:], exits.for_mint(r["mint"]))
+            res = (True, None if g is None else g / exitlab.TICKET_USD * 100 - p[1])
+    if time.time() >= float(r["t"]) + HOURS * 3600:
+        memo.setdefault(r["mint"], {})[sig] = list(res)
+        _memo["dirty"] = True
+    return res
+
+
+def confirm_ok(chain: str) -> bool:
+    """Buy lp_open on confirmation rather than at the verdict? only while the shadow book shows it on this chain:
+    100+ confirmed tokens, better than buying at once once the 5 best of each are taken out, both halves
+    positive. cached 10 min."""
+    hit = _confirm.get(chain)
+    if hit and time.time() - hit[0] < 600:
+        return hit[1]
+    import chains
+    now_x, conf_x = [], []
+    for r in sorted(_rows(), key=lambda r: float(r["t"])):
+        if r["reason"] != "lp_unlocked" or chains.split(r["mint"])[0] != chain or time.time() < float(r["t"]) + HOURS * 3600:
+            continue
+        x = replay_cached(r)
+        if x is not None:
+            now_x.append(min(x, CAP_PCT))
+        ok, y = replay_confirmed(r)
+        if ok and y is not None:
+            conf_x.append(min(y, CAP_PCT))
+    memo_flush()
+    good = False
+    if len(conf_x) >= 100 and len(now_x) > 5:
+        h = len(conf_x) // 2
+        good = (statistics.mean(sorted(conf_x)[:-5]) > statistics.mean(sorted(now_x)[:-5])
+                and statistics.mean(conf_x[:h]) > 0 and statistics.mean(conf_x[h:]) > 0)
+    _confirm[chain] = (time.time(), good)
+    return good
+
+
 def waived_from(r: dict) -> set:
     """The soft reasons results() `r` lifts: shadow buys that made money, clearly and on both halves."""
     return {d["reason"] for d in r["reasons"]

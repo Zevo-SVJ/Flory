@@ -443,6 +443,25 @@ class ChainOff(unittest.TestCase):
         os.remove(shadow.FILE)
 
 
+class Confirm(Base):
+    def test_lp_open_is_bought_only_on_a_rise_with_buyers_and_dropped_after_2h(self):
+        import confirm, paths, shadow
+        now = time.time()
+        confirm.add("robinhood:0x" + "1" * 40, {"price": 1.0, "symbol": "UP", "liq_usd": 50000, "ticket": 25, "tier": "lp_open"})
+        confirm.add("robinhood:0x" + "2" * 40, {"price": 1.0, "symbol": "FLAT", "liq_usd": 50000, "ticket": 25, "tier": "lp_open"})
+        paths.append("robinhood:0x" + "1" * 40, {"t": now, "price": 1.12, "liq": 50000, "b5": 9, "s5": 3, "v5": 1})
+        paths.append("robinhood:0x" + "2" * 40, {"t": now, "price": 1.12, "liq": 50000, "b5": 2, "s5": 6, "v5": 1})
+        out = confirm.tick(now)
+        self.assertEqual([e["kind"] for e in out], ["buy"])               # sellers ahead: not yet
+        self.assertIn("robinhood:0x" + "1" * 40, book.load())
+        out = confirm.tick(now + 2 * 3600 + 60)
+        self.assertEqual([e["kind"] for e in out], ["kill"])
+        self.assertEqual(confirm.load(), {})
+        f = [{"t": 0, "price": 1.0}, {"t": 60, "price": 1.2, "b5": 1, "s5": 5}, {"t": 120, "price": 1.11, "b5": 5, "s5": 1}]
+        self.assertEqual(shadow.confirm_entry(f), 2)
+        self.assertIsNone(shadow.confirm_entry([{"t": 0, "price": 1.0}, {"t": 3 * 3600, "price": 2, "b5": 9, "s5": 0}]))
+
+
 class EventWatch(unittest.TestCase):
     def test_event_words_are_searched_only_inside_their_window(self):
         import scan
