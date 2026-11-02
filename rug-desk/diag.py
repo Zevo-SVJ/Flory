@@ -81,7 +81,7 @@ if "--pourquoi" in sys.argv:
     for m, o in done:
         chain = chains.split(m)[0]
         t0, t1 = ts(o["t"]), ts(o["closed"])
-        path = paths.load(m, since=t0 - 60)
+        path = paths.load(m, since=t0 - 60, until=t1 + 6 * 3600)
         inside = [p for p in path if p["t"] <= t1 + 60]
         real = 100 * o["pnl"] / max(o["usd"], 1e-9)
         hi = lo = rep_a = rep_c = None
@@ -212,6 +212,21 @@ if "--longs" in sys.argv:
         f = lambda c: f"{100 * sum(c(a, b) for a, b in xs) / len(xs):5.1f} %"
         print(f"  {key:22s} {len(xs):4d} · {f(lambda a, b: a >= 2)} · {f(lambda a, b: a >= 5)} · {f(lambda a, b: a >= 10)} · "
               f"{f(lambda a, b: a >= 20)} · {f(lambda a, b: b >= 2)} · {f(lambda a, b: b <= 0.5)}")
+    # the desk's own trades after the sale (followed 7 days since Nov 2): how high did they go once sold?
+    after = {}
+    import edge
+    for t in edge.closed(outages=True):
+        t1 = time.mktime(time.strptime(t["closed"], "%Y-%m-%d %H:%M"))
+        pts = exitlab.clean(paths.load(t["mint"], since=t1, until=t1 + 7 * 86400))
+        if len(pts) < 10 or pts[0]["price"] <= 0:
+            continue
+        for d_ in (1, 3, 7):
+            if now - t1 >= d_ * 86400:
+                seg = [p["price"] for p in pts if p["t"] <= t1 + d_ * 86400]
+                after.setdefault(d_, []).append(max(seg) / pts[0]["price"])
+    for d_, xs in sorted(after.items()):
+        print(f"  APRÈS NOS VENTES · {d_} j · {len(xs)} trades · plus haut x2 : {100 * sum(x >= 2 for x in xs) / len(xs):.0f} % · "
+              f"x5 : {100 * sum(x >= 5 for x in xs) / len(xs):.0f} % · x10 : {100 * sum(x >= 10 for x in xs) / len(xs):.0f} % (du prix de vente)")
     best = sorted(((max(p["price"] for p in paths.load(r["mint"], since=float(r["t"]))) / float(r["price"]), r)
                    for r in rs if paths.load(r["mint"], since=float(r["t"]))), key=lambda x: -x[0])[:5]
     for m, r in best:

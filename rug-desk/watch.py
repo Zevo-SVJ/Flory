@@ -108,7 +108,9 @@ def watch() -> tuple[list[dict], dict]:
             closed = mint not in book.load()
             if closed:
                 marks.pop(mint, None)
-                paths.haunt(mint)
+                # 7 days after a sale (6 h before Nov 2): MICRODUCK, stopped at -36.5% on Oct 21, later went
+                # to ~9x the desk's entry. what sold tokens do in the days after is the data for a re-entry rule
+                paths.haunt(mint, 7 * 24)
             elif why.startswith("take_profit"):
                 b = book.load()
                 b[mint]["steps"] += 1

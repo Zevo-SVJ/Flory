@@ -139,7 +139,8 @@ def run() -> dict:
     raw = []
     for t in trades:
         opened = time.mktime(time.strptime(t["opened"], "%Y-%m-%d %H:%M"))
-        path = paths.load(t["mint"], since=opened - 60)
+        closed = time.mktime(time.strptime(t["closed"], "%Y-%m-%d %H:%M"))
+        path = paths.load(t["mint"], since=opened - 60, until=closed + 6 * 3600)   # the same 6 h after the sale as always
         if len(path) >= 10:
             raw.append(path)
             replays.append((t, exits.features(path)))
