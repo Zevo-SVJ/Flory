@@ -152,8 +152,16 @@ def drafts(hours: float = 24) -> dict[str, list[dict]]:
 
 
 if __name__ == "__main__":
-    h = float(sys.argv[1]) if len(sys.argv) > 1 else 24
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    h = float(args[0]) if args else 24
     d = drafts(h)
+    if "--today" in sys.argv:                            # POSTER.md: the one post of the day, nothing else
+        if not d["en"]:
+            print("NOTHING TO POST")
+            sys.exit(0)
+        x = d["en"][int(time.strftime("%j")) % len(d["en"])]     # a different format each day
+        print(f"=== POST\n{x['post']}\n=== REPLY\n{x['reply']}\n=== ATTACH\n{x['note']}")
+        sys.exit(0)
     if not d["en"]:
         print("pas encore de données sur cette période (rug-desk/data/audit.csv)")
     for i, x in enumerate(d["en"], 1):                  # English only: X's memecoin crowd reads English
