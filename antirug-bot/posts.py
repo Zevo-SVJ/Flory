@@ -44,6 +44,22 @@ def label(reason: str, lang: str) -> str:
     return (tgbot.LABELS if lang == "fr" else texts.EN).get(reason) or reason
 
 
+def culprit(reason: str) -> str:
+    """The line after the verdict, for what the bot actually caught."""
+    if reason.startswith("danger:") or reason in ("nobody_can_sell", "mint_open", "freeze_open"):
+        return "it looked like any other coin. the contract didn't."
+    if reason in ("dev_rugged_before", "dev_holds", "serial_dev"):
+        return "it looked like any other coin. the dev didn't."
+    if reason in ("lp_unlocked", "lp_unverified", "fake_cap"):
+        return "it looked like any other coin. the liquidity didn't."
+    return "it looked like any other coin. the wallets didn't."
+
+
+def bare(key: str) -> str:
+    """The address to paste in the bot: no "bsc:" in front."""
+    return key.split(":", 1)[1] if ":" in key else key
+
+
 def _clock(ts: str) -> str:
     """'2026-11-02 20:47' -> '8:47pm', the way the posts that work on X tell time."""
     t = time.strptime(ts, "%Y-%m-%d %H:%M")
@@ -72,11 +88,14 @@ def drafts(hours: float = 24) -> dict[str, list[dict]]:
     out = {"en": []}
     if not moved:
         return out
-    ex, syms = [], set()                                             # different tickers, strongest reasons first
-    for ch, r in crashed:
-        if r["symbol"] not in syms:
+    # examples: tickers an English reader can read first, one per reason, strongest reasons first
+    latin = lambda s: s.isascii() and any(c.isalpha() for c in s)
+    ex, syms, why = [], set(), set()
+    for ch, r in sorted(crashed, key=lambda x: (not latin(x[1]["symbol"]), rank(x[1]), x[0])):
+        if r["symbol"] not in syms and r["reason"] not in why:
             ex.append((ch, r))
             syms.add(r["symbol"])
+            why.add(r["reason"])
         if len(ex) == 3:
             break
     url = link()
@@ -110,9 +129,9 @@ def drafts(hours: float = 24) -> dict[str, list[dict]]:
             f"{_clock(flagged)}: ${r['symbol']} is moving. people are aping.\n\n"
             f"my bot looks at it for 5 seconds.\n🔴 HIGH RISK: {lab(r)}.\n\n"
             f"{later}: ${r['symbol']} {ch:+.0f}%.\n\n"
-            "the chart looked fine. the wallets didn't.\n\n"
+            f"{culprit(r['reason'])}\n\n"
             "check before you buy, not after ↓"), "reply": reply,
-            "note": "add a screenshot of the bot's answer on this CA: " + r["mint"]})
+            "note": "add a screenshot of the bot's answer on this CA: " + bare(r["mint"])})
     # 3. receipts, three tokens
     if len(ex) >= 2:
         lines = "\n".join(f"→ ${r['symbol']} {ch:+.0f}% · {lab(r)}" for ch, r in ex)
@@ -120,14 +139,14 @@ def drafts(hours: float = 24) -> dict[str, list[dict]]:
             f"{len(ex)} COINS MY BOT FLAGGED {span}. 6 HOURS LATER:\n\n{lines}\n\n"
             "every one of them had a chart that looked tradeable.\n\n"
             "bookmark this before you ape your next coin.\n\nbot below ↓"), "reply": reply,
-            "note": "post with screenshots of the bot's answers on these CAs"})
+            "note": "post with screenshots of the bot's answers on these CAs: " + " · ".join(bare(r["mint"]) for _, r in ex)})
     # 4. the video
     if ex:
         ch, r = ex[0]
         out["en"].append({"post": (
             "5 seconds.\n\nthat's how long it takes to know if the coin you're about to ape is a rug.\n\n"
             "free, 3 checks a day. link below ↓"), "reply": reply,
-            "note": f"film your screen: paste {r['mint']} (${r['symbol']}) in the bot, the answer comes back. "
+            "note": f"film your screen: paste {bare(r['mint'])} (${r['symbol']}) in the bot, the answer comes back. "
                     "attach the video (native, under 2:20)"})
     return out
 
