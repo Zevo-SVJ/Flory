@@ -8,6 +8,12 @@ import book, exits, paths, facts
 
 _quote_usd = {}             # mint -> last dollar price of its pool's quote token (SOL, or XMR, USDC...)
 _mismatch = {}              # mint -> ticks in a row where the chain and DexScreener disagree by half
+# one tick that drops the price under 30% of the last one, or the pool under 5% of it, waits for the next tick
+# before any sale: Nov 3, 20:30:41, a feed outage gave CAPY (Robinhood) a $0 pool for 8 s while it stood at
+# +128% with $94k, and the rest of the position was sold at -99%. a real rug is still there 20 s later
+GLITCH_PRICE, GLITCH_LIQ = 0.30, 0.05
+_last_good = {}             # mint -> (price, liq) of the last tick acted on
+_suspect = set()            # mints whose last tick was such a jump, not acted on yet
 
 
 def chain_marks(positions: dict, live: dict) -> dict:
@@ -85,6 +91,16 @@ def watch() -> tuple[list[dict], dict]:
                     _mismatch.pop(mint, None)
                     s["price"], s["liq"] = cp, cl
             paths.append(mint, s)
+            prev = _last_good.get(mint) or (p["entry"], p.get("liq0"))
+            jump = (s["price"] < GLITCH_PRICE * prev[0] or (
+                prev[1] and s.get("liq") is not None and s["liq"] < GLITCH_LIQ * prev[1]))
+            confirmed = _mismatch.get(mint, 0) >= 2       # the chain read already waited a tick for this
+            if jump and not confirmed and mint not in _suspect:
+                _suspect.add(mint)            # held one tick: confirmed next tick, or it was a bad read
+                continue
+            _suspect.discard(mint)
+            if s["price"] > 0:
+                _last_good[mint] = (s["price"], s.get("liq"))
             if s["price"] > 0:
                 marks[mint] = s["price"]
                 b = book.load()

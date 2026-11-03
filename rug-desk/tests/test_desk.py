@@ -119,6 +119,7 @@ class Base(unittest.TestCase):
     def setUp(self):
         import market
         market._tickers.clear()                 # the ticker search cache would leak between tests
+        watch._last_good.clear(); watch._suspect.clear(); watch._mismatch.clear()
         for f in (config.LOG, config.POSITIONS, config.TRADES):
             if os.path.exists(f):
                 os.remove(f)
@@ -322,7 +323,8 @@ class Exits(Base):
 
     def test_pool_gone(self):
         with mock.patch("requests.get", fake_get(ds=[])):
-            e = [x["text"] for x in watch.watch()[0]]
+            self.assertEqual(watch.watch()[0], [])                 # one empty read waits a tick...
+            e = [x["text"] for x in watch.watch()[0]]              # ...a gone pool is still gone 20 s later
         self.assertIn("pool_gone", e[0])
         self.assertAlmostEqual(book.today_pnl(), -25)
 
@@ -421,6 +423,13 @@ class Outages(unittest.TestCase):
         self.assertTrue(edge.outage(down))
         self.assertFalse(edge.outage(rug))
         self.assertTrue(edge.outage({**rug, "mint": "NeverPriced", "closed": "2026-10-22 13:00"}))   # 3 h, no price
+        t1 = time.mktime(time.strptime("2026-11-03 20:30", "%Y-%m-%d %H:%M"))
+        for i, px in enumerate([2.28, 0.01] + [2.28] * 12):          # sold on a $0 read, the token still at +128%
+            paths.append("GlitchMint", {"t": t1 + 9 + 20 * i, "price": px, "liq": 1, "b5": None, "s5": None, "v5": None})
+        for i, px in enumerate([2.28, 0.01] + [0.01] * 12):          # a real rug: it stays down
+            paths.append("RealRug", {"t": t1 + 9 + 20 * i, "price": px, "liq": 1, "b5": None, "s5": None, "v5": None})
+        self.assertTrue(edge.glitch_sale({"mint": "GlitchMint", "closed": "2026-11-03 20:30"}))
+        self.assertFalse(edge.glitch_sale({"mint": "RealRug", "closed": "2026-11-03 20:30"}))
 
 
 class ChainOff(unittest.TestCase):
@@ -1253,6 +1262,20 @@ class QuoteTokens(Base):
             self.assertIn(MINT, book.load())
             out = watch.watch()[0]                                                  # second tick agrees: sell
         self.assertTrue(out and out[0]["reason"] == "liquidity_pulled", out)
+
+
+class Glitch(Base):
+    def test_a_one_tick_zero_pool_never_sells_a_winner(self):
+        book.open_position(MINT, "TEST", 1.0, 80000)
+        with mock.patch("requests.get", fake_get(ds=ds_pairs(price=2.2, liq=94000))):
+            watch.watch()
+        with mock.patch("requests.get", fake_get(ds=ds_pairs(price=0.01, liq=1))):
+            self.assertEqual(watch.watch()[0], [])                 # the bad read: held
+        self.assertIn(MINT, book.load())
+        with mock.patch("requests.get", fake_get(ds=ds_pairs(price=2.2, liq=94000))):
+            out = watch.watch()[0]                                 # back to normal: nothing sold
+        self.assertFalse(any(e["reason"] in ("stop", "liquidity_pulled", "pool_gone") for e in out if "reason" in e), out)
+        self.assertIn(MINT, book.load())
 
 
 class Copycat(Base):

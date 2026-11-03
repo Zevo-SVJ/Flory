@@ -24,9 +24,23 @@ MAX_TICKET_SHARE = 0.05     # never more than 5% of the bankroll on one memecoin
 OUTAGE_GAP_MIN = 15
 
 
+def glitch_sale(t: dict) -> bool:
+    """True when the position was closed on a bad read: a price in the minute of the sale under 30% of what
+    the next 3 minutes all say (Nov 3: CAPY sold at -99% on a $0 pool, back at +128% 8 s later). the same
+    for winners and losers; a real rug stays down and is never flagged."""
+    import paths, statistics as st
+    t1 = time.mktime(time.strptime(t["closed"], "%Y-%m-%d %H:%M"))
+    at = [p["price"] for p in paths.load(t["mint"], since=t1, until=t1 + 60)]
+    after = [p["price"] for p in paths.load(t["mint"], since=t1 + 61, until=t1 + 240)]
+    return bool(at and len(after) >= 3 and min(at) < 0.3 * st.median(after))
+
+
 def outage(t: dict) -> bool:
-    """True when the desk was not watching this position for OUTAGE_GAP_MIN or more while it was open."""
+    """True when the desk was not watching this position for OUTAGE_GAP_MIN or more while it was open,
+    or sold it on a bad read (glitch_sale): either way the trade says nothing about the rules."""
     import paths
+    if glitch_sale(t):
+        return True
     t0 = time.mktime(time.strptime(t["opened"], "%Y-%m-%d %H:%M"))
     t1 = time.mktime(time.strptime(t["closed"], "%Y-%m-%d %H:%M")) + 60
     if t1 - t0 < OUTAGE_GAP_MIN * 60:
