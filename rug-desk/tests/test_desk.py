@@ -425,11 +425,14 @@ class Outages(unittest.TestCase):
         self.assertTrue(edge.outage({**rug, "mint": "NeverPriced", "closed": "2026-10-22 13:00"}))   # 3 h, no price
         t1 = time.mktime(time.strptime("2026-11-03 20:30", "%Y-%m-%d %H:%M"))
         for i, px in enumerate([2.28, 0.01] + [2.28] * 12):          # sold on a $0 read, the token still at +128%
-            paths.append("GlitchMint", {"t": t1 + 9 + 20 * i, "price": px, "liq": 1, "b5": None, "s5": None, "v5": None})
+            paths.append("robinhood:0x" + "a" * 40, {"t": t1 + 9 + 20 * i, "price": px, "liq": 1, "b5": None, "s5": None, "v5": None})
         for i, px in enumerate([2.28, 0.01] + [0.01] * 12):          # a real rug: it stays down
-            paths.append("RealRug", {"t": t1 + 9 + 20 * i, "price": px, "liq": 1, "b5": None, "s5": None, "v5": None})
-        self.assertTrue(edge.glitch_sale({"mint": "GlitchMint", "closed": "2026-11-03 20:30"}))
-        self.assertFalse(edge.glitch_sale({"mint": "RealRug", "closed": "2026-11-03 20:30"}))
+            paths.append("robinhood:0x" + "b" * 40, {"t": t1 + 9 + 20 * i, "price": px, "liq": 1, "b5": None, "s5": None, "v5": None})
+        self.assertTrue(edge.glitch_sale({"mint": "robinhood:0x" + "a" * 40, "closed": "2026-11-03 20:30"}))
+        self.assertFalse(edge.glitch_sale({"mint": "robinhood:0x" + "b" * 40, "closed": "2026-11-03 20:30"}))
+        for i, px in enumerate([2.28, 0.01] + [2.28] * 12):          # Solana: the chain read confirmed the sale
+            paths.append("SolGlitch", {"t": t1 + 9 + 20 * i, "price": px, "liq": 1, "b5": None, "s5": None, "v5": None})
+        self.assertFalse(edge.glitch_sale({"mint": "SolGlitch", "closed": "2026-11-03 20:30"}))
 
 
 class ChainOff(unittest.TestCase):

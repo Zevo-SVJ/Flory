@@ -28,7 +28,10 @@ def glitch_sale(t: dict) -> bool:
     """True when the position was closed on a bad read: a price in the minute of the sale under 30% of what
     the next 3 minutes all say (Nov 3: CAPY sold at -99% on a $0 pool, back at +128% 8 s later). the same
     for winners and losers; a real rug stays down and is never flagged."""
-    import paths, statistics as st
+    import paths, statistics as st, chains
+    if chains.split(t["mint"])[0] == "solana":
+        return False        # a Solana sale is confirmed on chain (two ticks of the pool's own vaults), and
+                            # DexScreener can show a rugged Solana pool alive for an hour after (iCat, Oct 31)
     t1 = time.mktime(time.strptime(t["closed"], "%Y-%m-%d %H:%M"))
     at = [p["price"] for p in paths.load(t["mint"], since=t1, until=t1 + 60)]
     after = [p["price"] for p in paths.load(t["mint"], since=t1 + 61, until=t1 + 240)]
