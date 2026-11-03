@@ -1370,6 +1370,27 @@ class EventHunt(Base):
         self.assertIsNone(watch.runner_check(MINT, book.load()[MINT], {**s, "liq": 90000, "b5": 5}, s["t"]))
 
 
+class Official(Base):
+    def test_only_a_post_of_the_account_itself_with_a_real_address_is_relayed_once(self):
+        import official, scan
+        for f in (official.FILE, official.SEEN):
+            if os.path.exists(f):
+                os.remove(f)
+        ca = "0x" + "ab" * 20
+        with open(official.FILE, "w") as f:
+            f.write(f"2026-11-10 20:00 | GTA VI | base | {ca} | https://x.com/RockstarGames/status/123\n")
+            f.write("2026-11-10 20:01 | GTA VI | base | 0xnotanaddress | https://x.com/RockstarGames/status/124\n")
+            f.write(f"2026-11-10 20:02 | GTA VI | base | 0x{'cd' * 20} | https://x.com/GTA6News/status/125\n")
+        sent = []
+        with mock.patch("notify.post", sent.append), mock.patch("market.pools", lambda ks: {}):
+            self.assertEqual(len(official.tick()), 1)
+            self.assertEqual(official.tick(), [])                 # once only
+        self.assertIn(ca, sent[0])
+        self.assertEqual(scan.event_mints.pop("base:" + ca.lower(), scan.event_mints.pop("base:" + ca, None)), "GTA VI")
+        for f in (official.FILE, official.SEEN):
+            os.remove(f)
+
+
 class Copycat(Base):
     def test_a_smaller_token_under_a_bigger_ticker_is_killed(self):
         import market

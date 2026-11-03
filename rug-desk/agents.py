@@ -145,6 +145,12 @@ down = set()        # sources already reported down, so each outage is said once
 
 def scout():
     try:
+        import official                  # a CA posted by the event's own account (official.py, ECHO.md)
+        for t in official.tick():
+            emit("SCOUT", "info", t.splitlines()[0])
+    except Exception as e:
+        emit("SCOUT", "error", f"official: {e}"[:200])
+    try:
         leads = scan.leads()
         down.discard("leads")
     except Exception as e:
