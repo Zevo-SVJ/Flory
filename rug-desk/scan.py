@@ -129,6 +129,9 @@ def event_leads(today: str | None = None) -> dict[str, str]:
                 a, chain = (p.get("baseToken") or {}).get("address"), p.get("chainId")
                 if not a or not chains.supported(chain):
                     continue
+                label = " ".join(((p.get("baseToken") or {}).get(f) or "") for f in ("name", "symbol")).lower()
+                if ev.get("match") and not any(x in label for x in ev["match"]):
+                    continue                           # found by the word, not about the event
                 seen[p.get("pairAddress") or a] = (float((p.get("volume") or {}).get("h1") or 0),
                                                    p.get("pairCreatedAt") or 0)
                 age_h = (now_ms - (p.get("pairCreatedAt") or 0)) / 3.6e6

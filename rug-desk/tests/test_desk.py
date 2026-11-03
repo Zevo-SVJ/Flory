@@ -506,9 +506,10 @@ class EventWatch(unittest.TestCase):
     def test_event_words_are_searched_only_inside_their_window(self):
         import scan
         born = (time.time() - 3 * 3600) * 1000
-        pair = {"baseToken": {"address": "0x" + "c" * 40}, "chainId": "bsc", "dexId": "pancakeswap",
-                "pairCreatedAt": born, "liquidity": {"usd": 40000}}
-        resp = mock.Mock(**{"raise_for_status.return_value": None, "json.return_value": {"pairs": [pair]}})
+        pair = {"baseToken": {"address": "0x" + "c" * 40, "symbol": "GTA6", "name": "Grand Theft"}, "chainId": "bsc",
+                "dexId": "pancakeswap", "pairCreatedAt": born, "liquidity": {"usd": 40000}}
+        amd = {**pair, "baseToken": {"address": "0x" + "d" * 40, "symbol": "AMD", "name": "AMD"}}
+        resp = mock.Mock(**{"raise_for_status.return_value": None, "json.return_value": {"pairs": [pair, amd]}})
         with mock.patch("requests.get", return_value=resp) as get:
             self.assertEqual(scan.event_leads("2026-11-01"), {})                   # before the window
             get.assert_not_called()
