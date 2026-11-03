@@ -38,6 +38,38 @@ def glitch_sale(t: dict) -> bool:
     return bool(at and len(after) >= 3 and min(at) < 0.3 * st.median(after))
 
 
+def glitch_fix(t: dict) -> tuple[float, float, float] | None:
+    """For a trade closed on a bad read (glitch_sale): (time of that sale, its booked pnl, the pnl of the
+    same sale at the price the next 3 minutes held). a real order fills at the pool's real price, never at a
+    misread, so that is what the sale was worth; the trade's other sales stand. None if not such a trade."""
+    if not glitch_sale(t):
+        return None
+    import paths, statistics as st
+    from config import PAPER_COSTS
+    rows = [r for r in _trades() if r["mint"] == t["mint"] and t["opened"] <= r["time"] <= t["closed"]]
+    close = next((r for r in reversed(rows) if r["action"] == "close"), None)
+    if not close:
+        return None
+    t0 = time.mktime(time.strptime(t["opened"], "%Y-%m-%d %H:%M"))
+    t1 = time.mktime(time.strptime(t["closed"], "%Y-%m-%d %H:%M"))
+    start = [p["price"] for p in paths.load(t["mint"], since=t0 - 60, until=t0 + 120)]
+    after = [p["price"] for p in paths.load(t["mint"], since=t1 + 61, until=t1 + 240)]
+    if not start or not after:
+        return None
+    booked = float(close["pnl"])
+    basis = float(close["usd"]) - booked                     # what the tokens sold had cost
+    cost = (PAPER_COSTS["fee_pct"] + PAPER_COSTS["mev_pct"]) / 100
+    worth = basis * st.median(after) / start[0] * (1 - cost) / (1 + cost) - PAPER_COSTS["tx_usd"]
+    return t1, booked, round(worth - basis, 2)
+
+
+def _trades() -> list[dict]:
+    if not os.path.exists(TRADES):
+        return []
+    with open(TRADES, newline="") as f:
+        return list(csv.DictReader(f))
+
+
 def outage(t: dict) -> bool:
     """True when the desk was not watching this position for OUTAGE_GAP_MIN or more while it was open,
     or sold it on a bad read (glitch_sale): either way the trade says nothing about the rules."""

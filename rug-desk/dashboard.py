@@ -175,24 +175,34 @@ def learn_state() -> dict:
         {"lessons": [learn.explain(l) for l in m.get("lessons", [])], "min": learn.MIN_TRAIN + learn.MIN_TEST}
 
 
-_outages = {"t": 0.0, "v": (0, 0.0, [], set())}
+_outages = {"t": 0.0, "v": (0, 0.0, [], set(), {})}
 
 
-def outage_state() -> tuple[int, float, list, set]:
-    """The trades closed since the balance restart that say nothing about the rules (edge.outage: the desk
-    was down while they were open, or a bad read sold them): (n, their pnl, [(time, pnl)] of each of their
-    sales, their mints). Skide's call, Nov 3: the page's balance, P&L and chart leave them out; the raw
-    figure stays in the P&L line. cached 5 min: each check reads a price path."""
+def outage_state() -> tuple[int, float, list, set, dict]:
+    """What the page corrects, since the balance restart (Skide's call, Nov 3):
+    - trades the desk could not follow (edge.outage, the Mac or the desk down): left out entirely;
+    - a sale made on a bad read (edge.glitch_fix): valued at the price the pool really held, the trade's
+      other sales kept (CAPY: its +100% half stays, the -99% misread becomes the +128% it really was).
+    returns (n trades corrected, $ to take off the realized pnl, [(time, $ to take off)] for the chart,
+    mints left out, {mint: $ added to its result}). cached 5 min: each check reads price paths."""
     if time.time() - _outages["t"] > 300:
         try:
             since = book.reset_info().get("time")
             ts = [t for t in edge.outages(since=None) if not since or t["closed"] >= since]
-            sales = []
+            trades_ = book.trades()
+            cuts, gone, fixed = [], set(), {}
             for t in ts:
-                for r in book.trades():
+                fix = edge.glitch_fix(t)
+                if fix:
+                    when, booked, worth = fix
+                    cuts.append((when, booked - worth))
+                    fixed[t["mint"]] = worth - booked
+                    continue
+                gone.add(t["mint"])
+                for r in trades_:
                     if r["mint"] == t["mint"] and r["action"] != "open" and t["opened"] <= r["time"] <= t["closed"]:
-                        sales.append((time.mktime(time.strptime(r["time"], "%Y-%m-%d %H:%M")), float(r["pnl"])))
-            _outages["v"] = (len(ts), round(sum(t["pnl"] for t in ts), 2), sorted(sales), {t["mint"] for t in ts})
+                        cuts.append((time.mktime(time.strptime(r["time"], "%Y-%m-%d %H:%M")), float(r["pnl"])))
+            _outages["v"] = (len(ts), round(sum(c for _, c in cuts), 2), sorted(cuts), gone, fixed)
         except Exception:
             pass
         _outages["t"] = time.time()
@@ -265,6 +275,8 @@ def state(range_key: str = "auto", series: str = "memes") -> dict:
         per_mint[t["mint"]] += float(t["pnl"])
     after = book.reset_info().get("n_trades", 0)            # the win rate restarts with the balance
     closed = {t["mint"] for t in trades[after:] if t["action"] == "close"} - outage_state()[3]
+    for m_, delta in outage_state()[4].items():             # a sale on a bad read, valued at the real price
+        per_mint[m_] += delta
     wins = sum(1 for m in closed if per_mint[m] > 0)
     for r in open_rows:
         per_mint[r["mint"]] += r["pnl"] or 0
@@ -315,13 +327,13 @@ def state(range_key: str = "auto", series: str = "memes") -> dict:
     main_ok = bool(hb and now - hb["time"] < 120)
     vigie_ok = bool(vb and now - vb["time"] < 120)
     out_n, out_pnl = outage_state()[:2]
-    realized_raw, realized = realized, realized - out_pnl          # the page counts the rules' trades only
+    realized = realized - out_pnl                                    # the page counts the rules' trades only
     balance = PAPER_BANKROLL_USD + realized + unrealized
     return {
         "now": now, "paper": PAPER, "judge": JUDGE, "ticket": TICKET_USD,
         "alive": main_ok or vigie_ok, "busy": vigie_ok and not main_ok,
         "bankroll": PAPER_BANKROLL_USD, "balance": balance, "realized": realized, "unrealized": unrealized,
-        "outages": [out_n, out_pnl], "realized_raw": realized_raw,
+        "corrected": out_n,
         "pnl": balance - PAPER_BANKROLL_USD, "today": book.today_pnl(), "loss_limit": DAILY_LOSS_HALT_USD,
         "cash": book.cash(positions), "marks_age": now - marks.get("t", 0),
         "wins": wins, "losses": len(closed) - wins, "mega_pct": MEGA_PROFIT_PCT,

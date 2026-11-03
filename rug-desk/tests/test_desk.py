@@ -433,6 +433,19 @@ class Outages(unittest.TestCase):
         for i, px in enumerate([2.28, 0.01] + [2.28] * 12):          # Solana: the chain read confirmed the sale
             paths.append("SolGlitch", {"t": t1 + 9 + 20 * i, "price": px, "liq": 1, "b5": None, "s5": None, "v5": None})
         self.assertFalse(edge.glitch_sale({"mint": "SolGlitch", "closed": "2026-11-03 20:30"}))
+        # the misread sale is valued at the real price: half a $25 ticket at 2.28x is about +$15.6
+        g = "robinhood:0x" + "a" * 40
+        t0 = time.mktime(time.strptime("2026-11-03 13:10", "%Y-%m-%d %H:%M"))
+        paths.append(g, {"t": t0 + 5, "price": 1.0, "liq": 1, "b5": None, "s5": None, "v5": None})
+        with open(config.TRADES, "w") as f:
+            f.write("time,mint,symbol,action,usd,pnl,reason\n2026-11-03 13:10," + g + ",CAPY,open,25,0,entry\n"
+                    "2026-11-03 13:23," + g + ",CAPY,partial,24.7,12.23,take_profit_100\n"
+                    "2026-11-03 20:30," + g + ",CAPY,close,0.12,-12.4,stop\n")
+        when, booked, worth = edge.glitch_fix({"mint": g, "opened": "2026-11-03 13:10", "closed": "2026-11-03 20:30"})
+        self.assertEqual(booked, -12.4)
+        self.assertGreater(worth, 14)
+        self.assertLess(worth, 17)
+        os.remove(config.TRADES)
 
 
 class ChainOff(unittest.TestCase):
