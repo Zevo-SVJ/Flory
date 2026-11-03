@@ -123,7 +123,7 @@ def guard(mint: str) -> str | None:
     return None
 
 
-def open_position(mint, symbol, price, liq_usd, usd=TICKET_USD, vaults=None, sol0=None):
+def open_position(mint, symbol, price, liq_usd, usd=TICKET_USD, vaults=None, sol0=None, event=None):
     with LOCK:
         book = load()
         if COSTS:   # the entry is what the tokens really cost: fee and impact on top, the tx fee off the ticket
@@ -134,6 +134,8 @@ def open_position(mint, symbol, price, liq_usd, usd=TICKET_USD, vaults=None, sol
         book[mint] = {"symbol": symbol, "entry": price, "qty0": qty, "qty": qty,
                       "peak": price, "peak_t": time.time(), "liq0": liq_usd, "opened": time.time(), "steps": 0,
                       "vaults": vaults, "sol0": sol0}     # PumpSwap only: VIGIE reads the pool on chain every tick
+        if event:                                 # bought for an event (config EVENT_WATCH): survives a restart
+            book[mint]["event"] = event
         save(book)
         record(mint, symbol, "open", usd, 0, "entry")
     _live(side="buy", mint=mint, symbol=symbol, price=price)

@@ -220,6 +220,30 @@ EVENT_WATCH = {
 # tier ("event", % of the balance), every check still applying: an event is another population than the
 # chain's everyday launches, and the paper desk is where to learn what it is worth
 EVENT_TIER_PCT = 2
+# Nov 3, Skide: 95% of the GTA tokens are copies and rugs, the few clean ones with real holders run far.
+# three things, paper only, every check still applying:
+# 1. a GTA token GARDE turned down for a state that can mend (holders too concentrated, no momentum yet,
+#    a thin pool, a low score...) is checked again every EVENT_RETRY_MIN while the window is open: the
+#    holders of the good one settle in after the first hour. a hard kill (honeypot, copycat, serial farm,
+#    a dev who rugged before, an X scam) stays final
+EVENT_RETRY_MIN = 45
+EVENT_PER_RUN = 5           # of SCOUT's scan_per_run slots, the event's tokens take up to this many first
+EVENT_RETRY = ("top10_heavy", "no_momentum", "dead_volume", "micro_trades", "fake_cap", "whale", "falling_knife",
+               "overextended", "stale_data", "thin_pool", "too_fresh", "no_pool", "no_price", "no_holders",
+               "below_graduation", "funded_cluster", "dev_holds")
+# 2. the heat of the event: the 1 h volume of every pair its words find on DexScreener, read every SCOUT run.
+#    a news (a Rockstar post, a trailer, a leak) shows there first, before a token stands out: when the heat
+#    is ratio x its median of the last 24 h (and at least min_usd), SCOUT re-checks every event token at once
+#    and Telegram says so. ECHO adds what it reads on X (data/event_news.txt, ECHO.md)
+EVENT_HEAT = {"ratio": 3.0, "min_usd": 200000, "min_readings": 20, "alert_every_h": 2}
+# 3. a GTA position that proves itself is held for the event instead of hours: once it took its first profit
+#    (+100%), after an hour held, with its pool 1.5x what it was at the buy and buyers still ahead over 5 min,
+#    the rest switches to these exits: more profit at x5 and x10, a 40% trail from the peak, a floor at +50%,
+#    no clock, and everything out by the event's sell_by
+EVENT_RUNNER = {"min_hours": 1, "liq_mult": 1.5}
+EVENT_RUNNER_EXIT = {"ladder": [(100, 0.50), (400, 0.15), (900, 0.15)], "trail": "fixed", "trail_pct": 40,
+                     "lock_after_pct": 100, "lock_floor_pct": 50, "stall_min": 10 ** 9, "dump_drop_pct": 100,
+                     "fade_ratio": None, "time_stop_hours": 10 ** 9}
 
 SCHEDULE = {                # used by agents.py: one entry per agent
     "vigie_every_s": 20,        # VIGIE: prices every open position, applies exits, logs the balance

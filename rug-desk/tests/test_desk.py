@@ -1309,6 +1309,67 @@ class EventSellBy(Base):
         self.assertNotIn(MINT, book.load())
 
 
+class EventHunt(Base):
+    def test_a_turned_down_event_token_is_checked_again_but_a_hard_kill_stays_final(self):
+        import scan
+        old = time.strftime("%Y-%m-%d %H:%M", time.localtime(time.time() - 3600))
+        fresh = time.strftime("%Y-%m-%d %H:%M")
+        rows = [{"time": old, "mint": "Top10", "stage": "facts", "verdict": "SKIP", "reason": "top10_heavy"},
+                {"time": old, "mint": "Honey", "stage": "facts", "verdict": "SKIP", "reason": "honeypot"},
+                {"time": fresh, "mint": "Recent", "stage": "facts", "verdict": "SKIP", "reason": "top10_heavy"},
+                {"time": old, "mint": "Other", "stage": "facts", "verdict": "SKIP", "reason": "top10_heavy"}]
+        for r in rows:
+            check.log(r)
+        ev = {"Top10", "Honey", "Recent"}
+        done = scan._done(ev)
+        self.assertNotIn("Top10", done)                    # can mend: looked at again
+        self.assertIn("Honey", done)                       # never again
+        self.assertIn("Recent", done)                      # waits EVENT_RETRY_MIN...
+        self.assertNotIn("Recent", scan._done(ev, now_retry=True))   # ...unless the event heats up
+        self.assertIn("Other", done)                       # not an event token: as before
+
+    def test_the_heat_of_an_event_says_when_it_bursts(self):
+        import scan
+        heat = scan.HEAT
+        if os.path.exists(heat):
+            os.remove(heat)
+        now = time.time()
+        for i in range(25):
+            scan.heat_note("GTA VI", 100000, 1, now - 3600 + i * 60)
+        self.assertIsNone(scan.event_burst("GTA VI", now))
+        scan.heat_note("GTA VI", 450000, 9, now)
+        self.assertIn("x4.5", scan.event_burst("GTA VI", now))
+        os.remove(heat)
+
+    def test_a_clean_event_winner_is_held_for_the_event(self):
+        import scan
+        book.open_position(MINT, "GTA", 1.0, 50000, event="GTA VI")
+        b = book.load()
+        b[MINT].update(steps=1, opened=time.time() - 2 * 3600, peak=2.2)
+        book.save(b)
+        s = {"t": time.time(), "price": 2.1, "liq": 90000, "b5": 30, "s5": 10}
+        self.assertIsNotNone(watch.runner_check(MINT, book.load()[MINT], s, s["t"]))
+        pos = book.load()[MINT]
+        self.assertTrue(pos["runner"])
+        # a 6-hour flat position would hit the clock; a runner has none, and only a 40% fall from the peak sells it
+        import exits
+        p = dict(config.EXIT)
+        flat = {"t": time.time() + 10 * 3600, "price": 1.9, "liq": 90000}
+        self.assertIsNone(exits.decide(pos, flat, p))
+        self.assertEqual(exits.decide({**pos, "peak": 4.0}, {**flat, "price": 2.3}, p)[1], "trailing_stop")
+        self.assertEqual(exits.decide(pos, {**flat, "price": 1.3}, p)[1], "lock")          # the +50% floor
+        self.assertEqual(exits.decide({**pos, "peak": 2.2}, {**flat, "price": 5.1}, p)[1], "take_profit_400")
+
+    def test_a_thin_or_unproven_event_position_keeps_the_usual_exits(self):
+        book.open_position(MINT, "GTA", 1.0, 50000, event="GTA VI")
+        b = book.load()
+        b[MINT].update(steps=1, opened=time.time() - 2 * 3600)
+        book.save(b)
+        s = {"t": time.time(), "price": 2.1, "liq": 60000, "b5": 30, "s5": 10}       # pool only x1.2
+        self.assertIsNone(watch.runner_check(MINT, book.load()[MINT], s, s["t"]))
+        self.assertIsNone(watch.runner_check(MINT, book.load()[MINT], {**s, "liq": 90000, "b5": 5}, s["t"]))
+
+
 class Copycat(Base):
     def test_a_smaller_token_under_a_bigger_ticker_is_killed(self):
         import market

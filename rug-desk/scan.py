@@ -26,8 +26,11 @@ RETRY_AFTER_MIN = 30
 RETRYABLE = ("too_fresh", "thin_pool", "no_pool", "no_price", "no_holders", "below_graduation")
 
 
-def _done() -> set[str]:
-    """Mints we never need to look at again: a final verdict, or a retryable kill that's still recent."""
+def _done(events: set[str] = frozenset(), now_retry: bool = False) -> set[str]:
+    """Mints we never need to look at again: a final verdict, or a retryable kill that's still recent.
+    events: the tokens of an open event, also retried after a kill that can mend or a pass not bought
+    (config EVENT_RETRY), every EVENT_RETRY_MIN, or at once when the event heats up (now_retry)."""
+    from config import EVENT_RETRY, EVENT_RETRY_MIN
     if not os.path.exists(LOG):
         return set()
     last = {}
@@ -35,10 +38,15 @@ def _done() -> set[str]:
         for r in csv.DictReader(f):
             last[r["mint"]] = r
     cutoff = time.strftime("%Y-%m-%d %H:%M", time.localtime(time.time() - RETRY_AFTER_MIN * 60))
+    ev_cut = time.strftime("%Y-%m-%d %H:%M", time.localtime(time.time() - EVENT_RETRY_MIN * 60))
     done = set()
     for mint, r in last.items():
         reason = r["reason"] or ""
         retry = reason in RETRYABLE or " failed" in reason or r["stage"] == "limits"
+        if mint in events and (reason in EVENT_RETRY or (r.get("verdict") in ("PASS", "BUY")
+                                                         and (r.get("action") or "").startswith("not bought"))):
+            if now_retry or r["time"] <= ev_cut:
+                continue
         if not retry or r["time"] > cutoff:
             done.add(mint)
     return done
@@ -88,10 +96,11 @@ def searched(trending: list[str] = ()) -> list[str]:
 event_mints: dict[str, str] = {}       # tokens found by an open event's search: {key: event}, read by check.run
 
 
-def event_due(mint: str, now: float | None = None) -> str | None:
-    """The event name if `mint` was bought for an event whose sell_by time (local) has come, else None."""
+def event_due(mint: str, now: float | None = None, pos: dict | None = None) -> str | None:
+    """The event name if `mint` was bought for an event whose sell_by time (local) has come, else None.
+    pos: the open position, which carries its event across a restart."""
     from config import EVENT_WATCH
-    name = event_mints.get(mint)
+    name = event_mints.get(mint) or (pos or {}).get("event")
     ev = EVENT_WATCH.get(name or "")
     if not ev or not ev.get("sell_by"):
         return None
@@ -108,6 +117,7 @@ def event_leads(today: str | None = None) -> dict[str, str]:
     for name, ev in EVENT_WATCH.items():
         if not ev["from"] <= today <= ev["to"]:
             continue
+        seen = {}                                  # pair -> (1 h volume, created): the event's heat
         for w in ev["words"]:
             try:
                 r = requests.get(SEARCH, params={"q": w}, timeout=15)
@@ -119,11 +129,79 @@ def event_leads(today: str | None = None) -> dict[str, str]:
                 a, chain = (p.get("baseToken") or {}).get("address"), p.get("chainId")
                 if not a or not chains.supported(chain):
                     continue
+                seen[p.get("pairAddress") or a] = (float((p.get("volume") or {}).get("h1") or 0),
+                                                   p.get("pairCreatedAt") or 0)
                 age_h = (now_ms - (p.get("pairCreatedAt") or 0)) / 3.6e6
                 ok_dex = p.get("dexId") == "pumpswap" if chain == "solana" else True
                 if (ok_dex and FACTS["min_age_min"] / 60 <= age_h
                         and ((p.get("liquidity") or {}).get("usd") or 0) >= FACTS["min_liquidity_usd"]):
                     out.setdefault(chains.key(chain, a), name)
+        if seen:
+            heat_note(name, sum(v for v, _ in seen.values()),
+                      sum(1 for _, t in seen.values() if now_ms - t < 3.6e6))
+    return out
+
+
+HEAT = os.path.join(os.path.dirname(LOG), "event_heat.jsonl")
+EVENT_NEWS = os.path.join(os.path.dirname(LOG), "event_news.txt")    # ECHO: a Rockstar post, a trailer (ECHO.md)
+_heat_alert: dict[str, float] = {}
+
+
+def heat_note(name: str, vol1h: float, new1h: int, now: float | None = None):
+    """One reading of an event's heat (data/event_heat.jsonl)."""
+    with open(HEAT, "a") as f:
+        f.write(json.dumps({"t": now or time.time(), "event": name, "vol1h": round(vol1h), "new1h": new1h}) + "\n")
+
+
+def event_burst(name: str, now: float | None = None) -> str | None:
+    """Why the event is heating up now, or None: its 1 h volume ratio x its 24 h median (config EVENT_HEAT),
+    or a news ECHO wrote in the last 2 hours."""
+    from config import EVENT_HEAT as H
+    now = now or time.time()
+    if os.path.exists(EVENT_NEWS) and now - os.path.getmtime(EVENT_NEWS) < 7200:
+        with open(EVENT_NEWS) as f:
+            last = [l.strip() for l in f if l.strip()]
+        if last:
+            return f"news X : {last[-1][:160]}"
+    if not os.path.exists(HEAT):
+        return None
+    rows = []
+    with open(HEAT) as f:
+        for l in f:
+            try:
+                r = json.loads(l)
+            except ValueError:
+                continue
+            if r.get("event") == name and now - r["t"] < 86400:
+                rows.append(r)
+    if len(rows) < H["min_readings"] + 1:
+        return None
+    vols = sorted(r["vol1h"] for r in rows[:-1])
+    med, cur = vols[len(vols) // 2], rows[-1]["vol1h"]
+    if cur >= H["min_usd"] and med > 0 and cur >= H["ratio"] * med:
+        return f"volume 1 h ${cur / 1e3:,.0f}k = x{cur / med:.1f} la médiane 24 h, {rows[-1]['new1h']} nouvelles paires"
+    return None
+
+
+def event_alert(now: float | None = None) -> list[str]:
+    """The events heating up now; Telegram hears of each at most every alert_every_h."""
+    from config import EVENT_WATCH, EVENT_HEAT
+    now, out = now or time.time(), []
+    today = time.strftime("%Y-%m-%d", time.localtime(now))
+    for name, ev in EVENT_WATCH.items():
+        if not ev["from"] <= today <= ev["to"]:
+            continue
+        why = event_burst(name, now)
+        if not why:
+            continue
+        out.append(name)
+        if now - _heat_alert.get(name, 0) >= EVENT_HEAT["alert_every_h"] * 3600:
+            _heat_alert[name] = now
+            try:
+                import notify
+                notify.post(f"🔥 {name} chauffe : {why}. SCOUT revoit tous ses tokens maintenant.")
+            except Exception:
+                pass
     return out
 
 
@@ -216,7 +294,8 @@ def sample_shadow(live: dict, waived: set) -> int:
 
 def leads() -> list[str]:
     import shadow
-    done, out, errors, waived = _done(), [], [], shadow.waived()
+    hot = event_alert()                        # an event heating up: its tokens are all checked again now
+    done, out, errors, waived = _done(set(event_mints), now_retry=bool(hot)), [], [], shadow.waived()
     for src in SOURCES:
         try:
             r = requests.get(f"https://api.dexscreener.com/{src}", timeout=15)
@@ -311,7 +390,9 @@ def leads() -> list[str]:
     mixed = [m for pair in zip(early, mom) for m in pair] + early[len(mom):] + mom[len(early):]
     global last_lanes
     last_lanes = {"early": len(early), "momentum": len(mom)}
-    picked = mixed[:SCHEDULE["scan_per_run"]]
+    from config import EVENT_PER_RUN           # an open event's tokens go first, a few per run
+    ev_first = [m for m in mixed if m in event_mints][:EVENT_PER_RUN]
+    picked = ev_first + [m for m in mixed if m not in ev_first][:SCHEDULE["scan_per_run"] - len(ev_first)]
     import dossier
     for m in picked:
         dossier.add(m, "SCOUT", "repéré", source=src.get(m, "listes DexScreener"), lane=market.lane(live[m]),

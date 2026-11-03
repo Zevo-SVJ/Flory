@@ -59,6 +59,10 @@ def vigie():
         if e["kind"] == "error":
             emit("VIGIE", "error", e["text"])
             continue
+        if e["kind"] == "info":          # an event position switched to the event's exits (watch.runner_check)
+            emit("VIGIE", "info", e["text"], symbol=e["symbol"], mint=e["mint"])
+            post(e["text"])
+            continue
         emit("VIGIE", "sell", e["text"], symbol=e["symbol"], mint=e["mint"], pnl=round(e["pnl"], 2),
              pct=round(e["pct"], 1), reason=e["reason"], closed=e.get("closed"))
         if e["reason"] in RUG_EXITS:

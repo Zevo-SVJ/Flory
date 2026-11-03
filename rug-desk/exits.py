@@ -86,6 +86,9 @@ def decide(pos: dict, s: dict, p: dict | None = None) -> tuple[float, str] | Non
     """pos: the open position. s: this tick {t, price, liq, b5, s5, v5} plus its features (vol, v5_avg).
     Returns (fraction of the ORIGINAL size to sell, reason), or None to hold."""
     p = p or active()
+    if pos.get("runner"):                         # an event position that proved itself (config EVENT_RUNNER)
+        from config import EVENT_RUNNER_EXIT
+        p = {**p, **EVENT_RUNNER_EXIT}
     price, entry = s["price"], pos["entry"]
     if price <= 0:
         return 1.0, "pool_gone"
@@ -93,7 +96,7 @@ def decide(pos: dict, s: dict, p: dict | None = None) -> tuple[float, str] | Non
     peak_pct = (pos["peak"] / entry - 1) * 100
     hours = (s["t"] - pos["opened"]) / 3600
 
-    if s.get("liq") is not None and s["liq"] < pos["liq0"] * (1 - p["liq_drop_pct"] / 100):
+    if s.get("liq") is not None and s["liq"] < (pos.get("liq_ref") or pos["liq0"]) * (1 - p["liq_drop_pct"] / 100):
         return 1.0, "liquidity_pulled"
     if pct <= p["stop_pct"]:
         return 1.0, "stop"

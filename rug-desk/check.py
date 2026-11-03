@@ -368,7 +368,7 @@ def run(mint: str) -> dict:
         return v
     if enter and PAPER:
         book.open_position(mint, v["symbol"], v["price"], v["liq_usd"], usd=v.get("ticket") or TICKET_USD,
-                           vaults=v.get("vaults"), sol0=v.get("sol0"))
+                           vaults=v.get("vaults"), sol0=v.get("sol0"), event=v.get("event"))
         dossier.add(mint, "GARDE", "achat", usd=v.get("ticket") or TICKET_USD, tier=v.get("tier"), price=v["price"])
         v["action"] = (f"PAPER BUY ${v.get('ticket') or TICKET_USD:.0f} ({v.get('tier', 'base')}"
                        + (f": {', '.join(v['signals'])}" if v.get("signals") else "") + f") at {v['price']}")

@@ -112,10 +112,13 @@ def watch() -> tuple[list[dict], dict]:
                     book.save(b)
             else:
                 pos = p
+            promoted = runner_check(mint, pos, s, now)
+            if promoted:
+                out.append(promoted)
             hist = paths.load(mint, since=max(pos["opened"], now - 3600))
             d = exits.decide(pos, exits.features(hist)[-1] if hist else s, exits.for_mint(mint, profile))
             import scan                              # an event's position is out before the event (config sell_by)
-            if not d and s["price"] > 0 and scan.event_due(mint, now):
+            if not d and s["price"] > 0 and scan.event_due(mint, now, pos):
                 d = (1.0, "event_sell_by")
             if not d:
                 continue
@@ -142,6 +145,32 @@ def watch() -> tuple[list[dict], dict]:
                         "reason": why, "closed": closed, "share": 1.0 if closed else share,
                         "text": f"{pos['symbol']}: {verb} {size} at {pct:+.0f}% ({why}), pnl ${pnl:+.2f}"})
     return out, marks
+
+
+def runner_check(mint: str, pos: dict, s: dict, now: float) -> dict | None:
+    """An event position that proved itself switches to the event's exits (config EVENT_RUNNER): it took its
+    first profit, was held an hour, its pool grew 1.5x and buyers still lead over 5 min. returns the event."""
+    from config import EVENT_RUNNER as R
+    import scan
+    if pos.get("runner") or not (pos.get("event") or scan.event_mints.get(mint)) or s["price"] <= 0:
+        return None
+    if (pos.get("steps", 0) < 1 or now - pos["opened"] < R["min_hours"] * 3600
+            or not s.get("liq") or s["liq"] < R["liq_mult"] * (pos.get("liq0") or float("inf"))
+            or (s.get("b5") or 0) < (s.get("s5") or 0)):
+        return None
+    b = book.load()
+    if mint not in b:
+        return None
+    b[mint].update(runner=True, liq_ref=s["liq"])
+    book.save(b)
+    pos.update(runner=True, liq_ref=s["liq"])
+    pct = (s["price"] / pos["entry"] - 1) * 100
+    import dossier
+    dossier.add(mint, "VIGIE", "tenue event", pct=round(pct, 1), liq=round(s["liq"]))
+    return {"kind": "info", "symbol": pos["symbol"], "mint": mint,
+            "text": f"{pos['symbol']}: tenue event à {pct:+.0f}% (pool ${s['liq'] / 1e3:,.0f}k, x"
+                    f"{s['liq'] / pos['liq0']:.1f}) : x5 et x10 en prises, stop suiveur 40%, plancher +50%, "
+                    f"tout vendu avant la date"}
 
 
 _gt_seen: dict[str, tuple[float, float]] = {}     # key -> (time, price): GeckoTerminal is read once a minute
