@@ -210,7 +210,10 @@ EXIT_AUTOTUNE = False       # since Oct 20 VIGIE's self-review switches profiles
 EVENT_WATCH = {
     # opened Nov 2, not Nov 12: Skide's screenshots that evening showed the run already on (GTA6 +3,459% to
     # $12.9M, GTA6CAT +3,328% to $10.7M, CYBERLEEK, Dacity), 17 days before the release
-    "GTA VI": {"from": "2026-11-02", "to": "2026-11-30",          # release Nov 19, 2026
+    # sell_by: every position bought for the event is sold by then, whatever its exits say. event coins top
+    # out on the eve and fall on the day ("sell the news"): $TRUMP peaked the day before the inauguration,
+    # then -50% after it and -75% in two weeks; GTAVI's own creator sold hours before Rockstar's reveal
+    "GTA VI": {"from": "2026-11-02", "to": "2026-11-30", "sell_by": "2026-11-19 06:00",   # release Nov 19
                "words": ["gta", "gtavi", "gta6", "vicecity", "vice", "lucia", "leonida", "rockstar", "cyberleek"]},
 }
 # a token found by an event's search may be bought on any chain, NO_BUY_CHAINS included, in its own small

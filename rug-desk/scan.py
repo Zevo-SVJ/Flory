@@ -88,6 +88,17 @@ def searched(trending: list[str] = ()) -> list[str]:
 event_mints: dict[str, str] = {}       # tokens found by an open event's search: {key: event}, read by check.run
 
 
+def event_due(mint: str, now: float | None = None) -> str | None:
+    """The event name if `mint` was bought for an event whose sell_by time (local) has come, else None."""
+    from config import EVENT_WATCH
+    name = event_mints.get(mint)
+    ev = EVENT_WATCH.get(name or "")
+    if not ev or not ev.get("sell_by"):
+        return None
+    due = time.mktime(time.strptime(ev["sell_by"], "%Y-%m-%d %H:%M"))
+    return name if (now or time.time()) >= due else None
+
+
 def event_leads(today: str | None = None) -> dict[str, str]:
     """{token key: event name} for the events whose window is open (config EVENT_WATCH): the same DexScreener
     search and the same age, pool and DEX limits as searched()."""

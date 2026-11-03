@@ -1294,6 +1294,21 @@ class Glitch(Base):
         self.assertIn(MINT, book.load())
 
 
+class EventSellBy(Base):
+    def test_an_event_position_is_sold_before_the_event(self):
+        import scan
+        book.open_position(MINT, "GTA", 1.0, 80000)
+        due = time.mktime(time.strptime(config.EVENT_WATCH["GTA VI"]["sell_by"], "%Y-%m-%d %H:%M"))
+        with mock.patch.dict(scan.event_mints, {MINT: "GTA VI"}):
+            self.assertIsNone(scan.event_due(MINT, due - 60))
+            self.assertEqual(scan.event_due(MINT, due + 60), "GTA VI")
+            with mock.patch("time.time", lambda: due + 60), \
+                    mock.patch("requests.get", fake_get(ds=ds_pairs(price=1.3, liq=80000))):
+                out = watch.watch()[0]
+        self.assertTrue(any(e.get("reason") == "event_sell_by" for e in out), out)
+        self.assertNotIn(MINT, book.load())
+
+
 class Copycat(Base):
     def test_a_smaller_token_under_a_bigger_ticker_is_killed(self):
         import market

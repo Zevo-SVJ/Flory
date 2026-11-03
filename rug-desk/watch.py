@@ -114,6 +114,9 @@ def watch() -> tuple[list[dict], dict]:
                 pos = p
             hist = paths.load(mint, since=max(pos["opened"], now - 3600))
             d = exits.decide(pos, exits.features(hist)[-1] if hist else s, exits.for_mint(mint, profile))
+            import scan                              # an event's position is out before the event (config sell_by)
+            if not d and s["price"] > 0 and scan.event_due(mint, now):
+                d = (1.0, "event_sell_by")
             if not d:
                 continue
             frac, why = d
