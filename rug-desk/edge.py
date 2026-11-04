@@ -74,7 +74,7 @@ def outage(t: dict) -> bool:
     """True when the desk was not watching this position for OUTAGE_GAP_MIN or more while it was open,
     or sold it on a bad read (glitch_sale): either way the trade says nothing about the rules."""
     import paths
-    if glitch_sale(t):
+    if glitch_sale(t) or t.get("why") == "not_meme":     # a tokenized stock: not a memecoin trade at all
         return True
     t0 = time.mktime(time.strptime(t["opened"], "%Y-%m-%d %H:%M"))
     t1 = time.mktime(time.strptime(t["closed"], "%Y-%m-%d %H:%M")) + 60
@@ -102,7 +102,7 @@ def closed(since: str | None = "rules", outages: bool = False) -> list[dict]:
         elif r["mint"] in live:
             live[r["mint"]]["pnl"] += float(r["pnl"])
             if r["action"] == "close":
-                out.append({**live.pop(r["mint"]), "closed": r["time"]})
+                out.append({**live.pop(r["mint"]), "closed": r["time"], "why": r.get("reason") or ""})
     since = RULES_SINCE if since == "rules" else since
     out = [t for t in out if not since or t["opened"] >= since]
     return out if outages else [t for t in out if not outage(t)]

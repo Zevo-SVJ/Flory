@@ -1,6 +1,6 @@
 # market.py
 # checks 10-13. the pool itself: depth, age, price, and whether anyone can actually sell.
-import time
+import re, time
 import requests
 from config import FACTS, TICKET_USD, MOMENTUM
 import chains
@@ -22,6 +22,8 @@ def _best(pairs: list, mint: str) -> dict | None:
     born = p.get("pairCreatedAt")
     return {
         "symbol": (p.get("baseToken") or {}).get("symbol"),
+        "name": (p.get("baseToken") or {}).get("name") or "",
+        "quote_name": (p.get("quoteToken") or {}).get("name") or "",
         "chain": chain,
         "dex": p.get("dexId"),
         "pair": p.get("pairAddress"),
@@ -104,10 +106,21 @@ def pool(mint: str) -> dict | None:
 SOFT_POOL = ("thin_pool", "fake_cap", "dead_volume", "micro_trades")
 
 
+# a share, a fund or a dollar made into a token is not a memecoin: Nov 4 the desk bought "AMD • Robinhood
+# Token" ($512 a unit, the stock itself on Robinhood Chain) as a launch. DexScreener names them so
+STOCK = re.compile(r"robinhood token|xstock|tokenized|backed finance|ondo global", re.I)
+
+
+def not_meme(m: dict | None) -> bool:
+    """A tokenized stock, fund or dollar, by its name or its pair's other side."""
+    return bool(m) and bool(STOCK.search(m.get("name") or "") or STOCK.search(m.get("quote_name") or ""))
+
+
 def market_kill(m: dict | None, skip=()) -> str | None:
     """The first pool rule this token breaks. `skip`: soft pool reasons waived for launches."""
     if not m:                                                    return "no_pool"
     if m["price"] <= 0:                                          return "no_price"
+    if not_meme(m):                                              return "not_meme"
     skip = set(skip) & set(SOFT_POOL) if lane(m) == "early" else set()
     floor = FACTS["soft_liq_floor_usd"] if "thin_pool" in skip else FACTS["min_liquidity_usd"]
     if m["liq_usd"] < floor:                                     return "thin_pool"

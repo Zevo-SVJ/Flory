@@ -1392,6 +1392,23 @@ class Official(Base):
             os.remove(f)
 
 
+class NotMeme(Base):
+    def test_a_tokenized_stock_is_never_bought_and_an_open_one_is_sold_out_of_the_verdict(self):
+        import market, edge
+        amd = {"price": 512.0, "liq_usd": 359000, "name": "AMD \u2022 Robinhood Token", "quote_name": "Global Dollar",
+               "age_min": 9000, "buys_1h": 50, "sells_1h": 40}
+        self.assertEqual(market.market_kill(amd), "not_meme")
+        self.assertFalse(market.not_meme({**amd, "name": "Grand Theft Auto 6"}))
+        self.assertTrue(market.not_meme({**amd, "name": "X", "quote_name": "SPDR S&P 500 ETF Trust \u2022 Robinhood Token"}))
+        book.open_position(MINT, "AMD", 1.0, 80000)
+        with mock.patch("market.not_meme", lambda m: True), \
+                mock.patch("requests.get", fake_get(ds=ds_pairs(price=1.0, liq=80000))):
+            out = watch.watch()[0]
+        self.assertTrue(any(e.get("reason") == "not_meme" for e in out), out)
+        t = [x for x in edge.closed(None, outages=True) if x["mint"] == MINT][-1]
+        self.assertTrue(edge.outage(t))
+
+
 class Copycat(Base):
     def test_a_smaller_token_under_a_bigger_ticker_is_killed(self):
         import market
