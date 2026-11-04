@@ -112,8 +112,9 @@ STOCK = re.compile(r"robinhood token|xstock|tokenized|backed finance|ondo global
 
 
 def not_meme(m: dict | None) -> bool:
-    """A tokenized stock, fund or dollar, by its name or its pair's other side."""
-    return bool(m) and bool(STOCK.search(m.get("name") or "") or STOCK.search(m.get("quote_name") or ""))
+    """A tokenized stock, fund or dollar, by its own name only: a memecoin may trade against a stock token
+    (microduck, Agent Wormhole on Robinhood Chain), the side it is paired with says nothing about it."""
+    return bool(m) and bool(STOCK.search(m.get("name") or ""))
 
 
 def market_kill(m: dict | None, skip=()) -> str | None:

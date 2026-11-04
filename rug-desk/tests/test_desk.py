@@ -1399,7 +1399,7 @@ class NotMeme(Base):
                "age_min": 9000, "buys_1h": 50, "sells_1h": 40}
         self.assertEqual(market.market_kill(amd), "not_meme")
         self.assertFalse(market.not_meme({**amd, "name": "Grand Theft Auto 6"}))
-        self.assertTrue(market.not_meme({**amd, "name": "X", "quote_name": "SPDR S&P 500 ETF Trust \u2022 Robinhood Token"}))
+        self.assertFalse(market.not_meme({**amd, "name": "microduck", "quote_name": "SPDR S&P 500 ETF Trust \u2022 Robinhood Token"}))
         book.open_position(MINT, "AMD", 1.0, 80000)
         with mock.patch("market.not_meme", lambda m: True), \
                 mock.patch("requests.get", fake_get(ds=ds_pairs(price=1.0, liq=80000))):
