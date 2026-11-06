@@ -1409,6 +1409,17 @@ class NotMeme(Base):
         self.assertTrue(edge.outage(t))
 
 
+class IdleAfterTake(unittest.TestCase):
+    def test_the_rest_of_a_winner_goes_once_it_stops_making_highs_only_in_that_profile(self):
+        import exits
+        pos = {"entry": 1.0, "peak": 2.0, "peak_t": 0, "opened": 0, "steps": 1, "liq0": 50000}
+        s = {"t": 2.5 * 3600, "price": 1.9, "liq": 50000}
+        p = {**config.EXIT, "trail": "fixed", "trail_pct": 30}
+        self.assertIsNone(exits.decide(pos, s, p))
+        self.assertEqual(exits.decide(pos, s, {**p, "idle_after_take_h": 2})[1], "idle_after_take")
+        self.assertIsNone(exits.decide({**pos, "steps": 0}, s, {**p, "idle_after_take_h": 2, "stall_min": 10 ** 9}))
+
+
 class Copycat(Base):
     def test_a_smaller_token_under_a_bigger_ticker_is_killed(self):
         import market

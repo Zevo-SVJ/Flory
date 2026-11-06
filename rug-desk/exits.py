@@ -116,6 +116,9 @@ def decide(pos: dict, s: dict, p: dict | None = None) -> tuple[float, str] | Non
     if (pct >= p["stall_min_pct"] and s["t"] - pos.get("peak_t", pos["opened"]) >= p["stall_min"] * 60
             and (s.get("s5") or 0) >= p["stall_sell_ratio"] * max(1, s.get("b5") or 0)):
         return 1.0, "stall"
+    idle = p.get("idle_after_take_h")              # a lab profile: the rest of a winner, no new high for this long
+    if idle and pos["steps"] > 0 and s["t"] - pos.get("peak_t", pos["opened"]) >= idle * 3600:
+        return 1.0, "idle_after_take"
     fade = p.get("fade_ratio")
     if (fade and hours >= 0.5 and s.get("v5") is not None and s.get("v5_avg")
             and s["v5"] < s["v5_avg"] * fade):

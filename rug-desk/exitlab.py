@@ -46,6 +46,12 @@ PROFILES = {
     "regles B stop -35%": {"stop_pct": -35, "ladder": [(100, 0.50), (400, 0.25), (900, 0.15)], "trail": "fixed",
                            "trail_pct": 30, "arm_pct": 100, "lock_after_pct": 10**9, "dump_drop_pct": 10**9,
                            "stall_min": 10**9, "time_stop_hours": 24, "time_stop_min_pct": 20},
+    # Nov 6: Harmonic took half at x2 at 01:31, then sat near its high for 5 h and fell from ~+100% to -50%
+    # between two 20 s ticks at 07:09: no stop catches a one-block dump. two answers to test on the same paths:
+    # take more at x2, or let the rest go once it stops making new highs
+    "75% at x2": {"ladder": [(100, 0.75), (200, 0.25)]},
+    "rest out after 1 h without a new high": {"idle_after_take_h": 1},
+    "rest out after 2 h without a new high": {"idle_after_take_h": 2},
 }
 
 
