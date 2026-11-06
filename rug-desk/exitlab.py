@@ -52,6 +52,10 @@ PROFILES = {
     "75% at x2": {"ladder": [(100, 0.75), (200, 0.25)]},
     "rest out after 1 h without a new high": {"idle_after_take_h": 1},
     "rest out after 2 h without a new high": {"idle_after_take_h": 2},
+    # Nov 6 run (84 trades): the three that beat the profile in force on both halves all leave sooner
+    # (k2 +79, 3 h clock +82, rest out after 1 h +76, against +48). together, judged at the Nov 8 checkpoint
+    "sooner: k2 + 3 h + rest out 1 h": {"trail": "chandelier", "trail_k": 2, "time_stop_hours": 3,
+                                        "idle_after_take_h": 1},
 }
 
 
