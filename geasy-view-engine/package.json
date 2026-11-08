@@ -9,7 +9,7 @@
     "build": "next build",
     "start": "next start",
     "build:worker": "esbuild src/worker/index.ts --bundle --platform=node --format=esm --target=node22 --outfile=dist/worker.mjs --packages=external --alias:@=./src --banner:js=\"import { createRequire } from 'module'; const require = createRequire(import.meta.url);\"",
-    "build:scripts": "esbuild scripts/migrate.ts scripts/create-user.ts scripts/mtproto-login.ts --bundle --platform=node --format=esm --target=node22 --outdir=dist/scripts --out-extension:.js=.mjs --packages=external --alias:@=./src",
+    "build:scripts": "esbuild scripts/migrate.ts scripts/create-user.ts scripts/mtproto-login.ts scripts/set-bot.ts --bundle --platform=node --format=esm --target=node22 --outdir=dist/scripts --out-extension:.js=.mjs --packages=external --alias:@=./src",
     "worker": "tsx src/worker/index.ts",
     "migrate": "tsx scripts/migrate.ts",
     "user:create": "tsx scripts/create-user.ts",

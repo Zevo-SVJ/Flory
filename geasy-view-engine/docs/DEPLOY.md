@@ -1,5 +1,16 @@
 # VPS deployment (Docker Compose)
 
+## Express install (recommended)
+
+On a fresh Ubuntu/Debian VPS, as root:
+
+```bash
+git clone https://github.com/Zevo-SVJ/Flory.git -b claude/dazzling-ride-rfuf47 && cd Flory/geasy-view-engine
+sudo ./install.sh --bot-token "<token from @BotFather>"
+```
+
+No domain? It uses `<ip>.sslip.io` with a real certificate. Own domain: add `--domain geasy.mydomain.com` (A record must point to the server). The script installs Docker, generates every secret, builds, creates the admin (password printed once), registers the bot webhook, installs daily backups and a 5-minute health check. Re-running it is safe. The sections below describe the same steps manually.
+
 Requirements: a VPS (1 vCPU / 1–2 GB RAM is enough), Docker + Compose v2, a domain whose A/AAAA record points to the VPS, ports 80 and 443 open.
 
 ## 1. Install
