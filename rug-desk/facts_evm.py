@@ -54,6 +54,11 @@ def report(key: str, pool: dict | None) -> dict:
                                    ("personal_slippage_modifiable", "tax_per_wallet"),
                                    ("trading_cooldown", "trading_cooldown"),
                                    ("honeypot_with_same_creator", "creator_made_honeypots")) if on(k)]
+    # high_tax stays a kill even though its shadow replays "win" (Nov 8: 13 on BSC, +56% mean): a replay
+    # prices the chart and pays the desk's costs, never the token's own tax. a 20% sell tax takes a fifth of
+    # every exit, and a tax the owner can raise takes the rest. the same blind spot makes closed_source
+    # (BSC +56%, n=70) and trading_cooldown look good in shadow: what they hide is whether you can sell.
+    # "danger:" reasons are never lifted by the shadow book (shadow.waived_from) for that reason
     if _f(g.get("sell_tax")) > MAX_TAX or _f(g.get("buy_tax")) > MAX_TAX:
         danger.append("high_tax")
     if str(g.get("is_open_source", "1")) == "0":
