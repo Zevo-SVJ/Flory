@@ -195,7 +195,11 @@ def check(mint: str, study: bool = False) -> dict:
                and token["lp_burned_pct"] < FACTS["min_lp_locked_pct"] and shadow.lp_open_ok(chains_split(mint)))
     if lp_open:
         seen["lp_open"] = True
-    if (k := fact_kill(token, market.lane(m), set(waived) | ({"lp_unlocked"} if lp_open else set()))) \
+    closed = PAPER and closed_bsc_ok(mint, token, m)      # an unpublished BSC contract, nothing else (CLOSED_BSC)
+    if closed:
+        seen["closed_bsc"] = True
+    if (k := fact_kill(token, market.lane(m), set(waived) | ({"lp_unlocked"} if lp_open else set())
+                       | ({"danger:closed_source"} if closed else set()))) \
             and not _model_override(k, seen):
         return {"stage": "facts", "verdict": "SKIP", "reason": k,
                 "symbol": m["symbol"] or token["symbol"], **seen}
@@ -217,6 +221,11 @@ def check(mint: str, study: bool = False) -> dict:
         usd = round(max(min(equity * SIZING["lp_open"] / 100, m["liq_usd"] * FACTS["max_ticket_share"], book.cash()),
                         min(TICKET_USD, book.cash())), 2)
         tier = "lp_open"
+    if closed and tier == "base":              # its own small tier, judged on its own trades
+        equity = PAPER_BANKROLL_USD + book.realized()
+        usd = round(max(min(equity * SIZING["closed_bsc"] / 100, m["liq_usd"] * FACTS["max_ticket_share"],
+                            book.cash()), min(TICKET_USD, book.cash())), 2)
+        tier = "closed_bsc"
     if held:                                   # the pool soft kill held above: applied unless the model expects a profit
         exp = _expected(seen, held)
         if exp is None or exp < __import__("learn").OVERRIDE_PCT:
@@ -287,6 +296,13 @@ def lp_from_rugcheck(token: dict, seen: dict) -> bool:
     return True
 
 
+def closed_bsc_ok(mint: str, token: dict, m: dict) -> bool:
+    """A BSC token whose only GoPlus danger is an unpublished contract, in a $15-150k pool (config CLOSED_BSC)."""
+    from config import CLOSED_BSC as C
+    return bool(C["on"] and chains_split(mint) in C["chains"] and (token.get("danger") or []) == ["closed_source"]
+                and C["min_liq"] <= ((m or {}).get("liq_usd") or 0) < C["max_liq"])
+
+
 def hot_skip(v: dict) -> str | None:
     """A pass whose ticket came out "strong" or "max" (2+ heat signals: high score, turnover, buyers ahead,
     smart wallets, X narrative) is not bought: those tickets lost money in every sample (config SIZING)."""
@@ -346,7 +362,7 @@ def run(mint: str) -> dict:
         v["action"] = f"not bought: prudence after a drawdown, score {v.get('score')} < {bar}"
         return v
     import shadow
-    if enter and (v.get("score") or 0) < MIN_SCORE and "low_score" not in shadow.waived() \
+    if enter and v.get("tier") != "closed_bsc" and (v.get("score") or 0) < MIN_SCORE and "low_score" not in shadow.waived() \
             and not (v.get("expected") is not None and v["expected"] >= __import__("learn").OVERRIDE_PCT):
         if PAPER and (v.get("score") or 0) >= SIZING["explore_min_score"]:
             equity = PAPER_BANKROLL_USD + book.realized()      # the explore tier: small, and logged apart
@@ -358,6 +374,12 @@ def run(mint: str) -> dict:
     if enter and (why := hot_skip(v)):
         v["action"] = why
         return v
+    if enter and PAPER and v.get("tier") == "closed_bsc":
+        import live, chains              # sells at a tax <= the cap now, or not bought (fails closed)
+        hp = live.honeypot(chains.split(mint)[1].lower())
+        if hp:
+            v["action"] = f"not bought: {hp} (closed_bsc)"
+            return v
     from config import BASE_MIN_AGE_MIN
     if (enter and v.get("tier") in (None, "base") and v.get("age_min") is not None
             and v["age_min"] < BASE_MIN_AGE_MIN and "young_base" not in shadow.waived()):

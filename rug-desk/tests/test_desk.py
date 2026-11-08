@@ -580,6 +580,31 @@ class ChainWaiver(unittest.TestCase):
         self.assertEqual(shadow.waived_from({**r, "rows": bsc[:60] + sol}), set())     # too few on that chain
 
 
+class ClosedBsc(unittest.TestCase):
+    def test_only_an_unpublished_bsc_contract_with_no_other_danger_in_a_mid_pool_qualifies(self):
+        bsc, pool = "bsc:0x" + "a" * 40, {"liq_usd": 40000}
+        self.assertTrue(check.closed_bsc_ok(bsc, {"danger": ["closed_source"]}, pool))
+        self.assertFalse(check.closed_bsc_ok(bsc, {"danger": ["honeypot", "closed_source"]}, pool))
+        self.assertFalse(check.closed_bsc_ok(bsc, {"danger": ["closed_source"]}, {"liq_usd": 9000}))
+        self.assertFalse(check.closed_bsc_ok("base:0x" + "a" * 40, {"danger": ["closed_source"]}, pool))
+
+    def _run(self, hp):
+        v = {"verdict": "PASS", "stage": "judge", "reason": "ok", "price": 1.0, "liq_usd": 40000, "symbol": "C",
+             "score": 40, "tier": "closed_bsc", "age_min": 30}
+        with mock.patch.object(check, "check", lambda m: dict(v)), mock.patch.object(check, "log", lambda r: None), \
+                mock.patch.object(check.market, "sol_regime", lambda: {}), mock.patch("dossier.add", lambda *a, **k: None), \
+                mock.patch("pending.add", lambda *a, **k: None), mock.patch.object(check.book, "open_position") as buy, \
+                mock.patch("shadow.waived", lambda: set()), mock.patch("live.honeypot", lambda t: hp):
+            return check.run("bsc:0x" + "a" * 40), buy
+
+    def test_it_is_bought_past_the_score_and_age_gates_only_if_it_sells(self):
+        out, buy = self._run(None)
+        buy.assert_called_once()
+        out, buy = self._run("taxe à la revente 40 %")
+        buy.assert_not_called()
+        self.assertIn("closed_bsc", out["action"])
+
+
 class ChainReopens(unittest.TestCase):
     def test_a_chain_off_reopens_only_when_its_shadowed_passes_pay(self):
         import shadow

@@ -67,7 +67,7 @@ SIZING = {"base": 4, "strong": 4, "max": 4,
           # leave the LP unlocked and a pull shows in the replay (pool drained, sold at what is left). those
           # tokens are now bought small, every other check and the score still applying, only while the
           # shadow book keeps the case: shadow.lp_open_ok() (n, mean without its 5 best, both halves)
-          "lp_open": 2}
+          "lp_open": 2, "closed_bsc": 2}
 LP_OPEN = {"chains": ("robinhood", "base"), "min_n": 100, "drop_best": 5}   # paper only: live.py trades BSC alone
 # Nov 8: base joins as a candidate (lp_unlocked on base: n=16, +32.6%, median +20.4%, 81% won). it opens by
 # itself only once shadow.lp_open_ok("base") holds: 100+ tokens, positive without the 5 best, both halves.
@@ -233,6 +233,14 @@ EVENT_TIER_PCT = 2
 # the skipped ones are shadowed as "young_base": the shadow book lifts the rule by itself if they pay
 # (20+, +5% a trade, both halves, above the noise), like any soft rule
 BASE_MIN_AGE_MIN = 180
+# Nov 8: BSC tokens killed only for an unpublished contract (GoPlus "closed_source", no other danger), pool
+# $15-150k: 65 shadowed, +63.7% mean, median +30%, +38.3% without the 5 best, halves +60 / +67, and all 65
+# sellable with a sell tax <= 10% when honeypot.is simulated a buy and a sale. the likely reason: BSC launchpad
+# tokens come from a factory and are not verified one by one, so GoPlus reads them as closed source.
+# they are bought small, in their own tier, past the score / age / heat gates (the shadow population had
+# none), only once honeypot.is says they sell at a tax <= LIVE max_sell_tax_pct at the moment of the buy.
+# judged on its own real trades at each checkpoint: stopped (on=False) if 20+ of them average below zero
+CLOSED_BSC = {"on": True, "chains": ("bsc",), "min_liq": 15000, "max_liq": 150000}
 # Nov 3, Skide: 95% of the GTA tokens are copies and rugs, the few clean ones with real holders run far.
 # three things, paper only, every check still applying:
 # 1. a GTA token GARDE turned down for a state that can mend (holders too concentrated, no momentum yet,
