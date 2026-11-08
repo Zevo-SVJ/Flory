@@ -290,7 +290,8 @@ def lp_from_rugcheck(token: dict, seen: dict) -> bool:
 def hot_skip(v: dict) -> str | None:
     """A pass whose ticket came out "strong" or "max" (2+ heat signals: high score, turnover, buyers ahead,
     smart wallets, X narrative) is not bought: those tickets lost money in every sample (config SIZING)."""
-    if SIZING.get("skip_hot") and v.get("tier") in ("strong", "max"):
+    import shadow                        # its shadowed skips may lift it, like any soft rule
+    if SIZING.get("skip_hot") and v.get("tier") in ("strong", "max") and "hot_signals" not in shadow.waived():
         return f"not bought: hot signals, already at the top of its hype ({', '.join(v.get('signals') or [])})"
     return None
 

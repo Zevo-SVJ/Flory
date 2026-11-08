@@ -122,7 +122,9 @@ def market_kill(m: dict | None, skip=()) -> str | None:
     if not m:                                                    return "no_pool"
     if m["price"] <= 0:                                          return "no_price"
     if not_meme(m):                                              return "not_meme"
-    skip = set(skip) & set(SOFT_POOL) if lane(m) == "early" else set()
+    chain = m.get("chain") or "solana"           # "thin_pool@bsc": lifted on that chain only (shadow.waived)
+    skip = {r.split("@")[0] for r in skip if "@" not in r or r.split("@")[1] == chain}
+    skip = skip & set(SOFT_POOL) if lane(m) == "early" else set()
     floor = FACTS["soft_liq_floor_usd"] if "thin_pool" in skip else FACTS["min_liquidity_usd"]
     if m["liq_usd"] < floor:                                     return "thin_pool"
     # gas paid twice on a small ticket: on Ethereum a $25 ticket loses 12% before the price moves

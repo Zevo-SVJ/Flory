@@ -68,7 +68,10 @@ SIZING = {"base": 4, "strong": 4, "max": 4,
           # tokens are now bought small, every other check and the score still applying, only while the
           # shadow book keeps the case: shadow.lp_open_ok() (n, mean without its 5 best, both halves)
           "lp_open": 2}
-LP_OPEN = {"chains": ("robinhood",), "min_n": 100, "drop_best": 5}   # paper only: live.py trades BSC alone
+LP_OPEN = {"chains": ("robinhood", "base"), "min_n": 100, "drop_best": 5}   # paper only: live.py trades BSC alone
+# Nov 8: base joins as a candidate (lp_unlocked on base: n=16, +32.6%, median +20.4%, 81% won). it opens by
+# itself only once shadow.lp_open_ok("base") holds: 100+ tokens, positive without the 5 best, both halves.
+# BSC stays out: lp_unlocked there is -23.3% over 93
 MAX_OPEN = 40               # safety net only: cash runs out first (1000 / 25 = 40)
 MAX_ENTRIES_PER_DAY = 40
 DAILY_LOSS_HALT_USD = 250   # realized loss today hits this -> no new entries until tomorrow

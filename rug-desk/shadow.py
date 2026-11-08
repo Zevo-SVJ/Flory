@@ -219,13 +219,33 @@ def confirm_ok(chain: str) -> bool:
     return good
 
 
+CHAIN_WAIVE_MIN_N = 100     # a soft pool rule lifted on one chain only: a stricter test, since there are
+                            # chains x rules cells to look at (Nov 8: thin_pool on BSC, n=185, +18.5%, halves
+                            # +9.6/+27.3, while thin_pool everywhere is -4.6%: chains are other populations)
+
+
 def waived_from(r: dict) -> set:
-    """The soft reasons results() `r` lifts: shadow buys that made money, clearly and on both halves."""
-    return {d["reason"] for d in r["reasons"]
-            if d["reason"] not in HARD and not d["reason"].startswith("danger:")
-            and d["n"] >= WAIVE_MIN_N and d["mean"] >= WAIVE_MIN_MEAN
-            and (d.get("half1") or 0) > 0 and (d.get("half2") or 0) > 0
-            and (d.get("low") or -1) > 0}          # and above zero beyond its own noise
+    """The soft reasons results() `r` lifts: shadow buys that made money, clearly and on both halves.
+    a soft pool rule can also be lifted on one chain ("thin_pool@bsc"), on 100+ tokens of that chain,
+    +5% a trade, both halves, and a 95% lower bound above zero."""
+    out = {d["reason"] for d in r["reasons"]
+           if d["reason"] not in HARD and not d["reason"].startswith("danger:")
+           and d["n"] >= WAIVE_MIN_N and d["mean"] >= WAIVE_MIN_MEAN
+           and (d.get("half1") or 0) > 0 and (d.get("half2") or 0) > 0
+           and (d.get("low") or -1) > 0}          # and above zero beyond its own noise
+    import chains, market
+    cells = {}
+    for reason, x, mint in r.get("rows") or []:
+        if reason in market.SOFT_POOL and reason not in out:
+            cells.setdefault((reason, chains.split(mint)[0]), []).append(x)
+    for (reason, chain), xs in cells.items():
+        if len(xs) < CHAIN_WAIVE_MIN_N:
+            continue
+        h, mu = len(xs) // 2, statistics.mean(xs)
+        low95 = mu - 1.96 * statistics.stdev(xs) / len(xs) ** 0.5
+        if mu >= WAIVE_MIN_MEAN and statistics.mean(xs[:h]) > 0 and statistics.mean(xs[h:]) > 0 and low95 > 0:
+            out.add(f"{reason}@{chain}")
+    return out
 
 
 def waived() -> set:

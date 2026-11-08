@@ -564,6 +564,22 @@ class YoungBase(unittest.TestCase):
         self.assertIn("young_base", "".join(str(c) for c in op().write.call_args_list))
 
 
+class ChainWaiver(unittest.TestCase):
+    def test_a_soft_pool_rule_is_lifted_on_the_one_chain_where_it_clearly_costs_money(self):
+        import shadow, market
+        bsc = [("thin_pool", x, "bsc:0x" + "%040x" % i) for i, x in enumerate([30, 10, 25, 5, 40, 8] * 20)]
+        sol = [("thin_pool", -20.0, "Sol%d" % i) for i in range(200)]
+        r = {"reasons": [{"reason": "thin_pool", "n": 320, "mean": -3.0, "half1": -3, "half2": -3, "low": -5}],
+             "rows": bsc + sol}
+        w = shadow.waived_from(r)
+        self.assertEqual(w, {"thin_pool@bsc"})
+        pool = {"price": 1.0, "liq_usd": 10000, "chain": "bsc", "age_min": 300, "buys_1h": 50, "sells_1h": 40,
+                "vol_1h": 5000, "name": "X"}
+        self.assertNotEqual(market.market_kill(pool, w), "thin_pool")
+        self.assertEqual(market.market_kill({**pool, "chain": "solana"}, w), "thin_pool")
+        self.assertEqual(shadow.waived_from({**r, "rows": bsc[:60] + sol}), set())     # too few on that chain
+
+
 class ChainReopens(unittest.TestCase):
     def test_a_chain_off_reopens_only_when_its_shadowed_passes_pay(self):
         import shadow
