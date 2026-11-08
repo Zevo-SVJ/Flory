@@ -40,6 +40,17 @@ if command -v ufw >/dev/null 2>&1 && ufw status | grep -q "Status: active"; then
   ufw allow 80/tcp >/dev/null; ufw allow 443/tcp >/dev/null; ufw allow 443/udp >/dev/null
 fi
 
+# Oracle Cloud Ubuntu images ship iptables rules that reject everything except SSH.
+if command -v iptables >/dev/null 2>&1 && iptables -S INPUT 2>/dev/null | grep -q "REJECT"; then
+  say "Opening ports 80/443 in iptables (Oracle-style default rules)"
+  for p in 80 443; do
+    iptables -C INPUT -p tcp --dport "$p" -j ACCEPT 2>/dev/null || iptables -I INPUT 1 -p tcp --dport "$p" -j ACCEPT
+  done
+  iptables -C INPUT -p udp --dport 443 -j ACCEPT 2>/dev/null || iptables -I INPUT 1 -p udp --dport 443 -j ACCEPT
+  if command -v netfilter-persistent >/dev/null 2>&1; then netfilter-persistent save >/dev/null 2>&1 || true
+  else warn "Install iptables-persistent to keep these rules after a reboot"; fi
+fi
+
 # ── 3. Configuration (.env) ─────────────────────────────────
 NEW_ENV=0
 if [ -f .env ]; then
