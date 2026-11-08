@@ -44,6 +44,10 @@ def fetch() -> int:
         reads = [(NEW, {"page": page}, None) for page in range(1, PAGES + 1)]
         reads += [(f"https://api.geckoterminal.com/api/v2/networks/{chains.CHAINS[c]['gt']}/new_pools", {"page": 1},
                    chains.CHAINS[c]["gt"]) for c in FOCUS if c in chains.CHAINS]
+        # Nov 8: Solana launches outside pump.fun (Raydium LaunchLab, bonk.fun) never reached GARDE: grads.py reads
+        # pump.fun only. FLOAT (+696%, $12M) and PUSSY (+3,222% in an hour) were LaunchLab tokens
+        reads += [(f"https://api.geckoterminal.com/api/v2/networks/{chains.CHAINS['solana']['gt']}/new_pools",
+                   {"page": 1}, chains.CHAINS["solana"]["gt"])]
         for url, params, net_hint in reads:
             r = gt.get(url, params=params)                             # the shared budget (gt.py)
             r.raise_for_status()
@@ -53,7 +57,10 @@ def fetch() -> int:
                 chain = chains.GT_TO_CHAIN.get(net)
                 base = ((rel.get("base_token") or {}).get("data") or {}).get("id") or ""
                 name = ((p.get("attributes") or {}).get("name") or "").split(" / ")[0].strip().lower()
-                if not chain or chain == "solana" or not base.startswith(net + "_") or name in chains.NOT_MEMES:
+                dex = (((rel.get("dex") or {}).get("data") or {}).get("id") or "").lower()
+                other_launchpad = chain == "solana" and any(w in dex for w in ("launchlab", "raydium", "bonk"))
+                if (not chain or (chain == "solana" and not other_launchpad) or not base.startswith(net + "_")
+                        or name in chains.NOT_MEMES):
                     continue
                 k = chains.key(chain, base[len(net) + 1:])
                 if k not in s:

@@ -318,7 +318,11 @@ def fact_kill(t: dict, lane: str = "early", skip: frozenset | set = frozenset())
         ("mint_open", lambda: t["mint_authority"]),
         ("freeze_open", lambda: t["freeze_authority"]),
         ("danger:" + (t["danger"] or [""])[0], lambda: t["danger"]),
-        ("lp_unverified", lambda: t["lp_burned_pct"] is None and not mom),
+        # Nov 8: a Solana token on another launchpad than pump.fun (Raydium LaunchLab, bonk.fun: FLOAT, PUSSY) has
+        # an LP the desk cannot read yet. its own name, so the shadow book measures those tokens apart and lifts
+        # the rule by itself if they pay (20+, +5%, both halves, above the noise), like any soft rule
+        ("lp_unverified_ray" if t.get("dex") in ("raydium", "launchlab") else "lp_unverified",
+         lambda: t["lp_burned_pct"] is None and not mom),
         # a survivor's liquidity belongs to many providers (CASHCAT on Robinhood Chain: 139, 123 days old):
         # no single hand pulls it. the LP lock is a launch check, like the burn it reads on Solana
         ("lp_unlocked", lambda: not mom and t["lp_burned_pct"] is not None

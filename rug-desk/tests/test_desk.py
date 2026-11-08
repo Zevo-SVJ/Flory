@@ -155,7 +155,7 @@ class Filter(Base):
             "danger:transfer_hook": {"gp": goplus(transfer_hook=["HookProgram"])},
             "lp_unlocked": {"chain": Chain(lp_live=500)},
             "dev_holds": {"chain": Chain(dev_amount=60000)},
-            "lp_unverified": {"ds": ds_pairs(dex="raydium")},
+            "lp_unverified_ray": {"ds": ds_pairs(dex="raydium")},
             "no_holders": {"gp": goplus(holders=[])},
             "top10_heavy": {"gp": goplus(holders=wallets(10, 0.07))},
             "whale": {"gp": goplus(holders=wallets(1, 0.08) + wallets(5, 0.01))},
@@ -621,6 +621,15 @@ class SolEarly(unittest.TestCase):
         buy.assert_called_once()
 
 
+class OtherLaunchpad(unittest.TestCase):
+    def test_a_raydium_launch_is_killed_under_its_own_name_so_it_is_measured_apart(self):
+        import facts
+        tok = {"dev": None, "mint_authority": None, "freeze_authority": None, "danger": [], "lp_burned_pct": None,
+               "dev_pct": 1, "top10_pct": 20, "max_wallet_pct": 3, "same_sol_wallets": 0, "ladder_wallets": 0}
+        self.assertEqual(facts.fact_kill({**tok, "dex": "raydium"}), "lp_unverified_ray")
+        self.assertEqual(facts.fact_kill({**tok, "dex": "pumpswap"}), "lp_unverified")
+
+
 class ChainReopens(unittest.TestCase):
     def test_a_chain_off_reopens_only_when_its_shadowed_passes_pay(self):
         import shadow
@@ -1081,7 +1090,7 @@ class MomentumLane(Base):
         self.assertEqual(self.verdict(ds=self.old(liq=60000))["reason"], "thin_pool")
 
     def test_a_launch_still_needs_its_lp_proof(self):
-        self.assertEqual(self.verdict(ds=ds_pairs(dex="raydium"))["reason"], "lp_unverified")
+        self.assertEqual(self.verdict(ds=ds_pairs(dex="raydium"))["reason"], "lp_unverified_ray")
 
 
 class GraduationRule(Base):

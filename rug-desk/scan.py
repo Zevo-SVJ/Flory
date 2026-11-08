@@ -84,7 +84,7 @@ def searched(trending: list[str] = ()) -> list[str]:
             a = (p.get("baseToken") or {}).get("address")
             chain = p.get("chainId")
             # Solana: PumpSwap only, the one pool whose LP the desk reads on chain. EVM: any DEX, GoPlus reads it
-            ok_dex = p.get("dexId") == "pumpswap" if chain == "solana" else chains.supported(chain)
+            ok_dex = p.get("dexId") in ("pumpswap", "raydium") if chain == "solana" else chains.supported(chain)
             k = chains.key(chain, a) if a and chains.supported(chain) else None
             if (ok_dex and k and k not in out
                     and FACTS["min_age_min"] / 60 <= age_h <= FACTS["max_age_hours"]
@@ -135,7 +135,7 @@ def event_leads(today: str | None = None) -> dict[str, str]:
                 seen[p.get("pairAddress") or a] = (float((p.get("volume") or {}).get("h1") or 0),
                                                    p.get("pairCreatedAt") or 0)
                 age_h = (now_ms - (p.get("pairCreatedAt") or 0)) / 3.6e6
-                ok_dex = p.get("dexId") == "pumpswap" if chain == "solana" else True
+                ok_dex = p.get("dexId") in ("pumpswap", "raydium") if chain == "solana" else True
                 if (ok_dex and FACTS["min_age_min"] / 60 <= age_h
                         and ((p.get("liquidity") or {}).get("usd") or 0) >= FACTS["min_liquidity_usd"]):
                     out.setdefault(chains.key(chain, a), name)
