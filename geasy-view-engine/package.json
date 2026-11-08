@@ -1,0 +1,43 @@
+{
+  "name": "geasy-view-engine",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "build:worker": "esbuild src/worker/index.ts --bundle --platform=node --format=esm --target=node22 --outfile=dist/worker.mjs --packages=external --alias:@=./src --banner:js=\"import { createRequire } from 'module'; const require = createRequire(import.meta.url);\"",
+    "build:scripts": "esbuild scripts/migrate.ts scripts/create-user.ts scripts/mtproto-login.ts --bundle --platform=node --format=esm --target=node22 --outdir=dist/scripts --out-extension:.js=.mjs --packages=external --alias:@=./src",
+    "worker": "tsx src/worker/index.ts",
+    "migrate": "tsx scripts/migrate.ts",
+    "user:create": "tsx scripts/create-user.ts",
+    "mtproto:login": "tsx scripts/mtproto-login.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "bullmq": "^5.34.0",
+    "geist": "^1.3.1",
+    "ioredis": "^5.4.1",
+    "next": "^16.3.3",
+    "pg": "^8.13.1",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "telegram": "^2.26.22",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.3",
+    "@types/node": "^22.10.0",
+    "@types/pg": "^8.11.10",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.5",
+    "esbuild": "^0.24.2",
+    "tailwindcss": "^4.3.3",
+    "tsx": "^4.19.2",
+    "typescript": "5.9",
+    "vitest": "^2.1.8"
+  }
+}
