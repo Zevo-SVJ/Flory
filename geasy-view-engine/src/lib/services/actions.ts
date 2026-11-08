@@ -27,6 +27,9 @@ const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replac
  */
 async function finish(id: string, channelId: string, status: "done" | "failed" | "skipped", error?: string) {
   const { n, pause } = await tx(async (c) => {
+    // Serialise per channel: jobs of different kinds settle concurrently, and without this lock a transaction
+    // that computed its count before the other committed would overwrite the counter with a stale value.
+    await c.query("SELECT 1 FROM automation_settings WHERE channel_id=$1 FOR UPDATE", [channelId]);
     await c.query("UPDATE automation_jobs SET status=$2, last_error=$3, finished_at=now(), updated_at=now() WHERE id=$1", [id, status, error ?? null]);
     const r = await c.query<{ n: number }>(
       `SELECT COALESCE(max(x.n), 0)::int AS n FROM (

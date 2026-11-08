@@ -11,7 +11,7 @@ export class FakeTelegram {
   server!: http.Server;
   BOT_ID = 4242;
 
-  async start(port = 18999) {
+  async start(port = 18997) {
     this.server = http.createServer(async (req, res) => {
       const chunks: Buffer[] = [];
       for await (const c of req) chunks.push(c as Buffer);
@@ -26,6 +26,7 @@ export class FakeTelegram {
       switch (method) {
         case "getMe": return ok({ id: this.BOT_ID, is_bot: true, first_name: "Geasy", username: "geasy_test_bot" });
         case "setWebhook": case "deleteWebhook": return ok(true);
+        case "getWebhookInfo": return ok({ url: "https://geasy.test/tg/webhook/x", pending_update_count: 0 });
         case "getChat": {
           const key = typeof params.chat_id === "string" ? [...this.chats.entries()].find(([, c]) => `@${c.username}` === params.chat_id)?.[0] : params.chat_id;
           const c = key !== undefined ? this.chats.get(key) : undefined;

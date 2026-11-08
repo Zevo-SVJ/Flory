@@ -76,14 +76,16 @@ export const mtproto: MtprotoSource = {
   async fetchMessages(peer, ids) {
     const s = await connect();
     if (!s) throw new Error("MTProto not configured");
-    const { client, gram } = s;
+    const { client } = s;
+    // GramJS (like Telethon) resolves a marked id (-100…) or a username from its entity cache.
+    // The cache is only filled for chats seen in dialogs, so load them once on a miss and retry.
+    const ref: string | number = peer.username ?? peer.chatId;
     let input;
     try {
-      input = await client.getInputEntity(peer.username ?? new gram.Api.PeerChannel({ channelId: BigInt(String(peer.chatId).replace(/^-100/, "")) as never }));
+      input = await client.getInputEntity(ref);
     } catch {
-      // Access hashes are only known for chats seen in dialogs; load them once and retry.
       await client.getDialogs({ limit: 300 });
-      input = await client.getInputEntity(peer.username ?? new gram.Api.PeerChannel({ channelId: BigInt(String(peer.chatId).replace(/^-100/, "")) as never }));
+      input = await client.getInputEntity(ref);
     }
     const msgs = await client.getMessages(input, { ids });
     const out = new Map<number, MtMessage>();

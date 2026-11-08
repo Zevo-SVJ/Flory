@@ -13,7 +13,7 @@ export default defineConfig({
       REDIS_URL: "redis://127.0.0.1:6379/9",
       ENCRYPTION_KEY: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
       PUBLIC_BASE_URL: "https://geasy.test",
-      TELEGRAM_API_BASE: "http://127.0.0.1:18999",
+      TELEGRAM_API_BASE: "http://127.0.0.1:18997",
       WORKER_PORT: "14000",
       LOG_LEVEL: "error",
     },

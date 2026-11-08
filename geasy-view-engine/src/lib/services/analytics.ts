@@ -94,3 +94,27 @@ export async function overviewCounts() {
   );
   return r.rows[0];
 }
+
+/** Sum over posts of the last MTProto views snapshot of each day: total views of tracked posts, day by day. */
+export async function viewsTotalsOverTime(channelId: string | null, days = 14) {
+  const r = await query<{ day: Date; total: number }>(
+    `SELECT day, sum(v)::int AS total FROM (
+       SELECT DISTINCT ON (s.post_id, date_trunc('day', s.captured_at)) date_trunc('day', s.captured_at) AS day, s.views AS v
+       FROM post_statistics s JOIN telegram_posts p ON p.id = s.post_id
+       WHERE s.source='mtproto' AND s.views IS NOT NULL AND s.captured_at > now() - make_interval(days => $2) AND ($1::uuid IS NULL OR p.channel_id = $1)
+       ORDER BY s.post_id, date_trunc('day', s.captured_at), s.captured_at DESC
+     ) x GROUP BY day ORDER BY day`,
+    [channelId, days],
+  );
+  return r.rows;
+}
+
+export async function topPosts(channelId: string | null, limit = 10, days = 30) {
+  const r = await query<PostRow & { channel_title: string }>(
+    `SELECT l.*, c.title AS channel_title FROM (${LATEST}) l JOIN channels c ON c.id=l.channel_id
+     WHERE l.views IS NOT NULL AND ($1::uuid IS NULL OR l.channel_id=$1) AND COALESCE(l.published_at, now()) > now() - make_interval(days => $3)
+     ORDER BY l.views DESC LIMIT $2`,
+    [channelId, limit, days],
+  );
+  return r.rows;
+}

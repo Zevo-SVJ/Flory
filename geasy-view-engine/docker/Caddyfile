@@ -1,0 +1,28 @@
+{$DOMAIN} {
+	encode zstd gzip
+
+	# Telegram → worker (independent of the dashboard)
+	@tg path /tg/webhook/*
+	handle @tg {
+		request_body {
+			max_size 1MB
+		}
+		reverse_proxy worker:4000
+	}
+
+	# Never expose worker internals
+	@internal path /health
+	handle @internal {
+		respond "Not found" 404
+	}
+
+	handle {
+		reverse_proxy web:3000
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		-Server
+	}
+}
