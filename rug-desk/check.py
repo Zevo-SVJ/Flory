@@ -140,7 +140,10 @@ def check(mint: str, study: bool = False) -> dict:
         seen["pool_kill"] = k                  # study: the pool rule that killed it, the rest still checked
     import chains
     evm = chains.is_evm(mint)
-    if market.lane(m) == "early" and not evm:                    # still under its graduation price: the
+    sol15 = PAPER and sol_early_ok(mint, m)                      # a 15-30 min Solana graduate (SOL_EARLY)
+    if sol15:
+        seen["sol15"] = True
+    if market.lane(m) == "early" and not evm and not sol15:      # still under its graduation price: the
         import grads                                             # first-hour dump has not been absorbed
         p0 = grads.birth_price(mint)
         if p0 and m.get("price_native") and m["price_native"] < FACTS["min_vs_graduation"] * p0:
@@ -226,6 +229,11 @@ def check(mint: str, study: bool = False) -> dict:
         usd = round(max(min(equity * SIZING["closed_bsc"] / 100, m["liq_usd"] * FACTS["max_ticket_share"],
                             book.cash()), min(TICKET_USD, book.cash())), 2)
         tier = "closed_bsc"
+    if sol15 and tier == "base":               # its own small tier, judged on its own trades
+        equity = PAPER_BANKROLL_USD + book.realized()
+        usd = round(max(min(equity * SIZING["sol15"] / 100, m["liq_usd"] * FACTS["max_ticket_share"],
+                            book.cash()), min(TICKET_USD, book.cash())), 2)
+        tier = "sol15"
     if held:                                   # the pool soft kill held above: applied unless the model expects a profit
         exp = _expected(seen, held)
         if exp is None or exp < __import__("learn").OVERRIDE_PCT:
@@ -296,6 +304,13 @@ def lp_from_rugcheck(token: dict, seen: dict) -> bool:
     return True
 
 
+def sol_early_ok(mint: str, m: dict) -> bool:
+    """A Solana graduate 15 to 30 min old (config SOL_EARLY)."""
+    from config import SOL_EARLY as S
+    age = (m or {}).get("age_min")
+    return bool(S["on"] and chains_split(mint) == "solana" and age is not None and S["min_age"] <= age < S["max_age"])
+
+
 def closed_bsc_ok(mint: str, token: dict, m: dict) -> bool:
     """A BSC token whose only GoPlus danger is an unpublished contract, in a $15-150k pool (config CLOSED_BSC)."""
     from config import CLOSED_BSC as C
@@ -345,7 +360,8 @@ def run(mint: str) -> dict:
         usd = min(equity * EVENT_TIER_PCT / 100, (v.get("liq_usd") or 0) * FACTS["max_ticket_share"], book.cash())
         v.update(ticket=round(max(usd, min(TICKET_USD, book.cash())), 2), tier="event", event=event)
     import shadow
-    if enter and chains_split(mint) in NO_BUY_CHAINS and not event and not shadow.chain_ok(chains_split(mint)):
+    if (enter and chains_split(mint) in NO_BUY_CHAINS and not event and v.get("tier") != "sol15"
+            and not shadow.chain_ok(chains_split(mint))):
         v["action"] = f"not bought: chain off ({chains_split(mint)}), followed in shadow as a pass"
         return v
     if enter and v.get("expected") is not None and v["expected"] < 0:
@@ -362,7 +378,7 @@ def run(mint: str) -> dict:
         v["action"] = f"not bought: prudence after a drawdown, score {v.get('score')} < {bar}"
         return v
     import shadow
-    if enter and v.get("tier") != "closed_bsc" and (v.get("score") or 0) < MIN_SCORE and "low_score" not in shadow.waived() \
+    if enter and v.get("tier") not in ("closed_bsc", "sol15") and (v.get("score") or 0) < MIN_SCORE and "low_score" not in shadow.waived() \
             and not (v.get("expected") is not None and v["expected"] >= __import__("learn").OVERRIDE_PCT):
         if PAPER and (v.get("score") or 0) >= SIZING["explore_min_score"]:
             equity = PAPER_BANKROLL_USD + book.realized()      # the explore tier: small, and logged apart

@@ -605,6 +605,22 @@ class ClosedBsc(unittest.TestCase):
         self.assertIn("closed_bsc", out["action"])
 
 
+class SolEarly(unittest.TestCase):
+    def test_a_15_to_30_min_solana_graduate_is_bought_small_past_the_chain_switch_and_the_score(self):
+        self.assertTrue(check.sol_early_ok("SolMint1", {"age_min": 20}))
+        self.assertFalse(check.sol_early_ok("SolMint1", {"age_min": 45}))
+        self.assertFalse(check.sol_early_ok("bsc:0x" + "a" * 40, {"age_min": 20}))
+        v = {"verdict": "PASS", "stage": "judge", "reason": "ok", "price": 1.0, "liq_usd": 40000, "symbol": "S",
+             "score": 40, "tier": "sol15", "age_min": 20}
+        with mock.patch.object(config, "NO_BUY_CHAINS", ("solana",)), \
+                mock.patch.object(check, "check", lambda m: dict(v)), mock.patch.object(check, "log", lambda r: None), \
+                mock.patch.object(check.market, "sol_regime", lambda: {}), mock.patch("dossier.add", lambda *a, **k: None), \
+                mock.patch("pending.add", lambda *a, **k: None), mock.patch.object(check.book, "open_position") as buy, \
+                mock.patch("shadow.waived", lambda: set()), mock.patch("shadow.chain_ok", lambda c: False):
+            check.run("SolMint1")
+        buy.assert_called_once()
+
+
 class ChainReopens(unittest.TestCase):
     def test_a_chain_off_reopens_only_when_its_shadowed_passes_pay(self):
         import shadow
@@ -1874,7 +1890,7 @@ class Shadow(Base):
         self.assertEqual(market.market_kill(m, {"thin_pool"}), "fake_cap")      # 50x its pool
         self.assertIsNone(market.market_kill(m, {"thin_pool", "fake_cap"}))
         self.assertEqual(market.market_kill({**m, "liq_usd": 7000}, {"thin_pool", "fake_cap"}), "thin_pool")  # the floor
-        self.assertEqual(market.market_kill({**m, "age_min": 30}, set(market.SOFT_POOL)), "too_fresh")      # never waived
+        self.assertEqual(market.market_kill({**m, "age_min": 10}, set(market.SOFT_POOL)), "too_fresh")      # never waived
         old = {**m, "age_min": 10000, "liq_usd": 200000, "mcap": 400000}
         self.assertEqual(market.market_kill({**old, "liq_usd": 20000}, {"thin_pool"}), "thin_pool")     # survivors: no waiver
 

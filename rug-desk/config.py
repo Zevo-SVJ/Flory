@@ -67,7 +67,7 @@ SIZING = {"base": 4, "strong": 4, "max": 4,
           # leave the LP unlocked and a pull shows in the replay (pool drained, sold at what is left). those
           # tokens are now bought small, every other check and the score still applying, only while the
           # shadow book keeps the case: shadow.lp_open_ok() (n, mean without its 5 best, both halves)
-          "lp_open": 2, "closed_bsc": 2}
+          "lp_open": 2, "closed_bsc": 2, "sol15": 2}
 LP_OPEN = {"chains": ("robinhood", "base"), "min_n": 100, "drop_best": 5}   # paper only: live.py trades BSC alone
 # Nov 8: base joins as a candidate (lp_unlocked on base: n=16, +32.6%, median +20.4%, 81% won). it opens by
 # itself only once shadow.lp_open_ok("base") holds: 100+ tokens, positive without the 5 best, both halves.
@@ -241,6 +241,13 @@ BASE_MIN_AGE_MIN = 180
 # none), only once honeypot.is says they sell at a tax <= LIVE max_sell_tax_pct at the moment of the buy.
 # judged on its own real trades at each checkpoint: stopped (on=False) if 20+ of them average below zero
 CLOSED_BSC = {"on": True, "chains": ("bsc",), "min_liq": 15000, "max_liq": 150000}
+# Nov 8: Solana graduates lost because the desk bought them an hour after graduation, when the curve's buyers
+# sell into the new pool. the cumulative backtest (611 pump.fun graduations with paths, actif exits): the
+# later the entry the worse, step by step: 15 min +9.2% (n=160), 30 min -1.9%, 60 min -9.2%, the desk's
+# 60 min + above graduation -6.8%. so a Solana graduate 15-30 min old is bought small, in its own tier, past
+# the chain switch-off, the score and the graduation-price gates (the backtest had none); every rug check of
+# GARDE still applies. paper only (live.py trades BSC). judged on its own trades: off if 30+ average below 0
+SOL_EARLY = {"on": True, "min_age": 15, "max_age": 30}
 # Nov 3, Skide: 95% of the GTA tokens are copies and rugs, the few clean ones with real holders run far.
 # three things, paper only, every check still applying:
 # 1. a GTA token GARDE turned down for a state that can mend (holders too concentrated, no momentum yet,

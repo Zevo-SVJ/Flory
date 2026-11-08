@@ -142,7 +142,9 @@ def market_kill(m: dict | None, skip=()) -> str | None:
     if lane(m) == "early" and (m.get("vol_1h") or 0) < FACTS["min_turnover_1h"] * m["liq_usd"] \
             and "dead_volume" not in skip:
         return "dead_volume"
-    if m["age_min"] is None or m["age_min"] < FACTS["min_age_min"]:
+    from config import SOL_EARLY                 # a Solana graduate may be judged from 15 min (SOL_EARLY)
+    min_age = SOL_EARLY["min_age"] if SOL_EARLY["on"] and chain == "solana" else FACTS["min_age_min"]
+    if m["age_min"] is None or m["age_min"] < min_age:
         return "too_fresh"
     if m["buys_1h"] >= 20 and m["sells_1h"] == 0:                return "nobody_can_sell"
     if lane(m) == "early" and (m.get("chg_1h") or 0) <= -FACTS.get("max_drop_1h_pct", 101):
