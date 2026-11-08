@@ -1,4 +1,5 @@
-import { env } from "../env";
+import { env, inlineMode } from "../env";
+import { getSchedulerStatus } from "./scheduler";
 import { query } from "../db";
 import { QUEUES, queue } from "../queue";
 import { getBot, getCredentialSummary } from "./credentials";
@@ -11,6 +12,8 @@ export type SystemStatus = {
   worker: { ok: boolean; detail: string; uptime?: number };
   queues: { counts: Record<string, { waiting: number; active: number; delayed: number; failed: number }> } | { error: string };
   lastWebhookAt: Date | null;
+  inline: boolean;
+  scheduler: { installed: boolean; lastTick: Date | null; detail?: string } | null;
 };
 
 async function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
@@ -27,7 +30,8 @@ export async function getSystemStatus(): Promise<SystemStatus> {
       )
     : null;
 
-  const worker = await withTimeout(fetch(`${env().WORKER_URL}/health`, { cache: "no-store" }), 2500).then(
+  const inline = inlineMode();
+  const worker = inline ? { ok: true, detail: "serverless (runs on this site)" } : await withTimeout(fetch(`${env().WORKER_URL}/health`, { cache: "no-store" }), 2500).then(
     async (r) => {
       const j = (await r.json()) as { status: string; uptime_s?: number };
       return { ok: r.ok, detail: j.status, uptime: j.uptime_s };
@@ -35,7 +39,10 @@ export async function getSystemStatus(): Promise<SystemStatus> {
     (e) => ({ ok: false, detail: `unreachable (${errMessage(e)})` }),
   );
 
-  const queues = await withTimeout(
+  const queues: SystemStatus["queues"] = inline ? await (async () => {
+    const r = await query<{ events: number; jobs: number }>("SELECT (SELECT count(*)::int FROM webhook_events WHERE status='pending') AS events, (SELECT count(*)::int FROM automation_jobs WHERE status IN ('pending','running')) AS jobs");
+    return { counts: { events: { waiting: r.rows[0].events, active: 0, delayed: 0, failed: 0 }, jobs: { waiting: r.rows[0].jobs, active: 0, delayed: 0, failed: 0 } } };
+  })() : await withTimeout(
     (async () => {
       const out: Record<string, { waiting: number; active: number; delayed: number; failed: number }> = {};
       for (const [k, name] of Object.entries(QUEUES)) { const c = await queue(name).getJobCounts("waiting", "active", "delayed", "failed"); out[k] = { waiting: c.waiting ?? 0, active: c.active ?? 0, delayed: c.delayed ?? 0, failed: c.failed ?? 0 }; }
@@ -52,5 +59,7 @@ export async function getSystemStatus(): Promise<SystemStatus> {
     worker,
     queues,
     lastWebhookAt: last.rows[0]?.t ?? null,
+    inline,
+    scheduler: inline ? await getSchedulerStatus().catch(() => ({ installed: false, lastTick: null })) : null,
   };
 }

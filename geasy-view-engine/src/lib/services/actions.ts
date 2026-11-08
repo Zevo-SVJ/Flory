@@ -15,7 +15,7 @@ export class RateLimitedError extends Error {
 export class PermanentJobError extends Error {}
 
 type JobRow = {
-  id: string; channel_id: string; post_id: string | null; kind: "reaction" | "notify"; status: string; payload: { messageId?: number; emoji?: string; manual?: boolean };
+  id: string; channel_id: string; post_id: string | null; kind: "reaction" | "notify"; status: string; attempts: number; payload: { messageId?: number; emoji?: string; manual?: boolean };
 };
 
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -55,9 +55,11 @@ async function finish(id: string, channelId: string, status: "done" | "failed" |
  * Executes one persisted job. Safe to call repeatedly: finished jobs are no-ops.
  * `final` = this is the last BullMQ attempt, so a retryable error becomes a permanent failure.
  */
-export async function runJob(jobRowId: string, final: boolean): Promise<void> {
+export async function runJob(jobRowId: string, finalArg?: boolean): Promise<void> {
   const job = await one<JobRow>("SELECT * FROM automation_jobs WHERE id=$1", [jobRowId]);
   if (!job || job.status === "done" || job.status === "skipped" || job.status === "failed") return;
+  // BullMQ passes `final` explicitly; in inline mode it is derived from the attempt counter and the channel's max_retries.
+  const final = finalArg ?? job.attempts + 1 > ((job.payload as { maxAttempts?: number }).maxAttempts ?? 5);
   await query("UPDATE automation_jobs SET status='running', attempts=attempts+1, updated_at=now() WHERE id=$1", [jobRowId]);
 
   try {

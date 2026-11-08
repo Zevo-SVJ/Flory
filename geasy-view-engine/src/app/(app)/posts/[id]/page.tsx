@@ -8,6 +8,7 @@ import { postReactions, postSeries } from "@/lib/services/analytics";
 import { getChannel } from "@/lib/services/channels";
 import { getBot } from "@/lib/services/credentials";
 import { getPost } from "@/lib/services/posts";
+import { inlineMode } from "@/lib/env";
 import { metricsSource } from "@/lib/services/statsjobs";
 import { TELEGRAM_REACTION_EMOJI } from "@/lib/telegram/bot";
 import { buildPostUrl } from "@/lib/telegram/url";
@@ -48,7 +49,7 @@ export default async function PostDetail({ params }: { params: Promise<{ id: str
       />
 
       {!src && (
-        <div className="mb-5"><Notice tone="info" title="Views and forwards unavailable">The Bot API does not expose them. Connect a Telegram account (MTProto) in Settings to read real values. Reaction counts below come from Telegram via the bot when it receives updates for this channel.</Notice></div>)}
+        <div className="mb-5"><Notice tone="info" title="Views and forwards unavailable">The Bot API does not expose them. {inlineMode() ? "This free serverless deployment cannot read them (they need a permanent MTProto connection)." : "Connect a Telegram account (MTProto) in Settings to read real values."} Reaction counts below come from Telegram via the bot when it receives updates for this channel.</Notice></div>)}
       {post.source === "manual" && !src && post.media_type === "unknown" && (
         <div className="mb-5"><Notice title="Existence of this post is not verified">The Bot API cannot read an existing message by id, so this registration could not be checked against Telegram.</Notice></div>)}
       {!post.tracking_enabled && <div className="mb-5"><Notice title="Tracking is stopped for this post">It will not be polled until you resume it.</Notice></div>}

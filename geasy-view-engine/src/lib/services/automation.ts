@@ -1,6 +1,8 @@
 import { one, query } from "../db";
 import { QUEUES, queue } from "../queue";
 import { log, errMessage } from "../logger";
+import { inlineMode } from "../env";
+import { runJob } from "./actions";
 
 export type AutomationSettings = {
   channel_id: string;
@@ -42,12 +44,31 @@ export async function createJobOnce(args: {
 }
 
 export async function enqueueJob(jobRowId: string, maxAttempts?: number) {
+  if (inlineMode()) {
+    // No queue: run now. A retryable failure leaves the row 'pending' and the scheduler retries it with backoff.
+    try { await runJob(jobRowId); } catch (e) { log.warn("inline job failed", { id: jobRowId, error: errMessage(e) }); }
+    return;
+  }
   // jobId = row id → BullMQ also refuses duplicates.
   await queue(QUEUES.actions).add("run", { jobRowId }, { jobId: jobRowId, attempts: (maxAttempts ?? 5) + 1 });
 }
 
 /** Re-enqueue jobs that exist in Postgres but were lost from Redis (crash, Redis flush). */
 export async function resumePendingJobs(): Promise<number> {
+  if (inlineMode()) {
+    const r = await query<{ id: string }>(
+      `SELECT id FROM automation_jobs
+       WHERE (status='pending' AND ( (attempts=0 AND created_at < now() - interval '20 seconds')
+                                  OR (attempts>0 AND updated_at < now() - make_interval(secs => LEAST(3600, 15 * power(2, attempts)))) ))
+          OR (status='running' AND updated_at < now() - interval '2 minutes')
+       ORDER BY created_at LIMIT 30`,
+    );
+    let n = 0;
+    for (const j of r.rows) {
+      try { await runJob(j.id); n++; } catch (e) { log.warn("job retry failed", { id: j.id, error: errMessage(e) }); }
+    }
+    return n;
+  }
   const r = await query<{ id: string; payload: { maxAttempts?: number } }>(
     `SELECT id, payload FROM automation_jobs WHERE status IN ('pending','running') AND updated_at < now() - interval '2 minutes' LIMIT 200`,
   );

@@ -5,6 +5,7 @@ import { Empty, Metric, Notice, PageHeader, Panel } from "@/components/ui";
 import { listPosts } from "@/lib/services/analytics";
 import { listChannels } from "@/lib/services/channels";
 import { mtprotoAvailable } from "@/lib/telegram/mtproto";
+import { inlineMode } from "@/lib/env";
 import { ago, dt, snippet } from "@/lib/fmt";
 import { buildPostUrl } from "@/lib/telegram/url";
 
@@ -27,8 +28,8 @@ export default async function PostsPage({ searchParams }: { searchParams: Promis
     <>
       <PageHeader title="Post Manager" sub="Paste the URL of one post to load and track it, or browse every post detected automatically." />
       {!mt && (
-        <div className="mb-6"><Notice tone="info" title="Views and forward counts need MTProto">
-          The Bot API cannot read an existing post, nor its views or forwards. Without a connected Telegram account, a post looked up here is tracked from the moment you register it (reaction counts via the bot); its text and views stay “—”. See Settings.
+        <div className="mb-6"><Notice tone="info" title={inlineMode() ? "Views and forwards are not available in this deployment" : "Views and forward counts need MTProto"}>
+          The Bot API cannot read an existing post, nor its views or forwards. Without a connected Telegram account, a post looked up here is tracked from the moment you register it (reaction counts via the bot); its text and views stay “—”.{inlineMode() ? " The free serverless deployment cannot read views." : " See Settings."}
         </Notice></div>)}
       <Panel title="Look up a post" className="mb-6"><PostLookupForm lookup={lookupPostAction} connect={connectAndLookupAction} /></Panel>
 

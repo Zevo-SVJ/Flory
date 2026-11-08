@@ -7,6 +7,7 @@ import { mtprotoAvailable } from "../telegram/mtproto";
 import { getWebhookSecret } from "./credentials";
 import { safeEqual } from "../crypto";
 import { log, errMessage } from "../logger";
+import { inlineMode } from "../env";
 
 export type TgUpdate = {
   update_id: number;
@@ -30,19 +31,22 @@ export function updateTypeOf(u: TgUpdate): string {
  * Persist-then-enqueue. The row is the source of truth: if Redis is down the sweeper
  * re-enqueues it later; if the DB is down we throw so the HTTP layer answers 503 and Telegram retries.
  */
-export async function ingestUpdate(u: TgUpdate): Promise<{ duplicate: boolean }> {
+export async function ingestUpdate(u: TgUpdate): Promise<{ duplicate: boolean; eventId: number | null }> {
   const r = await query(
     `INSERT INTO webhook_events (update_id, update_type, payload) VALUES ($1,$2,$3)
      ON CONFLICT (update_id) DO NOTHING RETURNING id`,
     [u.update_id, updateTypeOf(u), JSON.stringify(u)],
   );
-  if (r.rowCount === 0) return { duplicate: true };
+  if (r.rowCount === 0) return { duplicate: true, eventId: null };
+  const eventId = r.rows[0].id as number;
+  // Inline mode has no queue: the caller processes the event right after answering Telegram.
+  if (inlineMode()) return { duplicate: false, eventId };
   try {
-    await enqueueEvent(r.rows[0].id as number);
+    await enqueueEvent(eventId);
   } catch (e) {
     log.warn("enqueue failed, sweeper will retry", { updateId: u.update_id, error: errMessage(e) });
   }
-  return { duplicate: false };
+  return { duplicate: false, eventId };
 }
 
 export async function enqueueEvent(eventId: number) {
@@ -50,9 +54,31 @@ export async function enqueueEvent(eventId: number) {
 }
 
 /** Re-enqueue persisted events that never got processed (Redis outage, crash between insert and enqueue). */
-export async function sweepPendingEvents(): Promise<number> {
+export const MAX_EVENT_ATTEMPTS = 8;
+
+/**
+ * Re-process persisted events that were never completed (Redis outage / crash, or in inline mode a failed attempt).
+ * Inline mode: exponential backoff 15 s × 2^attempts (capped 1 h) using last_attempt_at; gives up after MAX_EVENT_ATTEMPTS.
+ */
+export async function sweepPendingEvents(limit = 500): Promise<number> {
+  if (inlineMode()) {
+    await query("UPDATE webhook_events SET status='failed', error=COALESCE(error,'gave up after max attempts') WHERE status='pending' AND attempts >= $1", [MAX_EVENT_ATTEMPTS]);
+    const r = await query<{ id: number }>(
+      `SELECT id FROM webhook_events
+       WHERE status='pending' AND attempts < $1
+         AND ( (last_attempt_at IS NULL AND received_at < now() - interval '20 seconds')
+            OR last_attempt_at < now() - make_interval(secs => LEAST(3600, 15 * power(2, attempts))) )
+       ORDER BY id LIMIT $2`,
+      [MAX_EVENT_ATTEMPTS, Math.min(limit, 30)],
+    );
+    let n = 0;
+    for (const row of r.rows) {
+      try { await processWebhookEvent(row.id); n++; } catch (e) { log.warn("event retry failed", { id: row.id, error: errMessage(e) }); }
+    }
+    return n;
+  }
   const r = await query<{ id: number }>(
-    `SELECT id FROM webhook_events WHERE status='pending' AND received_at < now() - interval '30 seconds' ORDER BY id LIMIT 500`,
+    `SELECT id FROM webhook_events WHERE status='pending' AND received_at < now() - interval '30 seconds' ORDER BY id LIMIT $1`, [limit],
   );
   let n = 0;
   for (const row of r.rows) {
@@ -88,7 +114,7 @@ async function channelByChat(chatId: number) {
 export async function processWebhookEvent(eventId: number): Promise<void> {
   const ev = await one<{ id: number; payload: TgUpdate; status: string }>("SELECT id, payload, status FROM webhook_events WHERE id=$1", [eventId]);
   if (!ev || ev.status !== "pending" && ev.status !== "failed") return; // already handled: idempotent
-  await query("UPDATE webhook_events SET attempts = attempts + 1 WHERE id=$1", [eventId]);
+  await query("UPDATE webhook_events SET attempts = attempts + 1, last_attempt_at = now() WHERE id=$1", [eventId]);
   const u = ev.payload;
 
   if (u.channel_post) return handleChannelPost(eventId, u.channel_post);
@@ -119,7 +145,7 @@ async function handleChannelPost(eventId: number, m: TgMessage) {
   // Albums arrive as N separate channel_post updates sharing a media_group_id: act once per album.
   const target = m.media_group_id ? `g:${m.media_group_id}` : `m:${m.message_id}`;
 
-  if (s.stats_enabled && (await mtprotoAvailable())) {
+  if (s.stats_enabled && !inlineMode() && (await mtprotoAvailable())) {
     await queue(QUEUES.stats).add("snapshot-channel", { channelId: ch.id }, { jobId: `snap-new-${post.id}`, delay: 3000, attempts: 5 });
   }
   if (s.reaction_enabled) {

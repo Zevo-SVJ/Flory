@@ -4,6 +4,7 @@ import { Empty, Metric, Notice, OriginTag, PageHeader, Panel, Stat, StatGrid } f
 import { channelPerformance, reactionTotalsOverTime, subscriberSeries, topPosts, viewsTotalsOverTime } from "@/lib/services/analytics";
 import { listChannels } from "@/lib/services/channels";
 import { mtprotoAvailable } from "@/lib/telegram/mtproto";
+import { inlineMode } from "@/lib/env";
 import { n, snippet } from "@/lib/fmt";
 
 export const metadata = { title: "Analytics" };
@@ -27,7 +28,7 @@ export default async function Analytics({ searchParams }: { searchParams: Promis
   return (
     <>
       <PageHeader title="Analytics" sub="Telegram counters are shown as reported. Averages are calculated by GEASY from stored snapshots and labelled as such. Nothing is estimated or projected." />
-      {!mt && <div className="mb-6"><Notice tone="info" title="View statistics require MTProto">Connect a Telegram account in Settings. Reaction analytics work with the bot alone.</Notice></div>}
+      {!mt && <div className="mb-6"><Notice tone="info" title="View statistics require MTProto">{inlineMode() ? "Not available in the free serverless deployment." : "Connect a Telegram account in Settings."} Reaction analytics work with the bot alone.</Notice></div>}
 
       <div className="mb-5 flex flex-wrap items-center gap-2 text-[12.5px]">
         <Link href={href({ channel: undefined })} className={`btn btn-sm ${!cid ? "!border-accent" : ""}`}>All channels</Link>

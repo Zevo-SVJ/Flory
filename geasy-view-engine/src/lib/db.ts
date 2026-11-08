@@ -1,5 +1,7 @@
 import pg from "pg";
-import { env } from "./env";
+import { rootCertificates } from "node:tls";
+import { env, inlineMode } from "./env";
+import { SUPABASE_ROOT_CA } from "./supabase-ca";
 import { log, errMessage } from "./logger";
 
 // bigint/bigserial → number. Telegram chat ids (~-1e12) are far below 2^53.
@@ -7,14 +9,26 @@ pg.types.setTypeParser(20, (v) => Number(v));
 
 const g = globalThis as unknown as { __geasyPool?: pg.Pool };
 
+export function poolConfig(): pg.PoolConfig {
+  const e = env();
+  const u = new URL(e.DATABASE_URL);
+  const local = ["localhost", "127.0.0.1", "postgres"].includes(u.hostname);
+  // `sslmode` is stripped so the explicit ssl option below is the single source of truth.
+  u.searchParams.delete("sslmode");
+  return {
+    connectionString: u.toString(),
+    // Remote Postgres: TLS with full certificate + hostname verification. The Supabase root CA is ADDED to Node's trust store.
+    ssl: local ? undefined : { rejectUnauthorized: true, ca: [...rootCertificates, SUPABASE_ROOT_CA, ...(e.DATABASE_CA_CERT ? [e.DATABASE_CA_CERT] : [])] },
+    // Serverless: many short-lived instances share a small pooler; keep each instance's footprint minimal.
+    max: inlineMode() ? 3 : 10,
+    idleTimeoutMillis: inlineMode() ? 10_000 : 30_000,
+    connectionTimeoutMillis: 8_000,
+  };
+}
+
 export function pool(): pg.Pool {
   if (!g.__geasyPool) {
-    const p = new pg.Pool({
-      connectionString: env().DATABASE_URL,
-      max: 10,
-      idleTimeoutMillis: 30_000,
-      connectionTimeoutMillis: 5_000,
-    });
+    const p = new pg.Pool(poolConfig());
     // An idle client dying (DB restart) must not crash the process.
     p.on("error", (e) => log.warn("pg idle client error", { error: errMessage(e) }));
     g.__geasyPool = p;

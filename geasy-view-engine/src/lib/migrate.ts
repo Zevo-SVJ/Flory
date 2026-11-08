@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { pool } from "./db";
 import { log } from "./logger";
+import { BUNDLED_MIGRATIONS } from "./migrations-bundled";
 
 export async function runMigrations(dir = process.env.MIGRATIONS_DIR ?? path.resolve(process.cwd(), "migrations")) {
   const c = await pool().connect();
@@ -12,11 +13,13 @@ export async function runMigrations(dir = process.env.MIGRATIONS_DIR ?? path.res
       "CREATE TABLE IF NOT EXISTS schema_migrations (name text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())",
     );
     const done = new Set((await c.query<{ name: string }>("SELECT name FROM schema_migrations")).rows.map((r) => r.name));
-    const files = fs.readdirSync(dir).filter((f) => f.endsWith(".sql")).sort();
+    // Prefer the migrations directory (Docker); fall back to the bundled copy (serverless, no usable filesystem).
+    const list: Array<{ name: string; sql: string }> = fs.existsSync(dir)
+      ? fs.readdirSync(dir).filter((f) => f.endsWith(".sql")).sort().map((f) => ({ name: f, sql: fs.readFileSync(path.join(dir, f), "utf8") }))
+      : BUNDLED_MIGRATIONS;
     const applied: string[] = [];
-    for (const f of files) {
+    for (const { name: f, sql } of list) {
       if (done.has(f)) continue;
-      const sql = fs.readFileSync(path.join(dir, f), "utf8");
       try {
         await c.query("BEGIN");
         await c.query(sql);

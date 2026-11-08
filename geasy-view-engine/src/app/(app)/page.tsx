@@ -17,6 +17,9 @@ export default async function Overview() {
   ]);
   const alerts: string[] = [];
   if (!sys.bot) alerts.push("No bot configured. Add the token in Settings to start monitoring.");
+  if (sys.inline && sys.scheduler && (!sys.scheduler.installed || !sys.scheduler.lastTick || Date.now() - new Date(sys.scheduler.lastTick).getTime() > 5 * 60_000)) {
+    alerts.push(sys.scheduler.installed ? "The scheduler has not run for over 5 minutes: failed events/jobs are not being retried. See Settings." : "The scheduler is not installed: retries and maintenance do not run. Open Settings → Scheduler.");
+  }
   if (!sys.worker.ok) alerts.push(`Worker: ${sys.worker.detail}. Automatic detection is not running.`);
   if (sys.webhook && "error" in sys.webhook) alerts.push(`Webhook check failed: ${sys.webhook.error}`);
   if (sys.webhook && "lastError" in sys.webhook && sys.webhook.lastError) alerts.push(`Telegram reports a webhook delivery error: ${sys.webhook.lastError}`);
@@ -57,9 +60,9 @@ export default async function Overview() {
           <Panel title="System" flush>
             <dl className="divide-y divide-line2 text-[13px]">
               <Row k="Bot" v={sys.bot ? `@${sys.bot.username}` : "Not configured"} ok={!!sys.bot} />
-              <Row k="Worker" v={sys.worker.ok ? `Running${sys.worker.uptime != null ? ` · up ${Math.round(sys.worker.uptime / 60)} min` : ""}` : sys.worker.detail} ok={sys.worker.ok} />
+              <Row k={sys.inline ? "Runtime" : "Worker"} v={sys.worker.ok ? `${sys.inline ? "Serverless" : "Running"}${sys.worker.uptime != null ? ` · up ${Math.round(sys.worker.uptime / 60)} min` : ""}` : sys.worker.detail} ok={sys.worker.ok} />
               <Row k="Webhook" v={!sys.webhook ? "—" : "error" in sys.webhook ? "Check failed" : `${sys.webhook.pending} pending at Telegram`} ok={!!sys.webhook && !("error" in sys.webhook) && !sys.webhook.lastError} />
-              <Row k="MTProto (views)" v={sys.mtproto ? `Account ${sys.mtproto.username ? "@" + sys.mtproto.username : sys.mtproto.name ?? ""}` : "Not configured · views unavailable"} ok={!!sys.mtproto} warn={!sys.mtproto} />
+              <Row k="MTProto (views)" v={sys.inline ? "Not available in serverless mode" : sys.mtproto ? `Account ${sys.mtproto.username ? "@" + sys.mtproto.username : sys.mtproto.name ?? ""}` : "Not configured · views unavailable"} ok={!!sys.mtproto} warn={!sys.mtproto || sys.inline} />
             </dl>
           </Panel>
           <Panel title="Recent activity" flush right={<Link href="/logs" className="text-[12px] text-mute hover:text-fg">All logs →</Link>}>

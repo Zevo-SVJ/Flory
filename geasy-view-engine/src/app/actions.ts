@@ -19,6 +19,9 @@ import { parseTelegramRef, TelegramRefError } from "@/lib/telegram/url";
 import { TELEGRAM_REACTION_EMOJI } from "@/lib/telegram/bot";
 import { errMessage } from "@/lib/logger";
 import { QUEUES, queue } from "@/lib/queue";
+import { inlineMode } from "@/lib/env";
+import { installScheduler } from "@/lib/services/scheduler";
+import { runTick } from "@/lib/services/tick";
 
 export type ActionState = { ok?: boolean; error?: string; message?: string; connectUrl?: string } | null;
 
@@ -253,7 +256,8 @@ export async function reactNowAction(_: ActionState, fd: FormData): Promise<Acti
 
 export async function refreshAllStatsAction() {
   await requireUser();
-  await queue(QUEUES.stats).add("tick", {}, { jobId: `manual-tick-${Date.now()}`, attempts: 1 });
+  if (inlineMode()) await runTick();
+  else await queue(QUEUES.stats).add("tick", {}, { jobId: `manual-tick-${Date.now()}`, attempts: 1 });
   revalidatePath("/", "layout");
 }
 
@@ -294,4 +298,13 @@ export async function signOutEverywhereAction() {
   const u = await requireUser();
   await query("DELETE FROM sessions WHERE user_id=$1", [u.id]);
   redirect("/login");
+}
+
+export async function installSchedulerAction(_: ActionState, __: FormData): Promise<ActionState> {
+  const u = await requireUser();
+  const r = await installScheduler();
+  if (!r.ok) return { error: `${r.error}. Enable the pg_cron and pg_net extensions in Supabase (Database → Extensions), then retry.` };
+  await logActivity({ category: "system", action: "scheduler_installed", actor: actorOf(u), message: "Scheduler (re)installed" });
+  revalidatePath("/settings");
+  return { ok: true, message: r.changed ? "Scheduler installed: it calls this site every minute." : "Scheduler already installed and up to date." };
 }

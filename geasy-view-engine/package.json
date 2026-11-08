@@ -5,6 +5,9 @@
   "type": "module",
   "engines": { "node": ">=22" },
   "scripts": {
+    "bundle:migrations": "node scripts/bundle-migrations.mjs",
+    "predev": "node scripts/bundle-migrations.mjs",
+    "prebuild": "node scripts/bundle-migrations.mjs",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",

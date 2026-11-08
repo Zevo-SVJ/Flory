@@ -1,4 +1,4 @@
-import { changePasswordAction, removeBotAction, saveBotAction, saveRetentionAction, signOutEverywhereAction } from "@/app/actions";
+import { changePasswordAction, installSchedulerAction, removeBotAction, saveBotAction, saveRetentionAction, signOutEverywhereAction } from "@/app/actions";
 import { ActionForm, ConfirmForm, SubmitButton } from "@/components/client";
 import { Notice, PageHeader, Panel } from "@/components/ui";
 import { getRetention } from "@/lib/services/maintenance";
@@ -37,6 +37,17 @@ export default async function Settings() {
           {!env().PUBLIC_BASE_URL.startsWith("https://") && <div className="mt-3"><Notice title="PUBLIC_BASE_URL is not HTTPS">Telegram only delivers webhooks to HTTPS URLs. Fix it in your .env before saving the token.</Notice></div>}
         </Panel>
 
+        {sys.inline ? (
+          <Panel title="Scheduler (pg_cron)">
+            <div className="text-[13px] text-mute">
+              <p>Serverless mode has no always-on process. A Supabase <span className="num">pg_cron</span> job calls <span className="num">/api/cron/tick</span> every minute to retry failed events/jobs, refresh subscriber counts and apply retention.</p>
+              <p className="mt-3">Status: {sys.scheduler?.installed ? <span className="text-accent">installed</span> : <span className="text-warn">not installed</span>} · last tick: <span className="text-fg">{ago(sys.scheduler?.lastTick)}</span></p>
+              {sys.scheduler?.detail && <p className="mt-1 text-[12px] text-danger">{sys.scheduler.detail}</p>}
+            </div>
+            <ActionForm action={installSchedulerAction} className="mt-3"><SubmitButton pendingText="Installing…">{sys.scheduler?.installed ? "Re-check scheduler" : "Install scheduler"}</SubmitButton></ActionForm>
+            <p className="mt-4 text-[12px] text-mute">Views and forwards need a permanent MTProto connection and are not available in this free serverless mode; they show “—”. Use the Docker deployment if you need them.</p>
+          </Panel>
+        ) : (
         <Panel title="Telegram account (MTProto) · views & forwards">
           <div className="text-[13px] text-mute">
             <p><span className="text-fg">Why:</span> the Bot API has no view counter, no forward counter and cannot read an existing post. These come from MTProto, read-only, using the official API with your own <span className="num">api_id</span>. Without it those values show “—”, never a guess.</p>
@@ -46,6 +57,7 @@ export default async function Settings() {
             <p className="mt-2 text-[12px]">Get <span className="num">api_id</span>/<span className="num">api_hash</span> at my.telegram.org → API development tools. The session is stored encrypted in the database.</p>
           </div>
         </Panel>
+        )}
 
         <Panel title="Data retention">
           <ActionForm action={saveRetentionAction} className="space-y-3 text-[13px]">

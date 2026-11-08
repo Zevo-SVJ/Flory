@@ -41,14 +41,18 @@ npm run dev                     # dashboard on :3000
 
 Telegram only delivers webhooks to public HTTPS: for local work use a tunnel and set `PUBLIC_BASE_URL` to it before saving the bot token in **Settings**.
 
-## Production
+## Free deployment (no server, no card)
+
+[docs/DEPLOY-FREE.md](docs/DEPLOY-FREE.md): Supabase (database) + Vercel (site + webhook). Three environment variables, self-configuring. No views/forwards in this mode.
+
+## Production (Docker, full features)
 
 See [docs/DEPLOY.md](docs/DEPLOY.md). Short version: `cp .env.example .env`, fill it, `docker compose up -d --build`, create the admin, open `https://your.domain`, add the bot token in Settings.
 
 ## Tests
 
 ```bash
-npm test          # 45 tests: URL parser, crypto, passwords, and the full pipeline
+npm test          # 54 tests: URL parser, crypto, passwords, and the full pipeline
 npm run typecheck
 ```
 

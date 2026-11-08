@@ -5,6 +5,7 @@ import { QUEUES, queue } from "../queue";
 import { recordSnapshot, type Post } from "./posts";
 import { getBot } from "./credentials";
 import { log, errMessage } from "../logger";
+import { inlineMode } from "../env";
 
 let override: MtprotoSource | null = null;
 /** Test seam: inject a fake MTProto source. */
@@ -75,7 +76,7 @@ export async function statsTick(): Promise<{ channels: number }> {
   const src = await metricsSource();
   const bucket = Math.floor(Date.now() / 60_000);
   let channels = 0;
-  if (src) {
+  if (src && !inlineMode()) {
     const r = await query<{ channel_id: string }>(
       `SELECT DISTINCT s.channel_id FROM automation_settings s JOIN channels c ON c.id=s.channel_id
        WHERE s.monitoring_enabled AND s.stats_enabled AND c.status IN ('connected','no_access','error')`,
