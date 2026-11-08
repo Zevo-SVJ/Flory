@@ -357,6 +357,11 @@ def run(mint: str) -> dict:
     if enter and (why := hot_skip(v)):
         v["action"] = why
         return v
+    from config import BASE_MIN_AGE_MIN
+    if (enter and v.get("tier") in (None, "base") and v.get("age_min") is not None
+            and v["age_min"] < BASE_MIN_AGE_MIN and "young_base" not in shadow.waived()):
+        v["action"] = f"not bought: young ({v['age_min']:.0f} min < {BASE_MIN_AGE_MIN}, base tier)"
+        return v
     if enter and PAPER and v["verdict"] == "PASS" and ECHO_MODE == "gate":
         pending.add(mint, {**v, "flags": (v.get("flags") or "").split()})
         v["action"] = f"waiting for ECHO's X read (score {v['score']})"

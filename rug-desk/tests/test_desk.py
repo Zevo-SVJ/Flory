@@ -8,6 +8,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import config, book, check, watch, report  # noqa: E402
 config.NO_BUY_CHAINS = ()          # the tests buy Solana mints; ChainOff tests the switch itself
+config.BASE_MIN_AGE_MIN = 0        # the tests buy 2 h old tokens; YoungBase tests the rule itself
 book.COSTS = False      # the exact-number tests below check the rules; Costs tests the fees on their own
 
 MINT = "Mint111111111111111111111111111111111111111"
@@ -530,6 +531,37 @@ class EventTier(unittest.TestCase):
             self.assertEqual(out["tier"], "event")
             buy.assert_called_once()
             self.assertIn("chain off", check.run("OtherSol111")["action"])     # not an event token: still off
+
+
+@mock.patch.object(config, "BASE_MIN_AGE_MIN", 180)
+class YoungBase(unittest.TestCase):
+    def _run(self, **kw):
+        v = {"verdict": "PASS", "stage": "judge", "reason": "ok", "price": 1.0, "liq_usd": 60000, "symbol": "Y",
+             "score": 70, "tier": "base", "age_min": 90, **kw}
+        with mock.patch.object(check, "check", lambda m: dict(v)), mock.patch.object(check, "log", lambda r: None), \
+                mock.patch.object(check.market, "sol_regime", lambda: {}), mock.patch("dossier.add", lambda *a, **k: None), \
+                mock.patch("pending.add", lambda *a, **k: None), mock.patch.object(check.book, "open_position") as buy, \
+                mock.patch("shadow.waived", lambda: set()), mock.patch("shadow.confirm_ok", lambda c: False):
+            return check.run("bsc:0x" + "e" * 40), buy
+
+    def test_a_young_base_token_is_not_bought_an_older_one_is(self):
+        out, buy = self._run()
+        self.assertIn("young", out["action"])
+        buy.assert_not_called()
+        out, buy = self._run(age_min=240)
+        buy.assert_called_once()
+
+    def test_lp_open_keeps_its_own_rule(self):
+        out, buy = self._run(tier="lp_open")
+        self.assertNotIn("young", out.get("action") or "")
+
+    def test_the_skip_is_shadowed_as_young_base(self):
+        import shadow
+        v = {"verdict": "PASS", "action": "not bought: young (90 min < 180, base tier)", "price": 1.0, "liq_usd": 5e4}
+        with mock.patch.object(shadow, "_rows", lambda: []), mock.patch("paths.haunt", lambda *a, **k: None), \
+                mock.patch("builtins.open", mock.mock_open()) as op:
+            shadow.note("bsc:0x" + "f" * 40, v)
+        self.assertIn("young_base", "".join(str(c) for c in op().write.call_args_list))
 
 
 class ChainReopens(unittest.TestCase):

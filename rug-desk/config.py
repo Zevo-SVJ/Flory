@@ -224,6 +224,12 @@ EVENT_WATCH = {
 # tier ("event", % of the balance), every check still applying: an event is another population than the
 # chain's everyday launches, and the paper desk is where to learn what it is worth
 EVENT_TIER_PCT = 2
+# Nov 8 checkpoint: a base-tier token under 3 h old is not bought. real trades: < 3 h -$137 over 19 (32% won),
+# 3-12 h +$73 over 11; shadow book: < 3 h -4.1% over 7802 tokens, 3-12 h -0.8%, 12-36 h +1.8%, > 36 h +1.7%.
+# lp_open (bought on confirmation: FLORA was 2 h old, +16.7%) and the event tier keep their own rules.
+# the skipped ones are shadowed as "young_base": the shadow book lifts the rule by itself if they pay
+# (20+, +5% a trade, both halves, above the noise), like any soft rule
+BASE_MIN_AGE_MIN = 180
 # Nov 3, Skide: 95% of the GTA tokens are copies and rugs, the few clean ones with real holders run far.
 # three things, paper only, every check still applying:
 # 1. a GTA token GARDE turned down for a state that can mend (holders too concentrated, no momentum yet,

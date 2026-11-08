@@ -34,7 +34,7 @@ def note(mint: str, v: dict) -> bool:
     if v.get("verdict") in ("PASS", "BUY") and str(v.get("action", "")).startswith("not bought") \
             and "regime dial" not in v["action"] and "prudence" not in v["action"] and "chain off" not in v["action"]:
         reason = ("model_veto" if "model" in v["action"] else "hot_signals" if "hot signals" in v["action"]
-                  else "low_score")                                            # passed every check, not bought
+                  else "young_base" if "young (" in v["action"] else "low_score")   # passed every check, not bought
         v = {**v, "verdict": "SKIP", "stage": "score", "reason": reason}
     elif v.get("verdict") in ("PASS", "BUY"):
         # a pass is followed the same way, bought or not: learn.py gets one label per token GARDE judged,
