@@ -110,9 +110,10 @@ def signal(cs: list[tuple], t: float) -> dict | None:
             "vol_1h": _vol(cs, t - 3600, t), "vol_6h": _vol(cs, t - 6 * 3600, t), "vol_24h": _vol(cs, t - 86400, t)}
 
 
-def enters(s: dict, sight: dict) -> bool:
-    """market.momentum_kill on candle numbers (no buy/sell split), plus the pool checks from the sighting."""
-    p = MOMENTUM
+def enters(s: dict, sight: dict, p: dict | None = None) -> bool:
+    """market.momentum_kill on candle numbers (no buy/sell split), plus the pool checks from the sighting.
+    p: the momentum rule (config MOMENTUM by default), for the variants below."""
+    p = p or MOMENTUM
     if sight.get("mcap") and sight["mcap"] > p["max_mcap_liq"] * sight["liq"]:
         return False
     if (sight.get("n1h") or 0) >= 100 and (sight.get("avg_trade") or 1e9) < FACTS["min_avg_trade_usd"]:
@@ -122,13 +123,13 @@ def enters(s: dict, sight: dict) -> bool:
             and s["vol_1h"] >= p["vol_accel"] * s["vol_6h"] / 6)
 
 
-def replay(sight: dict, cs: list[tuple] | None = None) -> dict:
+def replay(sight: dict, cs: list[tuple] | None = None, rule: dict | None = None) -> dict:
     t0 = sight["t"]
     cs = cs if cs is not None else candles(sight["pair"], t0 + ENTRY_WINDOW_S + HOLD_S + CANDLE_S, sight.get("net", "solana"))
     if len(cs) < 20:
         return {**sight, "skip": "no_candles"}
     grid = [c[0] + CANDLE_S for c in cs if t0 <= c[0] + CANDLE_S <= t0 + ENTRY_WINDOW_S]
-    entry = next((t for t in grid if (s := signal(cs, t)) and enters(s, sight)), None)
+    entry = next((t for t in grid if (s := signal(cs, t)) and enters(s, sight, rule)), None)
     if entry is None:
         return {**sight, "skip": "no_signal"}
     path = [{"t": c[0] + CANDLE_S, "price": c[4], "liq": sight["liq"], "b5": None, "s5": None, "v5": c[5]}
@@ -219,6 +220,45 @@ def scorecard(rows: list[dict] | None = None) -> dict | None:
             "sightings": len(rows)}
 
 
+# Nov 8: the caps on a vertical move (max_chg_1h 80%, max_chg_24h 400%) were set on a principle, never tested
+# alone. FLOAT, 10 days old, $5-6M, +400% on the day, still doubled. the same sightings, the same candles,
+# with and without the caps
+VARIANTS = {"règle actuelle": {}, "sans plafond 24 h": {"max_chg_24h": 10 ** 9},
+            "sans plafonds 1 h et 24 h": {"max_chg_1h": 10 ** 9, "max_chg_24h": 10 ** 9}}
+
+
+def variants(n: int = 120) -> None:
+    """Replays the last n sightings old enough once (candles read once each) under every VARIANTS rule."""
+    ready = [s for s in _jsonl(SEEN) if s["t"] + ENTRY_WINDOW_S + HOLD_S + CANDLE_S < time.time()][-n:]
+    res = {k: [] for k in VARIANTS}
+    for i, s in enumerate(ready):
+        try:
+            cs = candles(s["pair"], s["t"] + ENTRY_WINDOW_S + HOLD_S + CANDLE_S, s.get("net", "solana"))
+        except Exception:
+            continue
+        for k, over in VARIANTS.items():
+            r = replay(s, cs, {**MOMENTUM, **over})
+            if r.get("entered"):
+                res[k].append((s["t"], r["net_pct"]))
+        if (i + 1) % 20 == 0:
+            print(f"  {i + 1}/{len(ready)}…", flush=True)
+        time.sleep(GAP_S)
+    print(f"{len(ready)} tokens momentum rejoués (bougies, sorties et coûts du desk)")
+    for k, rows in res.items():
+        xs = [x for _, x in sorted(rows)]
+        if len(xs) < 5:
+            print(f"{k:<28} n {len(xs)} : trop peu")
+            continue
+        h = len(xs) // 2
+        print(f"{k:<28} n {len(xs):>3} | moyenne {statistics.mean(xs):+6.1f} % | médiane {statistics.median(xs):+6.1f} % | "
+              f"sans top 5 {statistics.mean(sorted(xs)[:-5]) if len(xs) > 5 else float('nan'):+6.1f} % | "
+              f"moitiés {statistics.mean(xs[:h]):+.1f} / {statistics.mean(xs[h:]):+.1f}")
+
+
 if __name__ == "__main__":
+    import sys
+    if sys.argv[1:2] == ["--plafonds"]:
+        variants(int(sys.argv[2]) if len(sys.argv) > 2 else 120)
+        sys.exit(0)
     print(run(), "sighting(s) replayed")
     print(json.dumps(scorecard(), indent=1))
