@@ -23,7 +23,7 @@ STEP = 6                     # one training tick in 6 (~2 min): neighbouring tic
 MAX_TOKENS = 1500            # the most recent shadows: enough, and a few minutes on the Mac
 CLIP = 100.0
 LAMBDA = 50.0                # shrinkage on standardized features
-THETAS = (-0.5, -1.0, -2.0, -4.0, -8.0)   # % over the next 30 min under which a position is sold
+THETAS = (-0.5, -1.0, -2.0, -4.0, -8.0, -12.0, -20.0)   # % over the next 30 min under which a position is sold
 NAMES = ["gain", "dd", "since_peak", "held", "vol", "vratio", "buyers", "liq", "r5", "r15", "took"]
 _cache = {"m": None, "mtime": None, "override": None}
 
@@ -171,7 +171,10 @@ def train() -> dict:
 
 
 if __name__ == "__main__":
-    m = train()
+    # run through the module itself: exits.decide imports "exitmodel", and the candidate being judged must be
+    # the one it sees (as __main__ this file is a second copy, and the first run judged the profile in force)
+    import exitmodel
+    m = exitmodel.train()
     t = m["test"]
     print(f"\nmodèle appris sur {m['n_ticks']} ticks · vend sous {m['theta']} % prévu sur 30 min")
     print("poids (standardisés) : " + " · ".join(f"{k} {w:+.2f}" for k, w in zip(m["names"], m["w"])))
