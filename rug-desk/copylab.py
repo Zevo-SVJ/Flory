@@ -9,7 +9,7 @@
 #   - python3 copylab.py: for each buy, the move from the first price the desk saw (what it could have
 #     bought at) to 1, 5, 15, 30 and 60 min later, net of the costs of a $25 round trip
 # nothing is bought: shadow only, in its own file. no rule changes until it pays on enough buys.
-import csv, json, os, statistics, time
+import csv, json, math, os, statistics, time
 from config import DATA, COPYLAB
 
 FILE = os.path.join(DATA, "copylab.csv")
@@ -36,22 +36,28 @@ def wallets() -> dict:
     return out
 
 
-def find(symbol: str, millions: float) -> list[str]:
-    """The holders of a Solana token (by its symbol, deepest pool) closest to `millions` tokens: how a fomo
-    trader's wallet is found from a position his profile shows (bystevenr: 18.42M FLOAT)."""
+def find(symbol: str, millions: float, usd: float | None = None) -> list[str]:
+    """The holders of a Solana token closest to `millions` tokens: how a fomo trader's wallet is found from a
+    position his profile shows (bystevenr: 18.42M FLOAT). several tokens share a symbol (CATE): with the
+    position's value in $, the one whose price matches it is taken; without, the deepest pool."""
     import requests, facts
     ps = [p for p in requests.get("https://api.dexscreener.com/latest/dex/search", params={"q": symbol},
                                   timeout=15).json().get("pairs") or []
           if p.get("chainId") == "solana" and (p.get("baseToken") or {}).get("symbol", "").upper() == symbol.upper()]
     if not ps:
         return [f"aucun token {symbol} sur Solana"]
-    mint = max(ps, key=lambda p: (p.get("liquidity") or {}).get("usd") or 0)["baseToken"]["address"]
+    if usd:
+        want = usd / (millions * 1e6)
+        best = min(ps, key=lambda p: abs(math.log(max(float(p.get("priceUsd") or 1e-18), 1e-18) / want)))
+    else:
+        best = max(ps, key=lambda p: (p.get("liquidity") or {}).get("usd") or 0)
+    mint = best["baseToken"]["address"]
     rows = []
     for a in facts._rpc("getTokenLargestAccounts", [mint])["value"]:
         info = facts._rpc("getAccountInfo", [a["address"], {"encoding": "jsonParsed"}])["value"]
         rows.append((float(a["uiAmountString"]) / 1e6, info["data"]["parsed"]["info"]["owner"]))
     rows.sort(key=lambda r: abs(r[0] - millions))
-    return [f"{symbol} : {mint}"] + [f"{m:9.2f} M  ->  {o}" for m, o in rows[:5]]
+    return [f"{symbol} : {mint} · prix {best.get('priceUsd')} $"] + [f"{m:9.2f} M  ->  {o}" for m, o in rows[:5]]
 
 
 def _state() -> dict:
@@ -164,8 +170,8 @@ def report() -> list[str]:
 
 if __name__ == "__main__":
     import sys
-    if sys.argv[1:2] == ["--trouver"] and len(sys.argv) == 4:      # python3 copylab.py --trouver CATE 3.4
-        print("\n".join(find(sys.argv[2], float(sys.argv[3]))))
+    if sys.argv[1:2] == ["--trouver"] and len(sys.argv) in (4, 5):  # python3 copylab.py --trouver CATE 3.4 109267
+        print("\n".join(find(sys.argv[2], float(sys.argv[3]), float(sys.argv[4]) if len(sys.argv) == 5 else None)))
     elif sys.argv[1:2] == ["--ajouter"] and len(sys.argv) == 4:    # python3 copylab.py --ajouter tjr <adresse>
         import re
         if not re.fullmatch(r"[1-9A-HJ-NP-Za-km-z]{32,44}", sys.argv[3]):
