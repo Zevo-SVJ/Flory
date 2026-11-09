@@ -1566,6 +1566,24 @@ class CopyLab(unittest.TestCase):
             self.assertEqual(copylab.tick(), 0)
 
 
+class Journal(unittest.TestCase):
+    def test_manual_trades_are_summed_per_token_and_judged_like_the_desk(self):
+        import journal
+        if os.path.exists(journal.FILE):
+            os.remove(journal.FILE)
+        with mock.patch.object(journal, "_market", lambda k: {"symbol": "MEME", "price": 0.001}), \
+                mock.patch.object(journal, "_key", lambda ca: ca):
+            journal.record("achat", "MintA", 25)
+            journal.record("vente", "MintA", 20)
+            journal.record("vente", "MintA", 30)
+            journal.record("achat", "MintB", 10)
+        ts = {t["mint"]: t for t in journal.trades()}
+        self.assertEqual((ts["MintA"]["in"], ts["MintA"]["out"]), (25.0, 50.0))
+        self.assertEqual(ts["MintB"]["out"], 0.0)
+        self.assertTrue(any("TOI : 1 trades vendus" in l and "+100.0 %" in l for l in journal.bilan()))
+        os.remove(journal.FILE)
+
+
 class Copycat(Base):
     def test_a_smaller_token_under_a_bigger_ticker_is_killed(self):
         import market
