@@ -56,8 +56,30 @@ def find(symbol: str, millions: float, usd: float | None = None) -> list[str]:
     for a in facts._rpc("getTokenLargestAccounts", [mint])["value"]:
         info = facts._rpc("getAccountInfo", [a["address"], {"encoding": "jsonParsed"}])["value"]
         rows.append((float(a["uiAmountString"]) / 1e6, info["data"]["parsed"]["info"]["owner"]))
+    if not any(abs(m - millions) <= 0.1 * millions for m, _ in rows):
+        rows += _all_holders(mint)          # below the top 20: every token account of this mint
     rows.sort(key=lambda r: abs(r[0] - millions))
     return [f"{symbol} : {mint} · prix {best.get('priceUsd')} $"] + [f"{m:9.2f} M  ->  {o}" for m, o in rows[:5]]
+
+
+def _all_holders(mint: str) -> list[tuple[float, str]]:
+    """(millions held, owner) for every token account of `mint`, read in one call per token program,
+    only the 40 bytes that matter (owner, amount)."""
+    import base64, struct, facts
+    dec = int(facts._rpc("getTokenSupply", [mint])["value"]["decimals"])
+    out = []
+    for prog, size in (("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA", 165), ("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb", None)):
+        filters = [{"memcmp": {"offset": 0, "bytes": mint}}] + ([{"dataSize": size}] if size else [])
+        try:
+            accs = facts._rpc("getProgramAccounts", [prog, {"encoding": "base64", "filters": filters,
+                                                             "dataSlice": {"offset": 32, "length": 40}}]) or []
+        except Exception:
+            continue
+        for a in accs:
+            raw = base64.b64decode(a["account"]["data"][0])
+            if len(raw) == 40:
+                out.append((struct.unpack("<Q", raw[32:40])[0] / 10 ** dec / 1e6, facts._b58(raw[:32])))
+    return out
 
 
 def _state() -> dict:
