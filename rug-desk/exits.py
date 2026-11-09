@@ -64,13 +64,20 @@ def volatility_pct(hist: list[dict], bars: int = 12, bar_s: int = 300) -> float 
 def features(path: list[dict], window_s: int = 3600) -> list[dict]:
     """Per tick, the two numbers the rules need from the past hour: volatility and average 5-min
     volume. Computed once per path, so replaying a dozen profiles stays fast."""
-    out, start = [], 0
+    out, start, j5, j15 = [], 0, 0, 0
     for i, s in enumerate(path):
         while path[start]["t"] < s["t"] - window_s:
             start += 1
+        while j5 + 1 <= i and path[j5 + 1]["t"] <= s["t"] - 300:
+            j5 += 1
+        while j15 + 1 <= i and path[j15 + 1]["t"] <= s["t"] - 900:
+            j15 += 1
         win = path[start:i + 1]
         vols = [h["v5"] for h in win if h.get("v5") is not None]
-        out.append({**s, "vol": volatility_pct(win), "v5_avg": sum(vols) / len(vols) if vols else None})
+        p5, p15 = path[j5]["price"], path[j15]["price"]     # the price 5 and 15 min ago (adaptive exits)
+        out.append({**s, "vol": volatility_pct(win), "v5_avg": sum(vols) / len(vols) if vols else None,
+                    "r5": s["price"] / p5 - 1 if p5 > 0 and s["price"] > 0 else None,
+                    "r15": s["price"] / p15 - 1 if p15 > 0 and s["price"] > 0 else None})
     return out
 
 
@@ -104,6 +111,16 @@ def decide(pos: dict, s: dict, p: dict | None = None) -> tuple[float, str] | Non
     if pos["steps"] < len(ladder) and pct >= ladder[pos["steps"]][0]:
         level, frac = ladder[pos["steps"]]
         return frac, f"take_profit_{level}"
+    # adaptive: past the pool, the stop and the first takes, the model decides for each token
+    if p.get("adaptive") and s["t"] - pos["opened"] >= 120:      # the exit model (exitmodel.py), once trained
+        import exitmodel
+        m = exitmodel.load()
+        if m:
+            if exitmodel.predict(m, exitmodel.vec(pos, s)) < m["theta"]:
+                return 1.0, "adaptive"
+            if hours >= p["time_stop_hours"] and pct < p["time_stop_min_pct"]:
+                return 1.0, "time_stop"
+            return None
     if peak_pct >= p["lock_after_pct"] and pct <= p["lock_floor_pct"]:
         return 1.0, "lock"
     if pos["steps"] > 0 or peak_pct >= p["arm_pct"]:

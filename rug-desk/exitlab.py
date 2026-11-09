@@ -56,6 +56,9 @@ PROFILES = {
     # (k2 +79, 3 h clock +82, rest out after 1 h +76, against +48). together, judged at the Nov 8 checkpoint
     "sooner: k2 + 3 h + rest out 1 h": {"trail": "chandelier", "trail_k": 2, "time_stop_hours": 3,
                                         "idle_after_take_h": 1},
+    # Nov 9: exits that adapt to each token (exitmodel.py): past the pool, the stop and the take at x2, a model
+    # of the next 30 min decides. without a trained model (python3 exitmodel.py) it is the profile in force
+    "adaptatif": {"adaptive": True},
 }
 
 

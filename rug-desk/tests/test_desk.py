@@ -1518,6 +1518,32 @@ class IdleAfterTake(unittest.TestCase):
         self.assertIsNone(exits.decide({**pos, "steps": 0}, s, {**p, "idle_after_take_h": 2, "stall_min": 10 ** 9}))
 
 
+class ExitModel(unittest.TestCase):
+    def test_it_learns_from_paths_and_sells_a_fading_token_before_a_rising_one(self):
+        import exitmodel, exits, random
+        rnd, paths_ = random.Random(3), []
+        for k in range(160):                       # tokens that rise on buyers, then fade on sellers
+            p, path = 1.0, []
+            for i in range(400):
+                up = i < 200
+                p *= 1 + (0.004 if up else -0.004) + rnd.gauss(0, 0.002)
+                path.append({"t": i * 20.0, "price": p, "liq": 50000, "b5": 30 if up else 10, "s5": 10 if up else 30,
+                             "v5": 1000})
+            paths_.append(exits.features(path))
+        m = exitmodel.fit(paths_)
+        pos = {"entry": 1.0, "peak": 1.5, "peak_t": 0, "opened": 0, "steps": 0, "liq0": 50000}
+        up = {"t": 3000, "price": 1.5, "liq": 50000, "b5": 30, "s5": 10, "v5": 1000, "v5_avg": 1000, "r5": 0.05, "r15": 0.1}
+        down = {**up, "b5": 10, "s5": 30, "r5": -0.05, "r15": -0.1}
+        self.assertGreater(exitmodel.predict(m, exitmodel.vec(pos, up)), exitmodel.predict(m, exitmodel.vec(pos, down)))
+
+    def test_without_a_model_the_adaptive_profile_is_the_profile_in_force(self):
+        import exits, exitmodel
+        with mock.patch.object(exitmodel, "load", lambda: None):
+            pos = {"entry": 1.0, "peak": 1.0, "peak_t": 0, "opened": 0, "steps": 0, "liq0": 50000}
+            s = {"t": 7 * 3600, "price": 1.01, "liq": 50000}
+            self.assertEqual(exits.decide(pos, s, {**config.EXIT, "adaptive": True})[1], "time_stop")
+
+
 class Copycat(Base):
     def test_a_smaller_token_under_a_bigger_ticker_is_killed(self):
         import market
