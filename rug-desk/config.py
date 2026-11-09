@@ -239,6 +239,8 @@ BASE_MIN_AGE_MIN = 180
 COPYLAB = {"on": True, "every_s": 20, "wallets": {
     "bystevenr": "AH75Bn6QHSt5K2Ad4p1otns3JTwpSJWZTwiwKWNhmnKx",     # 93.5K followers on fomo
     "brez": "Fvkc2thk1YcAASdR2gi8uf9n67JW9Dqqr9iRd99MDhoB",          # 215K followers on fomo
+    "tjr": "9fnyojTv8GYHWr4Vaj4tvVL82scPPYYkW1CAXAbfUsdj",           # 244.5K (3.49M CATE + 8.80M FLOAT)
+    "surgz": "95ddWCEqs7bX1vAPFXgAxNKmYkCvpQFiurCk4KWg2AST",         # 38.3K (20.15M FLOAT)
 }}
 # Nov 8: BSC tokens killed only for an unpublished contract (GoPlus "closed_source", no other danger), pool
 # $15-150k: 65 shadowed, +63.7% mean, median +30%, +38.3% without the 5 best, halves +60 / +67, and all 65

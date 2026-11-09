@@ -18,6 +18,7 @@ FIELDS = ["t", "seen", "who", "wallet", "mint", "sig", "amount"]
 QUOTE = {"So11111111111111111111111111111111111111112", "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
          "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB"}      # SOL, USDC, USDT: what they pay with
 HORIZONS = (1, 5, 15, 30, 60)
+TRAILS = (10, 20)            # %: sold once the price falls this far under its high since the buy (60 min at most)
 WATCH_H = 2
 _last = {"t": 0.0}
 
@@ -161,6 +162,7 @@ def report() -> list[str]:
     except OSError:
         return ["copylab : aucun achat enregistré pour l'instant"]
     out, res = [], {h: [] for h in HORIZONS}
+    trail = {k: [] for k in TRAILS}
     lags = []
     for r in rows:
         seen = float(r["seen"])
@@ -176,6 +178,16 @@ def report() -> list[str]:
             later = [p for p in pts if p["t"] >= p0["t"] + h * 60]
             if later:
                 res[h].append(100 * (later[0]["price"] / p0["price"] - 1) - cost)
+        win = [p for p in pts if p["t"] <= p0["t"] + 3600]       # follow the wave: out on the turn
+        if len(win) >= 5 and win[-1]["t"] >= p0["t"] + 3000:
+            for k in TRAILS:
+                peak, sold = p0["price"], win[-1]["price"]
+                for p in win[1:]:
+                    peak = max(peak, p["price"])
+                    if p["price"] <= peak * (1 - k / 100):
+                        sold = p["price"]
+                        break
+                trail[k].append(100 * (sold / p0["price"] - 1) - cost)
     out.append(f"copylab : {len(rows)} achat(s) des wallets suivis · délai médian entre leur achat et notre "
                f"premier prix : {statistics.median(lags):.0f} s" if lags else f"copylab : {len(rows)} achat(s), pas encore de prix")
     for h in HORIZONS:
@@ -186,6 +198,15 @@ def report() -> list[str]:
         half = len(xs) // 2
         out.append(f"  revendu à {h:>2} min : n {len(xs):>3} · moyenne {statistics.mean(xs):+6.1f} % · médiane "
                    f"{statistics.median(xs):+6.1f} % · gagnants {100 * sum(x > 0 for x in xs) / len(xs):3.0f} % · "
+                   f"moitiés {statistics.mean(xs[:half]):+.1f} / {statistics.mean(xs[half:]):+.1f}")
+    for k in TRAILS:
+        xs = trail[k]
+        if len(xs) < 3:
+            out.append(f"  vendu à {k} % sous le plus haut : {len(xs)} cas, trop peu")
+            continue
+        half = len(xs) // 2
+        out.append(f"  vendu à {k:>2} % sous le plus haut (1 h max) : n {len(xs):>3} · moyenne {statistics.mean(xs):+6.1f} % · "
+                   f"médiane {statistics.median(xs):+6.1f} % · gagnants {100 * sum(x > 0 for x in xs) / len(xs):3.0f} % · "
                    f"moitiés {statistics.mean(xs[:half]):+.1f} / {statistics.mean(xs[half:]):+.1f}")
     return out
 
