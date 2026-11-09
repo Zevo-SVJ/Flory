@@ -57,7 +57,7 @@ def find(symbol: str, millions: float, usd: float | None = None) -> list[str]:
     for a in facts._rpc("getTokenLargestAccounts", [mint])["value"]:
         info = facts._rpc("getAccountInfo", [a["address"], {"encoding": "jsonParsed"}])["value"]
         rows.append((float(a["uiAmountString"]) / 1e6, info["data"]["parsed"]["info"]["owner"]))
-    if not any(abs(m - millions) <= 0.1 * millions for m, _ in rows):
+    if not any(abs(m - millions) <= 0.02 * millions for m, _ in rows):
         rows += _all_holders(mint)          # below the top 20: every token account of this mint
     rows.sort(key=lambda r: abs(r[0] - millions))
     return [f"{symbol} : {mint} · prix {best.get('priceUsd')} $"] + [f"{m:9.2f} M  ->  {o}" for m, o in rows[:5]]
