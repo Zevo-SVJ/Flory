@@ -22,6 +22,38 @@ WATCH_H = 2
 _last = {"t": 0.0}
 
 
+EXTRA = os.path.join(DATA, "copylab_wallets.json")       # wallets added by hand: python3 copylab.py --ajouter
+
+
+def wallets() -> dict:
+    """config COPYLAB's wallets, plus the ones added with --ajouter."""
+    out = dict(COPYLAB.get("wallets") or {})
+    try:
+        with open(EXTRA) as f:
+            out.update(json.load(f))
+    except (OSError, ValueError):
+        pass
+    return out
+
+
+def find(symbol: str, millions: float) -> list[str]:
+    """The holders of a Solana token (by its symbol, deepest pool) closest to `millions` tokens: how a fomo
+    trader's wallet is found from a position his profile shows (bystevenr: 18.42M FLOAT)."""
+    import requests, facts
+    ps = [p for p in requests.get("https://api.dexscreener.com/latest/dex/search", params={"q": symbol},
+                                  timeout=15).json().get("pairs") or []
+          if p.get("chainId") == "solana" and (p.get("baseToken") or {}).get("symbol", "").upper() == symbol.upper()]
+    if not ps:
+        return [f"aucun token {symbol} sur Solana"]
+    mint = max(ps, key=lambda p: (p.get("liquidity") or {}).get("usd") or 0)["baseToken"]["address"]
+    rows = []
+    for a in facts._rpc("getTokenLargestAccounts", [mint])["value"]:
+        info = facts._rpc("getAccountInfo", [a["address"], {"encoding": "jsonParsed"}])["value"]
+        rows.append((float(a["uiAmountString"]) / 1e6, info["data"]["parsed"]["info"]["owner"]))
+    rows.sort(key=lambda r: abs(r[0] - millions))
+    return [f"{symbol} : {mint}"] + [f"{m:9.2f} M  ->  {o}" for m, o in rows[:5]]
+
+
 def _state() -> dict:
     try:
         with open(STATE) as f:
@@ -47,7 +79,7 @@ def buys_in(tx: dict, wallet: str) -> list[tuple[str, float]]:
 
 def tick(now: float | None = None) -> int:
     """Read the wallets' newest transactions; log the buys. Returns how many buys were logged."""
-    if not COPYLAB.get("on") or not COPYLAB.get("wallets"):
+    if not COPYLAB.get("on") or not wallets():
         return 0
     now = now or time.time()
     if now - _last["t"] < COPYLAB.get("every_s", 20):
@@ -55,7 +87,7 @@ def tick(now: float | None = None) -> int:
     _last["t"] = now
     import facts, paths
     st, n = _state(), 0
-    for who, wallet in COPYLAB["wallets"].items():
+    for who, wallet in wallets().items():
         try:
             sigs = facts._rpc("getSignaturesForAddress", [wallet, {"limit": 15}]) or []
         except Exception:
@@ -131,4 +163,18 @@ def report() -> list[str]:
 
 
 if __name__ == "__main__":
-    print("\n".join(report()))
+    import sys
+    if sys.argv[1:2] == ["--trouver"] and len(sys.argv) == 4:      # python3 copylab.py --trouver CATE 3.4
+        print("\n".join(find(sys.argv[2], float(sys.argv[3]))))
+    elif sys.argv[1:2] == ["--ajouter"] and len(sys.argv) == 4:    # python3 copylab.py --ajouter tjr <adresse>
+        import re
+        if not re.fullmatch(r"[1-9A-HJ-NP-Za-km-z]{32,44}", sys.argv[3]):
+            sys.exit("adresse Solana invalide")
+        w = {k: v for k, v in wallets().items() if k not in (COPYLAB.get("wallets") or {})}
+        w[sys.argv[2]] = sys.argv[3]
+        os.makedirs(DATA, exist_ok=True)
+        with open(EXTRA, "w") as f:
+            json.dump(w, f, indent=1)
+        print(f"suivi : {', '.join(wallets())} (le desk le prend en compte au prochain tick, sans redémarrer)")
+    else:
+        print("\n".join(report()))
