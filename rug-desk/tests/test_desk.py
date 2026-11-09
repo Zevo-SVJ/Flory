@@ -3028,7 +3028,7 @@ class LongSlide(Base):
         self.assertEqual([r["level"] for r in out], ["prudence"])
         self.assertIn("depuis le plus haut de", out[0]["text"])
         self.assertIn("seulement les tokens notés 55", out[0]["text"])
-        self.assertEqual(incidents.strict_score(), 65)
+        self.assertEqual(incidents.strict_score(), 55)
         self.assertEqual(incidents.prudence()["factor"], 0.8)
         self.assertEqual(incidents.paused(), 0)                              # prudence is no pause
         self.write(base + slide + [1150 + i for i in range(1, 25)], now + 600)   # back to $1,174: half won back
