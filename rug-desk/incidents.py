@@ -41,7 +41,11 @@ PATTERN_N, PATTERN_DAYS = 3, 7
 # (Oct 21: $1,190 -> $1,140 between 17:40 and 20:20, two losing exits and the rest latent, no line at all)
 DD_NOTE_USD, DD_NOTE_STEP = 30.0, 15.0   # 3% of the bankroll under the day's peak: analysed since the peak, again every $15 lower
 DD_PRUDENT_USD = 50.0                    # 5%: the desk turns prudent until it has won back half the drop (24 h at most)
-PRUDENT_FACTOR, PRUDENT_MIN_SCORE, PRUDENT_MAX_S = 0.8, 65, 24 * 3600
+# Nov 9: prudence no longer raises the score bar (65 -> the usual MIN_SCORE): the score never predicted the
+# outcome (config SIZING: scores 80+ did no better, the hot 2+ signal tickets lost), so a higher bar only
+# stopped the desk from trading its way back. it keeps the smaller tickets
+from config import MIN_SCORE
+PRUDENT_FACTOR, PRUDENT_MIN_SCORE, PRUDENT_MAX_S = 0.8, MIN_SCORE, 24 * 3600
 
 
 def _read(path, default):
