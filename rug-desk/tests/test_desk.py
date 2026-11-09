@@ -1584,6 +1584,25 @@ class Journal(unittest.TestCase):
         os.remove(journal.FILE)
 
 
+class JournalWallet(unittest.TestCase):
+    def test_a_swap_of_the_wallet_is_a_buy_or_a_sale_in_dollars(self):
+        import journal
+        me = "MyWallet111"
+        buy = {"transaction": {"message": {"accountKeys": [{"pubkey": me}]}},
+               "meta": {"err": None, "preBalances": [2_000_000_000], "postBalances": [1_800_000_000],
+                        "preTokenBalances": [], "postTokenBalances": [{"owner": me, "mint": "Meme", "uiTokenAmount": {"uiAmount": 5000}}]}}
+        self.assertEqual(journal.parse(buy, me, 150.0), [("achat", "Meme", 30.0)])
+        sell = {"transaction": {"message": {"accountKeys": [{"pubkey": me}]}},
+                "meta": {"err": None, "preBalances": [1_800_000_000], "postBalances": [2_100_000_000],
+                         "preTokenBalances": [{"owner": me, "mint": "Meme", "uiTokenAmount": {"uiAmount": 5000}}],
+                         "postTokenBalances": [{"owner": me, "mint": "Meme", "uiTokenAmount": {"uiAmount": 0}}]}}
+        self.assertEqual(journal.parse(sell, me, 150.0), [("vente", "Meme", 45.0)])
+        gift = {"transaction": {"message": {"accountKeys": [{"pubkey": me}]}},
+                "meta": {"err": None, "preBalances": [1_000_000_000], "postBalances": [999_995_000],
+                         "preTokenBalances": [], "postTokenBalances": [{"owner": me, "mint": "Air", "uiTokenAmount": {"uiAmount": 9}}]}}
+        self.assertEqual(journal.parse(gift, me, 150.0), [])                  # an airdrop is not a trade
+
+
 class Copycat(Base):
     def test_a_smaller_token_under_a_bigger_ticker_is_killed(self):
         import market

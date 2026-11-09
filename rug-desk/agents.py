@@ -74,6 +74,12 @@ def vigie():
             emit("VIGIE", "info", "copylab : achat d'un trader suivi enregistré (suivi 2 h, rien n'est acheté)")
     except Exception as e:
         print(f"copylab: {type(e).__name__}: {e}", flush=True)
+    try:
+        import journal                   # Skide's own trades, read from his wallet (journal.py)
+        if (n := journal.tick()):
+            emit("VIGIE", "info", f"journal : {n} trade(s) manuel(s) enregistré(s) depuis ton wallet")
+    except Exception as e:
+        print(f"journal: {type(e).__name__}: {e}", flush=True)
     import confirm                       # lp_open tokens waiting for +10% with buyers (confirm.py)
     for e in confirm.tick():
         emit("GARDE", e["kind"], e["text"], symbol=e["symbol"], mint=e["mint"],
