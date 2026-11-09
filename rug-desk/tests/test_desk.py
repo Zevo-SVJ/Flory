@@ -605,6 +605,7 @@ class ClosedBsc(unittest.TestCase):
         self.assertIn("closed_bsc", out["action"])
 
 
+@mock.patch.dict(config.SOL_EARLY, {"on": True})
 class SolEarly(unittest.TestCase):
     def test_a_15_to_30_min_solana_graduate_is_bought_small_past_the_chain_switch_and_the_score(self):
         self.assertTrue(check.sol_early_ok("SolMint1", {"age_min": 20}))

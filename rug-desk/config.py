@@ -247,7 +247,12 @@ CLOSED_BSC = {"on": True, "chains": ("bsc",), "min_liq": 15000, "max_liq": 15000
 # 60 min + above graduation -6.8%. so a Solana graduate 15-30 min old is bought small, in its own tier, past
 # the chain switch-off, the score and the graduation-price gates (the backtest had none); every rug check of
 # GARDE still applies. paper only (live.py trades BSC). judged on its own trades: off if 30+ average below 0
-SOL_EARLY = {"on": True, "min_age": 15, "max_age": 30}
+# Nov 9, morning: OFF after 5 trades. 4 of them hit the stop within 2 to 28 min, each filled near -45% (the
+# price fell through -35% between two ticks): -$45.63, DOGWIF +$3.72 the only winner. the backtest's +9.2% at
+# 15 min did not survive real entries: those graduates dump right after the desk's buy. and its losses cost the
+# rest of the desk: an incident pause (72 tokens skipped overnight) and prudence (tickets x0.51, notes 65+)
+# hit the BSC trades that the live copy measures. the shadow book keeps following Solana's passes
+SOL_EARLY = {"on": False, "min_age": 15, "max_age": 30}
 # Nov 3, Skide: 95% of the GTA tokens are copies and rugs, the few clean ones with real holders run far.
 # three things, paper only, every check still applying:
 # 1. a GTA token GARDE turned down for a state that can mend (holders too concentrated, no momentum yet,
