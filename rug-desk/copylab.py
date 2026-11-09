@@ -215,6 +215,36 @@ if __name__ == "__main__":
     import sys
     if sys.argv[1:2] == ["--trouver"] and len(sys.argv) in (4, 5):  # python3 copylab.py --trouver CATE 3.4 109267
         print("\n".join(find(sys.argv[2], float(sys.argv[3]), float(sys.argv[4]) if len(sys.argv) == 5 else None)))
+    elif sys.argv[1:2] == ["--lot"]:
+        # one line per trader on stdin: pseudo SYMBOLE quantité_en_millions valeur_en_dollars
+        # added by itself when the closest holder is within 2% and the next one is not
+        added = []
+        for line in sys.stdin:
+            parts = line.replace(",", ".").replace("$", "").split()
+            if len(parts) != 4:
+                continue
+            who, sym, mil, usd = parts[0], parts[1], float(parts[2]), float(parts[3])
+            try:
+                res = find(sym, mil, usd)
+            except Exception as e:
+                print(f"{who} : erreur {type(e).__name__} ({str(e)[:80]})")
+                continue
+            cands = [(float(r.split("M")[0]), r.split("->")[1].strip()) for r in res[1:] if "->" in r]
+            if not cands:
+                print(f"{who} : {res[0]}")
+                continue
+            near = [c for c in cands if abs(c[0] - mil) <= 0.02 * mil]
+            if len(near) == 1:
+                w = {k: v for k, v in wallets().items() if k not in (COPYLAB.get("wallets") or {})}
+                w[who] = near[0][1]
+                with open(EXTRA, "w") as f:
+                    json.dump(w, f, indent=1)
+                added.append(who)
+                print(f"{who} : ajouté -> {near[0][1]} ({near[0][0]:.2f} M {sym})")
+            else:
+                print(f"{who} : ambigu ou introuvable, à départager : " +
+                      " · ".join(f"{m:.2f} M {a}" for m, a in cands[:3]))
+        print(f"suivi : {', '.join(wallets())}")
     elif sys.argv[1:2] == ["--ajouter"] and len(sys.argv) == 4:    # python3 copylab.py --ajouter tjr <adresse>
         import re
         if not re.fullmatch(r"[1-9A-HJ-NP-Za-km-z]{32,44}", sys.argv[3]):
