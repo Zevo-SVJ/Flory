@@ -68,6 +68,12 @@ def vigie():
         if e["reason"] in RUG_EXITS:
             on_rug(e["mint"], e["symbol"], e["reason"])
         post(copy_sell(e) + "\n" + e["text"])
+    try:
+        import copylab                   # the followed traders' buys, shadow only (copylab.py)
+        if copylab.tick():
+            emit("VIGIE", "info", "copylab : achat d'un trader suivi enregistré (suivi 2 h, rien n'est acheté)")
+    except Exception as e:
+        print(f"copylab: {type(e).__name__}: {e}", flush=True)
     import confirm                       # lp_open tokens waiting for +10% with buyers (confirm.py)
     for e in confirm.tick():
         emit("GARDE", e["kind"], e["text"], symbol=e["symbol"], mint=e["mint"],

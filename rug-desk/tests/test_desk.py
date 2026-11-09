@@ -9,6 +9,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import config, book, check, watch, report  # noqa: E402
 config.NO_BUY_CHAINS = ()          # the tests buy Solana mints; ChainOff tests the switch itself
 config.BASE_MIN_AGE_MIN = 0        # the tests buy 2 h old tokens; YoungBase tests the rule itself
+config.COPYLAB["on"] = False       # no RPC from the tests
 book.COSTS = False      # the exact-number tests below check the rules; Costs tests the fees on their own
 
 MINT = "Mint111111111111111111111111111111111111111"
@@ -1543,6 +1544,26 @@ class ExitModel(unittest.TestCase):
             pos = {"entry": 1.0, "peak": 1.0, "peak_t": 0, "opened": 0, "steps": 0, "liq0": 50000}
             s = {"t": 7 * 3600, "price": 1.01, "liq": 50000}
             self.assertEqual(exits.decide(pos, s, {**config.EXIT, "adaptive": True})[1], "time_stop")
+
+
+class CopyLab(unittest.TestCase):
+    def test_a_buy_is_a_token_balance_of_the_wallet_going_up(self):
+        import copylab
+        w = "Wallet111"
+        tx = {"meta": {"err": None,
+                       "preTokenBalances": [{"owner": w, "mint": "So11111111111111111111111111111111111111112",
+                                             "uiTokenAmount": {"uiAmount": 5}}],
+                       "postTokenBalances": [{"owner": w, "mint": "MemeMint", "uiTokenAmount": {"uiAmount": 1000}},
+                                             {"owner": "Other", "mint": "Else", "uiTokenAmount": {"uiAmount": 9}}]}}
+        self.assertEqual(copylab.buys_in(tx, w), [("MemeMint", 1000.0)])
+        sell = {"meta": {"err": None, "preTokenBalances": [{"owner": w, "mint": "MemeMint", "uiTokenAmount": {"uiAmount": 1000}}],
+                         "postTokenBalances": [{"owner": w, "mint": "MemeMint", "uiTokenAmount": {"uiAmount": 0}}]}}
+        self.assertEqual(copylab.buys_in(sell, w), [])
+
+    def test_the_lab_is_off_in_the_tests_unless_asked(self):
+        import copylab
+        with mock.patch.dict(config.COPYLAB, {"on": False}):
+            self.assertEqual(copylab.tick(), 0)
 
 
 class Copycat(Base):

@@ -233,6 +233,13 @@ EVENT_TIER_PCT = 2
 # the skipped ones are shadowed as "young_base": the shadow book lifts the rule by itself if they pay
 # (20+, +5% a trade, both halves, above the noise), like any soft rule
 BASE_MIN_AGE_MIN = 180
+# Nov 9: the copy wave lab (copylab.py), shadow only: the buys of followed fomo traders, and what the price
+# does in the minutes after. wallets found on chain from the FLOAT they hold (18.42M and 10.41M FLOAT,
+# as their fomo profiles show). public addresses
+COPYLAB = {"on": True, "every_s": 20, "wallets": {
+    "bystevenr": "AH75Bn6QHSt5K2Ad4p1otns3JTwpSJWZTwiwKWNhmnKx",     # 93.5K followers on fomo
+    "brez": "Fvkc2thk1YcAASdR2gi8uf9n67JW9Dqqr9iRd99MDhoB",          # 215K followers on fomo
+}}
 # Nov 8: BSC tokens killed only for an unpublished contract (GoPlus "closed_source", no other danger), pool
 # $15-150k: 65 shadowed, +63.7% mean, median +30%, +38.3% without the 5 best, halves +60 / +67, and all 65
 # sellable with a sell tax <= 10% when honeypot.is simulated a buy and a sale. the likely reason: BSC launchpad
