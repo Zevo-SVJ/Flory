@@ -11,7 +11,8 @@ FILE = os.path.join(DATA, "longwatch.csv")
 FIELDS = ["t", "mint", "symbol", "chain", "mcap", "price", "liq", "verdict", "reason"]
 CAP_LO, CAP_HI = 150_000, 1_000_000
 DAYS = 7
-MAX_ACTIVE = 60             # tokens priced for 7 days at once: VIGIE prices every ghost every 20 s
+MAX_ACTIVE = 300            # tokens priced for 7 days at once: VIGIE prices every ghost every 20 s, 30 per call.
+                            # Nov 9: 60 gave 60 tokens in a week, too few to say which 300k token goes to 5M
 
 
 def rows() -> list[dict]:

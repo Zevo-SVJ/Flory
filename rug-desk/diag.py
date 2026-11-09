@@ -212,6 +212,35 @@ if "--longs" in sys.argv:
         f = lambda c: f"{100 * sum(c(a, b) for a, b in xs) / len(xs):5.1f} %"
         print(f"  {key:22s} {len(xs):4d} · {f(lambda a, b: a >= 2)} · {f(lambda a, b: a >= 5)} · {f(lambda a, b: a >= 10)} · "
               f"{f(lambda a, b: a >= 20)} · {f(lambda a, b: b >= 2)} · {f(lambda a, b: b <= 0.5)}")
+    # Nov 9: would buying them have paid? each token bought at its verdict price and held up to 3 days under
+    # three exit profiles (the one in force, "regles B", the event hold), real costs, by chain
+    from config import EVENT_RUNNER_EXIT
+    import exits as _ex, chains as _ch
+    profs = {"actif": _ex.active(), "regles B": {**_ex.active(), **exitlab.PROFILES["regles B"]},
+             "tenue longue": {**_ex.active(), **EVENT_RUNNER_EXIT, "time_stop_hours": 72}}
+    res = {}
+    for r in rs:
+        t0, p0 = float(r["t"]), float(r["price"])
+        if now - t0 < 3 * 86400 or p0 <= 0:
+            continue
+        pts = exitlab.clean(paths.load(r["mint"], since=t0, until=t0 + 3 * 86400))
+        if len(pts) < 50:
+            continue
+        path = _ex.features([{"t": t0, "price": p0, "liq": float(r["liq"] or 0), "b5": None, "s5": None, "v5": None}] + pts)
+        c = _ch.costs(r["mint"])
+        liq = float(r["liq"] or 0) or 1
+        cost = 2 * (c["fee_pct"] + c.get("mev_pct", 0) + 100 * exitlab.TICKET_USD / (liq / 2)) + 2 * c["tx_usd"] / exitlab.TICKET_USD * 100
+        for name, prm in profs.items():
+            g = exitlab.simulate(path, prm)
+            if g is not None:
+                for key in (f"{name} · {r['chain']}", f"{name} · tous"):
+                    res.setdefault(key, []).append(g / exitlab.TICKET_USD * 100 - cost)
+    if res:
+        print("  SI ON LES AVAIT ACHETÉS (au verdict, gardés 3 j au plus, coûts compris) : n · moyenne · médiane · sans top 3")
+        for key in sorted(res):
+            xs = res[key]
+            print(f"  {key:26s} {len(xs):4d} · {statistics.mean(xs):+7.1f} % · {statistics.median(xs):+7.1f} % · "
+                  f"{statistics.mean(sorted(xs)[:-3]) if len(xs) > 3 else float('nan'):+7.1f} %")
     # the desk's own trades after the sale (followed 7 days since Nov 2): how high did they go once sold?
     after = {}
     import edge
