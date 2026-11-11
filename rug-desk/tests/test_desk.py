@@ -10,6 +10,7 @@ import config, book, check, watch, report  # noqa: E402
 config.NO_BUY_CHAINS = ()          # the tests buy Solana mints; ChainOff tests the switch itself
 config.BASE_MIN_AGE_MIN = 0        # the tests buy 2 h old tokens; YoungBase tests the rule itself
 config.COPYLAB["on"] = False       # no RPC from the tests
+import incidents as _inc; _inc.PRUDENCE_ON = True   # the tests check the prudence logic itself
 book.COSTS = False      # the exact-number tests below check the rules; Costs tests the fees on their own
 
 MINT = "Mint111111111111111111111111111111111111111"

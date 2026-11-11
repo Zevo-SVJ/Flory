@@ -40,6 +40,10 @@ PATTERN_N, PATTERN_DAYS = 3, 7
 # the long slide: a balance that bleeds a little every hour never trips the 10-min or the 1-h bars
 # (Oct 21: $1,190 -> $1,140 between 17:40 and 20:20, two losing exits and the rest latent, no line at all)
 DD_NOTE_USD, DD_NOTE_STEP = 30.0, 15.0   # 3% of the bankroll under the day's peak: analysed since the peak, again every $15 lower
+# Nov 11, Skide: no prudence. the tickets stay full size after a drawdown (no x0.8, no Turtle cut per 10%)
+# and no stricter score: paper results are judged in % per trade, and the live copy buys a fixed $13 whatever
+# the paper ticket. the analyses, and the 30 min pause after a rug or an abnormal drop, stay
+PRUDENCE_ON = False
 DD_PRUDENT_USD = 50.0                    # 5%: the desk turns prudent until it has won back half the drop (24 h at most)
 # Nov 9: prudence no longer raises the score bar (65 -> the usual MIN_SCORE): the score never predicted the
 # outcome (config SIZING: scores 80+ did no better, the hot 2+ signal tickets lost), so a higher bar only
@@ -298,7 +302,7 @@ def _drawdown(st: dict, pts: list, now: float, sigma: float, written: bool = Fal
     # gains handed back from a peak are no loss on what was staked (a trailing stop at work): they never turn the
     # desk prudent
     real = dd - sum(m["giveback"] for m in window_moves(t_pk))
-    turn = real >= DD_PRUDENT_USD and not st.get("prudent")
+    turn = PRUDENCE_ON and real >= DD_PRUDENT_USD and not st.get("prudent")
     if written and not turn:
         return out                       # this minute's analysis already covers it
     rec = analyze("prudence" if turn else "note", f"baisse de {dd:.2f} $ depuis le plus haut de la journée",
@@ -318,7 +322,7 @@ def _drawdown(st: dict, pts: list, now: float, sigma: float, written: bool = Fal
 def prudence() -> dict:
     """The Turtle rule on the drawdown from the balance's peak since the restart: x0.8 per 10% of the bankroll."""
     pts = points(0)
-    if not pts:
+    if not pts or not PRUDENCE_ON:
         return {"factor": 1.0, "dd_pct": 0.0}
     peak = max(PAPER_BANKROLL_USD, max(b for _, b in pts))
     dd = max(0.0, (peak - pts[-1][1]) / PAPER_BANKROLL_USD * 100)
@@ -332,7 +336,7 @@ def prudence() -> dict:
 def strict_score() -> int | None:
     """While prudent, only the better setups are bought: a score of PRUDENT_MIN_SCORE or more. after losses the
     pull is to take more and worse trades to win it back; this is the opposite (the "A setups only" rule)."""
-    return PRUDENT_MIN_SCORE if _read(STATE, {}).get("prudent") else None
+    return PRUDENT_MIN_SCORE if PRUDENCE_ON and _read(STATE, {}).get("prudent") else None
 
 
 def paused() -> float:
