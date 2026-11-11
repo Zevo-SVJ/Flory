@@ -349,6 +349,11 @@ def leads() -> list[str]:
     live.update(market.pools([m for m in out if m not in live]))
     import mbacktest                           # every momentum pool seen, for the momentum backtest
     mbacktest.note(live)
+    try:
+        import ignition                        # Solana ignitions, measured apart, nothing bought (ignition.py)
+        ignition.note({m: live[m] for m in out if live.get(m)})
+    except Exception as e:
+        print(f"ignition: {type(e).__name__}: {e}", flush=True)
     # a graduate whose pool stayed under $10k two hours after graduating is dead: stop pricing it
     born = grads.load()["mints"]
     grads.forget([m for m in graduates if time.time() - born.get(m, time.time()) > 7200

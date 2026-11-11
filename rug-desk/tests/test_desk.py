@@ -1604,6 +1604,20 @@ class JournalWallet(unittest.TestCase):
         self.assertEqual(journal.parse(gift, me, 150.0), [])                  # an airdrop is not a trade
 
 
+class Ignition(unittest.TestCase):
+    def test_a_solana_burst_is_logged_once_and_a_quiet_token_is_not(self):
+        import ignition
+        if os.path.exists(ignition.FILE):
+            os.remove(ignition.FILE)
+        burst = {"chain": "solana", "price": 0.001, "chg_5m": 12, "chg_1h": 40, "buys_5m": 60, "sells_5m": 20,
+                 "liq_usd": 40000, "mcap": 900000, "vol_5m": 30000, "vol_1h": 80000, "symbol": "IGN", "age_min": 30}
+        quiet = {**burst, "chg_5m": 1, "chg_1h": 3}
+        with mock.patch("paths.haunt", lambda *a, **k: None):
+            self.assertEqual(ignition.note({"SolA": burst, "SolB": quiet, "bsc:0x" + "a" * 40: {**burst, "chain": "bsc"}}), 1)
+            self.assertEqual(ignition.note({"SolA": burst}), 0)          # not again within 6 h
+        os.remove(ignition.FILE)
+
+
 class Copycat(Base):
     def test_a_smaller_token_under_a_bigger_ticker_is_killed(self):
         import market
