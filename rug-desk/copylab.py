@@ -9,7 +9,7 @@
 #   - python3 copylab.py: for each buy, the move from the first price the desk saw (what it could have
 #     bought at) to 1, 5, 15, 30 and 60 min later, net of the costs of a $25 round trip
 # nothing is bought: shadow only, in its own file. no rule changes until it pays on enough buys.
-import csv, json, math, os, statistics, time
+import csv, json, math, os, re, statistics, time
 from config import DATA, COPYLAB
 
 FILE = os.path.join(DATA, "copylab.csv")
@@ -18,6 +18,13 @@ FIELDS = ["t", "seen", "who", "wallet", "mint", "sig", "amount"]
 QUOTE = {"So11111111111111111111111111111111111111112", "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
          "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB"}      # SOL, USDC, USDT: what they pay with
 HORIZONS = (1, 5, 15, 30, 60)
+# Nov 11: of the first 692 "buys", 23 tokens only: one wallet bought the same token 216 times, another one
+# Helius staked SOL. a wave starts on the trader's FIRST buy of a token, and only a memecoin rides one: a
+# repeated buy of a token he already bought in the last 6 h is not counted, nor a token that is a dollar, a
+# staked or wrapped SOL, a stock, or too big for followers to move (cap over $300M or pool over $10M)
+REPEAT_S = 6 * 3600
+NOT_WAVE = re.compile(r"usd|staked|stake|wrapped|helius|jito|marinade|msol|jitosol|bsol|xstock|robinhood token|"
+                      r"\bsol\b|bitcoin|ether", re.I)
 TRAILS = (10, 20)            # %: sold once the price falls this far under its high since the buy (60 min at most)
 WATCH_H = 2
 _last = {"t": 0.0}
@@ -138,6 +145,12 @@ def tick(now: float | None = None) -> int:
             except Exception:
                 continue
             for mint, amt in buys_in(tx, wallet):
+                lastb = st.setdefault("_last", {})
+                k, bt = f"{who}:{mint}", s.get("blockTime") or now
+                if bt - lastb.get(k, -1e18) < REPEAT_S:      # a repeat buy: no new wave, not logged
+                    lastb[k] = bt
+                    continue
+                lastb[k] = bt
                 new = not os.path.exists(FILE)
                 with open(FILE, "a", newline="") as f:
                     w = csv.DictWriter(f, fieldnames=FIELDS)
@@ -161,7 +174,26 @@ def report() -> list[str]:
             rows = list(csv.DictReader(f))
     except OSError:
         return ["copylab : aucun achat enregistré pour l'instant"]
-    out, res = [], {h: [] for h in HORIZONS}
+    import market
+    first, last = [], {}
+    for r in sorted(rows, key=lambda r: float(r["t"])):
+        k = (r["who"], r["mint"])
+        if float(r["t"]) - last.get(k, -1e18) >= REPEAT_S:
+            first.append(r)
+        last[k] = float(r["t"])
+    try:
+        info = market.pools(sorted({r["mint"] for r in first}))
+    except Exception:
+        info = {}
+    def wave(m):
+        p = info.get(m) or {}
+        name = f"{p.get('name') or ''} {p.get('symbol') or ''}"
+        return bool(p) and not NOT_WAVE.search(name) and (p.get("mcap") or 0) <= 3e8 and (p.get("liq_usd") or 0) <= 1e7
+    kept = [r for r in first if wave(r["mint"])]
+    skipped = len(rows) - len(kept)
+    rows = kept
+    out, res = [f"copylab : {skipped} achat(s) écarté(s) (rachats du même token en moins de 6 h, dollars, SOL staké, "
+                 f"tokens trop gros pour une vague) · {len(rows)} premier(s) achat(s) de memecoins gardé(s)"], {h: [] for h in HORIZONS}
     trail = {k: [] for k in TRAILS}
     lags = []
     for r in rows:
@@ -188,8 +220,8 @@ def report() -> list[str]:
                         sold = p["price"]
                         break
                 trail[k].append(100 * (sold / p0["price"] - 1) - cost)
-    out.append(f"copylab : {len(rows)} achat(s) des wallets suivis · délai médian entre leur achat et notre "
-               f"premier prix : {statistics.median(lags):.0f} s" if lags else f"copylab : {len(rows)} achat(s), pas encore de prix")
+    out.append(f"  délai médian entre leur achat et notre premier prix : {statistics.median(lags):.0f} s" if lags
+               else "  pas encore de prix pour ces achats")
     for h in HORIZONS:
         xs = res[h]
         if len(xs) < 3:

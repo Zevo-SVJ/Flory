@@ -33,8 +33,11 @@ def lessons(reasons: tuple | None = None) -> list[dict]:
 
 
 def profiles() -> dict:
+    """The exit profiles VIGIE's review may switch to. Nov 11: never "adaptatif": its model was trained on
+    these very shadow paths, so it wins this test in-sample (it switched itself in on Nov 10, after losing on
+    the tokens it never saw, -4.1% against -3.7%). it is judged by exitmodel.py on held-out tokens only"""
     import exitlab
-    return {"config": dict(EXIT), **{n: {**EXIT, **o} for n, o in exitlab.PROFILES.items()}}
+    return {"config": dict(EXIT), **{n: {**EXIT, **o} for n, o in exitlab.PROFILES.items() if not o.get("adaptive")}}
 
 
 def _net(d: dict, params) -> float | None:
