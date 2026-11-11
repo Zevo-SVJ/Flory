@@ -2655,6 +2655,7 @@ class Trend(Base):
         import learn
         self.assertEqual(learn.features({"dial": "0.67"})["dial"], 0.67)
 
+    @mock.patch.object(config, "DIAL_GATE_ON", True)
     def test_memecoins_stand_down_only_when_the_coach_says_so(self):
         import coach, majors, shadow
         self.addCleanup(setattr, check, "ECHO_MODE", check.ECHO_MODE)

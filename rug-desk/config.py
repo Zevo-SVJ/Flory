@@ -227,6 +227,9 @@ EVENT_WATCH = {
 # tier ("event", % of the balance), every check still applying: an event is another population than the
 # chain's everyday launches, and the paper desk is where to learn what it is worth
 EVENT_TIER_PCT = 2
+# Nov 11, Skide: the market-regime gate is off. TREND's review had set it (memecoins stand down while the
+# BTC/ETH/SOL dial is under 0.5); the desk now buys whatever the dial says. TREND still computes the dial
+DIAL_GATE_ON = False
 # Nov 8 checkpoint: a base-tier token under 3 h old is not bought. real trades: < 3 h -$137 over 19 (32% won),
 # 3-12 h +$73 over 11; shadow book: < 3 h -4.1% over 7802 tokens, 3-12 h -0.8%, 12-36 h +1.8%, > 36 h +1.7%.
 # lp_open (bought on confirmation: FLORA was 2 h old, +16.7%) and the event tier keep their own rules.

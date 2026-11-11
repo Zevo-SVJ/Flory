@@ -285,7 +285,8 @@ def trend(balance: float | None) -> dict:
     res = _gap_test(green, red, k=1)
     gate = coach.get("meme_dial_gate")
     if gate is None and res["ok"] and statistics.mean(red) < 0:
-        e = coach.apply("TREND", "meme_dial_gate", GATE, res, balance)
+        from config import DIAL_GATE_ON
+        e = coach.apply("TREND", "meme_dial_gate", GATE, res, balance) if DIAL_GATE_ON else None
         change = (f"les memecoins se mettent en retrait sous un cadran de {GATE} : {res['why']}" if e else
                   "le retrait des memecoins en régime rouge est justifié (changement récent, j'attends)")
     else:

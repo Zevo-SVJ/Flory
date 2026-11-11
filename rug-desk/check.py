@@ -368,7 +368,8 @@ def run(mint: str) -> dict:
         v["action"] = f"not bought: the model expects {v['expected']:+.1f}% per trade"
         return v
     import coach                         # set only by TREND's self-review, when red regimes clearly lose
-    gate = coach.get("meme_dial_gate")
+    from config import DIAL_GATE_ON
+    gate = coach.get("meme_dial_gate") if DIAL_GATE_ON else None
     if enter and gate is not None and v.get("dial") is not None and v["dial"] < gate:
         v["action"] = f"not bought: regime dial {v['dial']:.2f} < {gate} (memecoins stand down)"
         return v
