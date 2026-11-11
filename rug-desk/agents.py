@@ -52,6 +52,9 @@ def log_equity(marks: dict):
 _vigie_last = {"t": 0.0}
 
 
+_disk_said = {"t": 0.0}
+
+
 def vigie():
     _vigie_last["t"] = time.time()
     exits, marks = watch.watch()
@@ -68,6 +71,16 @@ def vigie():
         if e["reason"] in RUG_EXITS:
             on_rug(e["mint"], e["symbol"], e["reason"])
         post(copy_sell(e) + "\n" + e["text"])
+    try:                                 # Nov 12: a full disk crashed the desk in a loop all night, silently
+        import shutil
+        free = shutil.disk_usage(DATA).free / 1e9
+        if free < 3 and time.time() - _disk_said["t"] > 6 * 3600:
+            _disk_said["t"] = time.time()
+            emit("VIGIE", "error", f"disque presque plein : {free:.1f} Go libres")
+            post(f"⚠️ DISQUE PRESQUE PLEIN : {free:.1f} Go libres sur le Mac. Sous 0 le desk plante en boucle. "
+                 f"Vide la corbeille, les Téléchargements ou ~/Library/Caches.")
+    except Exception:
+        pass
     try:
         import copylab                   # the followed traders' buys, shadow only (copylab.py)
         if copylab.tick():
