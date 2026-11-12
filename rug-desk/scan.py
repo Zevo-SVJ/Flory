@@ -26,6 +26,49 @@ RETRY_AFTER_MIN = 30
 RETRYABLE = ("too_fresh", "thin_pool", "no_pool", "no_price", "no_holders", "below_graduation")
 
 
+# a base-tier pass refused only for its age (config BASE_MIN_AGE_MIN) is checked again once old enough, up to
+# YOUNG_RECHECK_MAX_MIN. before Nov 12 such a pass was a final verdict: the token was never looked at again,
+# and as SCOUT finds tokens at their launch, the 3 h rule bought nothing at all for days (Nov 9-12)
+YOUNG_RECHECK_MAX_MIN = 36 * 60
+YOUNG_PER_RUN = 5           # of SCOUT's scan_per_run slots, the matured ones take up to this many first
+YOUNG_RULE_SINCE = "2026-11-08 18:40"     # rows from before the action was logged: told apart by age and tier
+
+
+def _last_rows() -> dict[str, dict]:
+    last = {}
+    try:
+        with open(LOG, newline="") as f:
+            for r in csv.DictReader(f):
+                last[r["mint"]] = r
+    except OSError:
+        pass
+    return last
+
+
+def young_due(last: dict | None = None, now: float | None = None) -> list[str]:
+    """Tokens whose last verdict was a pass refused for being too young, now old enough: newest first."""
+    from config import BASE_MIN_AGE_MIN, NO_BUY_CHAINS
+    last = _last_rows() if last is None else last
+    now = now or time.time()
+    due = []
+    for mint, r in last.items():
+        if r.get("verdict") not in ("PASS", "BUY"):
+            continue
+        action = r.get("action") or ""
+        try:
+            age = float(r.get("age_min") or "nan")
+            t = time.mktime(time.strptime(r["time"], "%Y-%m-%d %H:%M"))
+        except (ValueError, KeyError):
+            continue
+        young = action.startswith("not bought: young (") or (
+            not action and r["time"] >= YOUNG_RULE_SINCE and (r.get("tier") or "base") == "base"
+            and age < BASE_MIN_AGE_MIN and (r.get("chain") or chains.split(mint)[0]) not in NO_BUY_CHAINS)
+        cur = age + (now - t) / 60
+        if young and BASE_MIN_AGE_MIN <= cur <= YOUNG_RECHECK_MAX_MIN:
+            due.append((t, mint))
+    return [m for _, m in sorted(due, reverse=True)]
+
+
 def _done(events: set[str] = frozenset(), now_retry: bool = False) -> set[str]:
     """Mints we never need to look at again: a final verdict, or a retryable kill that's still recent.
     events: the tokens of an open event, also retried after a kill that can mend or a pass not bought
@@ -33,10 +76,8 @@ def _done(events: set[str] = frozenset(), now_retry: bool = False) -> set[str]:
     from config import EVENT_RETRY, EVENT_RETRY_MIN
     if not os.path.exists(LOG):
         return set()
-    last = {}
-    with open(LOG, newline="") as f:
-        for r in csv.DictReader(f):
-            last[r["mint"]] = r
+    last = _last_rows()
+    matured = set(young_due(last))
     cutoff = time.strftime("%Y-%m-%d %H:%M", time.localtime(time.time() - RETRY_AFTER_MIN * 60))
     ev_cut = time.strftime("%Y-%m-%d %H:%M", time.localtime(time.time() - EVENT_RETRY_MIN * 60))
     done = set()
@@ -47,6 +88,8 @@ def _done(events: set[str] = frozenset(), now_retry: bool = False) -> set[str]:
                                                          and (r.get("action") or "").startswith("not bought"))):
             if now_retry or r["time"] <= ev_cut:
                 continue
+        if mint in matured:
+            continue
         if not retry or r["time"] > cutoff:
             done.add(mint)
     return done
@@ -342,6 +385,9 @@ def leads() -> list[str]:
     events = {k: n for k, n in found_ev.items() if k not in done and k not in out}
     out += list(events)
     src.update({m: f"événement {n}" for m, n in events.items()})
+    matured = young_due()[:3 * YOUNG_PER_RUN]  # passes refused for their age, old enough now
+    out += [m for m in matured if m not in out]
+    src.update({m: "revu à 3 h" for m in matured})
     src.update({m: "tendance GeckoTerminal" for m in trend})
     src.update({m: "top organique Jupiter" for m in top})
     # one batched pool read for every lead: most are bonding-curve tokens with no real pool yet.
@@ -400,7 +446,9 @@ def leads() -> list[str]:
     last_lanes = {"early": len(early), "momentum": len(mom)}
     from config import EVENT_PER_RUN           # an open event's tokens go first, a few per run
     ev_first = [m for m in mixed if m in event_mints][:EVENT_PER_RUN]
-    picked = ev_first + [m for m in mixed if m not in ev_first][:SCHEDULE["scan_per_run"] - len(ev_first)]
+    old_enough = [m for m in mixed if m in matured and m not in ev_first][:YOUNG_PER_RUN]
+    first = ev_first + old_enough
+    picked = first + [m for m in mixed if m not in first][:SCHEDULE["scan_per_run"] - len(first)]
     import dossier
     for m in picked:
         dossier.add(m, "SCOUT", "repéré", source=src.get(m, "listes DexScreener"), lane=market.lane(live[m]),

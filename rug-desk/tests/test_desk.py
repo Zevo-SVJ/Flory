@@ -566,6 +566,38 @@ class YoungBase(unittest.TestCase):
         self.assertIn("young_base", "".join(str(c) for c in op().write.call_args_list))
 
 
+    def test_the_action_is_logged(self):
+        rows = []
+        v = {"verdict": "PASS", "stage": "judge", "reason": "ok", "price": 1.0, "liq_usd": 60000, "symbol": "Y",
+             "score": 70, "tier": "base", "age_min": 90}
+        with mock.patch.object(check, "check", lambda m: dict(v)), mock.patch.object(check, "log", rows.append), \
+                mock.patch.object(check.market, "sol_regime", lambda: {}), mock.patch("dossier.add", lambda *a, **k: None), \
+                mock.patch("pending.add", lambda *a, **k: None), mock.patch.object(check.book, "open_position"), \
+                mock.patch("shadow.waived", lambda: set()), mock.patch("shadow.confirm_ok", lambda c: False):
+            check.run("bsc:0x" + "e" * 40)
+        self.assertTrue(rows[0]["action"].startswith("not bought: young ("))
+        self.assertIn("action", check.FIELDS)
+
+    def test_a_young_pass_is_checked_again_once_old_enough(self):
+        import scan
+        now = time.mktime(time.strptime("2026-11-12 12:00", "%Y-%m-%d %H:%M"))
+        at = lambda h: time.strftime("%Y-%m-%d %H:%M", time.localtime(now - h * 3600))
+        young = "not bought: young (90 min < 180, base tier)"
+        last = {
+            "bsc:0xa": {"verdict": "PASS", "action": young, "age_min": "90", "time": at(2), "tier": "base"},   # 210 min now
+            "bsc:0xb": {"verdict": "PASS", "action": young, "age_min": "90", "time": at(1), "tier": "base"},   # 150 min: not yet
+            "bsc:0xc": {"verdict": "PASS", "action": young, "age_min": "90", "time": at(40), "tier": "base"},  # too late
+            "bsc:0xd": {"verdict": "PASS", "action": "not bought: score 40 < 55", "age_min": "90", "time": at(2)},
+            "bsc:0xe": {"verdict": "PASS", "action": "", "age_min": "60", "time": at(3), "tier": "base",
+                        "chain": "bsc"},                                  # before the action was logged
+            "solana:x": {"verdict": "PASS", "action": "", "age_min": "60", "time": at(3), "tier": "base",
+                         "chain": "solana"},                              # chain off anyway
+            "bsc:0xf": {"verdict": "SKIP", "action": "", "age_min": "60", "time": at(3), "chain": "bsc"},
+        }
+        with mock.patch.object(config, "BASE_MIN_AGE_MIN", 180), mock.patch.object(config, "NO_BUY_CHAINS", ("solana",)):
+            self.assertEqual(scan.young_due(last, now), ["bsc:0xa", "bsc:0xe"])
+
+
 class ChainWaiver(unittest.TestCase):
     def test_a_soft_pool_rule_is_lifted_on_the_one_chain_where_it_clearly_costs_money(self):
         import shadow, market

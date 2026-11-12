@@ -22,17 +22,19 @@ FIELDS = ["time", "mint", "symbol", "stage", "verdict", "confidence", "reason", 
           # what learn.py learns from: the token as GARDE saw it at the verdict
           "chain", "vol_liq", "avg_trade", "chg_1h", "chg_5m", "buy_ratio", "mcap_liq", "socials",
           "top10", "max_wallet", "holders", "expected", "override", "dial",
-          "rc_score", "rc_danger", "rc_lp_locked", "pool_kill"]
+          "rc_score", "rc_danger", "rc_lp_locked", "pool_kill",
+          # what was done with a pass: bought, or "not bought: <why>" (scan.py retries some of them)
+          "action"]
 
 
-def _migrate():
-    """An older checks.csv has fewer columns: rewrite it once with the new header."""
-    with open(LOG, newline="") as f:
+def _migrate(path: str = LOG):
+    """An older checks.csv (or study.csv) has fewer columns: rewrite it once with the new header."""
+    with open(path, newline="") as f:
         r = csv.DictReader(f)
         if r.fieldnames == FIELDS:
             return
         rows = list(r)
-    with open(LOG, "w", newline="") as f:
+    with open(path, "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=FIELDS)
         w.writeheader()
         for row in rows:
@@ -45,8 +47,8 @@ STUDY = os.path.join(DATA, "study.csv")     # GARDE's verdicts on tokens the poo
 def log(row: dict, path: str = LOG):
     os.makedirs(DATA, exist_ok=True)
     new = not os.path.exists(path)
-    if not new and path == LOG:
-        _migrate()
+    if not new:
+        _migrate(path)
     with open(path, "a", newline="") as f:
         w = csv.DictWriter(f, fieldnames=FIELDS)
         if new:
@@ -338,6 +340,13 @@ def study(mint: str) -> dict:
 
 
 def run(mint: str) -> dict:
+    """GARDE's verdict and what was done with it, logged once the action is known."""
+    v = _run(mint)
+    log({"time": time.strftime("%Y-%m-%d %H:%M"), "mint": mint, **v})
+    return v
+
+
+def _run(mint: str) -> dict:
     v = check(mint)
     v.update(market.sol_regime() or {})
     try:
@@ -345,7 +354,6 @@ def run(mint: str) -> dict:
         v["dial"] = majors.dial_value()
     except Exception:
         v["dial"] = None
-    log({"time": time.strftime("%Y-%m-%d %H:%M"), "mint": mint, **v})
     import dossier
     dossier.add(mint, "GARDE", v["verdict"], **{k: v.get(k) for k in (
         "stage", "reason", "symbol", "lane", "score", "flags", "tier", "signals", "ticket", "price", "liq_usd",
