@@ -374,6 +374,11 @@ def _run(mint: str) -> dict:
         usd = min(equity * EVENT_TIER_PCT / 100, (v.get("liq_usd") or 0) * FACTS["max_ticket_share"], book.cash())
         v.update(ticket=round(max(usd, min(TICKET_USD, book.cash())), 2), tier="event", event=event)
     import shadow
+    from config import BASE_OFF                # a chain x tier that lost on its real trades (config BASE_OFF)
+    if (enter and not event and v.get("tier") in (None, "base") and chains_split(mint) in BASE_OFF["chains"]
+            and not shadow.chain_ok(chains_split(mint), since=BASE_OFF["since"], min_mean=5.0)):
+        v["action"] = f"not bought: base tier off ({chains_split(mint)}), followed in shadow as a pass"
+        return v
     if (enter and chains_split(mint) in NO_BUY_CHAINS and not event and v.get("tier") != "sol15"
             and not shadow.chain_ok(chains_split(mint))):
         v["action"] = f"not bought: chain off ({chains_split(mint)}), followed in shadow as a pass"

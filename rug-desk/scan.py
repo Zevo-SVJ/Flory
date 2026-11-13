@@ -47,7 +47,9 @@ def _last_rows() -> dict[str, dict]:
 
 def young_due(last: dict | None = None, now: float | None = None) -> list[str]:
     """Tokens whose last verdict was a pass refused for being too young, now old enough: newest first."""
-    from config import BASE_MIN_AGE_MIN, NO_BUY_CHAINS
+    from config import BASE_MIN_AGE_MIN, NO_BUY_CHAINS, YOUNG_RECHECK_ON
+    if not YOUNG_RECHECK_ON:
+        return []
     last = _last_rows() if last is None else last
     now = now or time.time()
     due = []

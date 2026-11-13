@@ -32,7 +32,8 @@ def note(mint: str, v: dict) -> bool:
     Returns True if the token is now followed."""
     reason = v.get("reason") or ""
     if v.get("verdict") in ("PASS", "BUY") and str(v.get("action", "")).startswith("not bought") \
-            and "regime dial" not in v["action"] and "prudence" not in v["action"] and "chain off" not in v["action"]:
+            and "regime dial" not in v["action"] and "prudence" not in v["action"] and "chain off" not in v["action"] \
+            and "tier off" not in v["action"]:
         reason = ("model_veto" if "model" in v["action"] else "hot_signals" if "hot signals" in v["action"]
                   else "young_base" if "young (" in v["action"]
                   else "closed_bsc_unsellable" if "(closed_bsc)" in v["action"] else "low_score")   # passed, not bought
@@ -136,17 +137,18 @@ _confirm = {}
 _chain_ok = {}
 
 
-def chain_ok(chain: str) -> bool:
+def chain_ok(chain: str, since: float = 0.0, min_mean: float = 0.0) -> bool:
     """Does a chain the desk stopped buying (config NO_BUY_CHAINS) pay again? its passes, followed in shadow:
     20+ finished, positive on average and without the 3 best, both halves positive. cached 10 min.
     Nov 2: CAPY passed on Solana at a $60k cap, was not bought (chain off) and was at $220k 5 min later."""
-    hit = _chain_ok.get(chain)
+    hit = _chain_ok.get((chain, since, min_mean))
     if hit and time.time() - hit[0] < 600:
         return hit[1]
     import chains
     xs = []
     for r in sorted(_rows(), key=lambda r: float(r["t"])):
-        if r["reason"] == "pass" and chains.split(r["mint"])[0] == chain and time.time() >= float(r["t"]) + HOURS * 3600:
+        if (r["reason"] == "pass" and chains.split(r["mint"])[0] == chain and float(r["t"]) >= since
+                and time.time() >= float(r["t"]) + HOURS * 3600):
             x = replay_cached(r)
             if x is not None:
                 xs.append(min(x, CAP_PCT))
@@ -154,9 +156,9 @@ def chain_ok(chain: str) -> bool:
     ok = False
     if len(xs) >= 20:
         h = len(xs) // 2
-        ok = (statistics.mean(xs) > 0 and statistics.mean(sorted(xs)[:-3]) > 0
+        ok = (statistics.mean(xs) > min_mean and statistics.mean(sorted(xs)[:-3]) > 0
               and statistics.mean(xs[:h]) > 0 and statistics.mean(xs[h:]) > 0)
-    _chain_ok[chain] = (time.time(), ok)
+    _chain_ok[(chain, since, min_mean)] = (time.time(), ok)
     return ok
 
 

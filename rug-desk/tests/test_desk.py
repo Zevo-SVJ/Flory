@@ -8,6 +8,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import config, book, check, watch, report  # noqa: E402
 config.NO_BUY_CHAINS = ()          # the tests buy Solana mints; ChainOff tests the switch itself
+config.BASE_OFF = {"chains": (), "since": 0}   # the tests buy BSC base tokens; BaseOff tests the cut itself
 config.BASE_MIN_AGE_MIN = 0        # the tests buy 2 h old tokens; YoungBase tests the rule itself
 config.COPYLAB["on"] = False       # no RPC from the tests
 import incidents as _inc; _inc.PRUDENCE_ON = True   # the tests check the prudence logic itself
@@ -594,8 +595,46 @@ class YoungBase(unittest.TestCase):
                          "chain": "solana"},                              # chain off anyway
             "bsc:0xf": {"verdict": "SKIP", "action": "", "age_min": "60", "time": at(3), "chain": "bsc"},
         }
-        with mock.patch.object(config, "BASE_MIN_AGE_MIN", 180), mock.patch.object(config, "NO_BUY_CHAINS", ("solana",)):
+        with mock.patch.object(config, "BASE_MIN_AGE_MIN", 180), mock.patch.object(config, "NO_BUY_CHAINS", ("solana",)), \
+                mock.patch.object(config, "YOUNG_RECHECK_ON", True):
             self.assertEqual(scan.young_due(last, now), ["bsc:0xa", "bsc:0xe"])
+
+
+class BaseOff(unittest.TestCase):
+    def _run(self, tier="base", pays=False, event=None):
+        import scan
+        v = {"verdict": "PASS", "stage": "judge", "reason": "ok", "price": 1.0, "liq_usd": 60000, "symbol": "B",
+             "score": 70, "tier": tier, "age_min": 400}
+        with mock.patch.object(check, "check", lambda m: dict(v)), mock.patch.object(check, "log", lambda r: None), \
+                mock.patch.object(check.market, "sol_regime", lambda: {}), mock.patch("dossier.add", lambda *a, **k: None), \
+                mock.patch("pending.add", lambda *a, **k: None), mock.patch.object(check.book, "open_position") as buy, \
+                mock.patch("shadow.waived", lambda: set()), mock.patch("shadow.confirm_ok", lambda c: False), \
+                mock.patch("shadow.chain_ok", lambda c, since=0.0, min_mean=0.0: pays), \
+                mock.patch.dict(scan.event_mints, {"bsc:0x" + "b" * 40: event} if event else {}), \
+                mock.patch.object(config, "BASE_OFF", {"chains": ("bsc",), "since": 0}):
+            return check.run("bsc:0x" + "b" * 40), buy
+
+    def test_bsc_base_is_off_until_its_new_shadow_passes_pay(self):
+        out, buy = self._run()
+        buy.assert_not_called()
+        self.assertIn("tier off", out["action"])
+        out, buy = self._run(pays=True)
+        buy.assert_called_once()
+
+    def test_closed_bsc_and_events_still_buy(self):
+        _, buy = self._run(tier="closed_bsc")
+        self.assertNotIn("tier off", str(_.get("action")))
+        _, buy = self._run(event="GTA VI")
+        buy.assert_called_once()
+
+    def test_the_skip_is_shadowed_as_a_pass(self):
+        import shadow
+        v = {"verdict": "PASS", "action": "not bought: base tier off (bsc), followed in shadow as a pass",
+             "price": 1.0, "liq_usd": 5e4}
+        with mock.patch.object(shadow, "_rows", lambda: []), mock.patch("paths.haunt", lambda *a, **k: None), \
+                mock.patch("builtins.open", mock.mock_open()) as op:
+            shadow.note("bsc:0x" + "f" * 40, v)
+        self.assertIn(",pass,", "".join(str(c) for c in op().write.call_args_list).replace("'", ","))
 
 
 class ChainWaiver(unittest.TestCase):

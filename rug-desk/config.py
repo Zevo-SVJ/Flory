@@ -242,6 +242,16 @@ BASE_MIN_AGE_MIN = 180
 # +12.9% (98); 0.65-0.8 +0.6% (110); < 0.65 +10.6% (469). a soft rule ("bot_buyers"): shadowed, and the shadow
 # book lifts it by itself if the skipped ones pay. other EVM chains not measured yet: BSC only
 BOT_BUYERS = {"chains": ("bsc",), "min_share": 0.9, "min_trades": 10}
+# Nov 13 evening, the rule set before the numbers were read (Skide: "on est passés de 140$ à -3"): since the
+# Oct 26 exits, any chain x tier with 8+ real trades and a negative total stops buying. real trades:
+# bsc base -$69.06 over 35 (14 won) -> off. robinhood base -$50.01 over 7 (under 8: on). robinhood lp_open
+# +$62.81 over 7 (on). closed_bsc and the event tier keep buying on BSC. its passes are followed in shadow as
+# before; it buys again once those shadowed AFTER this cut pay: 20+, +5% a trade, without the 3 best and on
+# both halves (the older shadow passes said +7.8% while the real trades lost: only new ones count)
+BASE_OFF = {"chains": ("bsc",), "since": 1794596400}       # 2026-11-13 19:00 UTC
+# the re-check at 3 h of a pass refused for its age (scan.young_due), off the same evening by the same rule:
+# real trades bought 3-12 h old, -$0.91 over 12. a base token under 3 h is still not bought (BASE_MIN_AGE_MIN)
+YOUNG_RECHECK_ON = False
 # Nov 9: the copy wave lab (copylab.py), shadow only: the buys of followed fomo traders, and what the price
 # does in the minutes after. wallets found on chain from the FLOAT they hold (18.42M and 10.41M FLOAT,
 # as their fomo profiles show). public addresses
