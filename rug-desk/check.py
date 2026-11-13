@@ -203,6 +203,12 @@ def check(mint: str, study: bool = False) -> dict:
     closed = PAPER and closed_bsc_ok(mint, token, m)      # an unpublished BSC contract, nothing else (CLOSED_BSC)
     if closed:
         seen["closed_bsc"] = True
+    from config import BOT_BUYERS             # bots buying crumbs, a dump coming (config BOT_BUYERS)
+    if (evm and chains_split(mint) in BOT_BUYERS["chains"] and "bot_buyers" not in waived
+            and (seen.get("buy_ratio") or 0) >= BOT_BUYERS["min_share"]
+            and (mm.get("buys_1h") or 0) + (mm.get("sells_1h") or 0) >= BOT_BUYERS["min_trades"]):
+        return {"stage": "facts", "verdict": "SKIP", "reason": "bot_buyers",
+                "symbol": m["symbol"] or token["symbol"], **seen}
     if (k := fact_kill(token, market.lane(m), set(waived) | ({"lp_unlocked"} if lp_open else set())
                        | ({"danger:closed_source"} if closed else set()))) \
             and not _model_override(k, seen):

@@ -2257,6 +2257,17 @@ class MultiChain(Base):
         self.assertIn(self.KEY, book.load())
         self.assertIn(EVM.lower(), v["x_ca"])
 
+    def test_bots_buying_crumbs_on_bsc_are_killed(self):
+        key = "bsc:" + EVM.lower()
+        with evm_net(ds=evm_pair("bsc", buys=190, sells=10)), mock.patch("requests.post", Chain()):
+            self.assertEqual(check.check(key)["reason"], "bot_buyers")
+        with evm_net(ds=evm_pair("bsc", buys=60, sells=30)), mock.patch("requests.post", Chain()):
+            self.assertNotEqual(check.check(key).get("reason"), "bot_buyers")
+        with evm_net(ds=evm_pair("bsc", buys=6, sells=0)), mock.patch("requests.post", Chain()):
+            self.assertNotEqual(check.check(key).get("reason"), "bot_buyers")     # too few swaps to judge
+        with evm_net(ds=evm_pair("robinhood", buys=190, sells=10)), mock.patch("requests.post", Chain()):
+            self.assertNotEqual(check.check(self.KEY).get("reason"), "bot_buyers")   # BSC only, measured there
+
     def test_honeypot_and_tax_are_killed_hard(self):
         with evm_net(gp=evm_goplus(is_honeypot="1")), mock.patch("requests.post", Chain()):
             self.assertEqual(check.check(self.KEY)["reason"], "danger:honeypot")

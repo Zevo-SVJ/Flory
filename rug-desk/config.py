@@ -236,6 +236,12 @@ DIAL_GATE_ON = False
 # the skipped ones are shadowed as "young_base": the shadow book lifts the rule by itself if they pay
 # (20+, +5% a trade, both halves, above the noise), like any soft rule
 BASE_MIN_AGE_MIN = 180
+# Nov 13: fake buyers on BSC. DOGE (bought 23:54, -66% an hour later) had 1438 buys for 95 sales: bots buying
+# crumbs so the token looks wanted, then a big holder dumps into them. the shadow book, BSC tokens GARDE judged,
+# by the buyers' share of the last hour's swaps: >= 0.9 -29.0% mean, -85.9% median, 22% won (n 112); 0.8-0.9
+# +12.9% (98); 0.65-0.8 +0.6% (110); < 0.65 +10.6% (469). a soft rule ("bot_buyers"): shadowed, and the shadow
+# book lifts it by itself if the skipped ones pay. other EVM chains not measured yet: BSC only
+BOT_BUYERS = {"chains": ("bsc",), "min_share": 0.9, "min_trades": 10}
 # Nov 9: the copy wave lab (copylab.py), shadow only: the buys of followed fomo traders, and what the price
 # does in the minutes after. wallets found on chain from the FLOAT they hold (18.42M and 10.41M FLOAT,
 # as their fomo profiles show). public addresses
