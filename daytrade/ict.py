@@ -1,0 +1,348 @@
+# ict.py
+# the ICT setups traders post about, turned into fixed rules and replayed on every day since 2016.
+#   python3 ict.py                         (SPY, a proxy for ES)
+#   DAYTRADE_SYMBOL=QQQ python3 ict.py     (QQQ, a proxy for NQ)
+#   python3 ict.py --short                 (one line per setup, no JSON)
+#
+# vocabulary, as coded here (5-minute candles, regular session only):
+#   bullish FVG at candle k : low[k] > high[k-2]   the gap (high[k-2], low[k]) was skipped by a fast move up
+#   bearish FVG at candle k : high[k] < low[k-2]
+#   liquidity               : the previous day's high / low, and the high / low of the first 30 minutes;
+#                             stops rest just beyond them
+#   sweep                   : price trades beyond one of those levels (takes the stops), then turns
+#   IFVG (inverse FVG)      : an FVG that price closes straight through; it flips sides, and the close
+#                             through it is the entry
+#
+# SILVER BULLET (long; short is the mirror): between 10:00 and 11:00, after a sweep of a low, a bullish FVG
+#   forms; buy the retrace to the top of the gap. stop just below the swept low. target 2R.
+# IFVG REVERSAL (long): a bearish FVG forms on the way down, a low is swept, then a candle closes above the
+#   FVG before 12:00; buy that close. stop just below the swept low. target 2R.
+# TURTLE SOUP, JUDAS SWING (PO3), ORDER BLOCK: batch 2, see each function.
+# all: one trade per setup per day, out at the close at the latest. if stop and target are hit in the same
+# minute, the stop counts. a limit fills only if price trades a cent through it.
+import json, math, sys
+from config import ICT, COSTS, SYMBOL
+import data
+import strategy
+
+TICK = 0.01
+
+
+def candles(bars: list[dict], size: int) -> list[dict]:
+    """1-minute bars -> size-minute candles {s, e, o, h, l, c}: s / e = first minute, minute after the last."""
+    out = {}
+    for b in bars:
+        g = b["m"] // size
+        c = out.get(g)
+        if c is None:
+            out[g] = {"s": g * size, "e": (g + 1) * size, "o": b["o"], "h": b["h"], "l": b["l"], "c": b["c"]}
+        else:
+            c["h"], c["l"], c["c"] = max(c["h"], b["h"]), min(c["l"], b["l"]), b["c"]
+    return [out[g] for g in sorted(out)]
+
+
+def mirror(bars: list[dict]) -> list[dict]:
+    """Prices negated: a short setup becomes a long one, so each rule is written once."""
+    return [{**b, "o": -b["o"], "h": -b["l"], "l": -b["h"], "c": -b["c"]} for b in bars]
+
+
+def levels(prev: dict | None, bars: list[dict]) -> list[tuple[int, float]]:
+    """(minute from which the level exists, price) for the lows liquidity rests under."""
+    out = []
+    if prev:
+        out.append((0, prev["l"]))
+    first = [b for b in bars if b["m"] < 30]
+    if first:
+        out.append((30, min(b["l"] for b in first)))
+    return out
+
+
+def sweeps(bars: list[dict], lv: list[tuple[int, float]]) -> dict[int, float]:
+    """minute -> lowest low since the first sweep, for every minute at or after that sweep."""
+    out, low, swept = {}, None, False
+    for b in bars:
+        if not swept and any(b["m"] >= since and b["l"] < px for since, px in lv):
+            swept = True
+        if swept:
+            low = b["l"] if low is None else min(low, b["l"])
+            out[b["m"]] = low
+    return out
+
+
+def manage(bars: list[dict], start_m: int, entry: float, stop: float, target: float,
+           limit: bool = False) -> tuple[float, int]:
+    """Exit price and minute, walking 1-minute bars from the fill minute. stop first when both are touched;
+    a minute that opens through the stop exits at that open. after a limit fill the target does not count
+    in the fill minute itself: its high may have come before the dip that filled the order."""
+    for b in bars:
+        if b["m"] < start_m:
+            continue
+        if b["l"] <= stop:
+            return (min(stop, b["o"]) if b["m"] > start_m else stop), b["m"]
+        if b["h"] >= target and not (limit and b["m"] == start_m):
+            return target, b["m"]
+    return bars[-1]["c"], bars[-1]["m"]
+
+
+def _trade(bars, fill_m, entry, stop, p, limit=False, target=None):
+    if entry - stop < p["min_risk_pct"] / 100 * abs(entry):
+        return None
+    target = target if target is not None else entry + p["target_r"] * (entry - stop)
+    px, m = manage(bars, fill_m, entry, stop, target, limit)
+    return {"m": fill_m, "entry": entry, "stop": stop, "exit": px, "exit_m": m, "r": (px - entry) / (entry - stop)}
+
+
+def silver_bullet(bars: list[dict], prev: dict | None, p: dict = ICT) -> dict | None:
+    lo, hi = p["sb_window"]
+    sw = sweeps(bars, levels(prev, bars))
+    cs = candles(bars, p["bar_min"])
+    for k in range(2, len(cs)):
+        c, a = cs[k], cs[k - 2]
+        if not (lo < c["e"] <= hi):
+            continue
+        gap = c["l"] - a["h"]
+        if gap < p["min_gap_pct"] / 100 * abs(c["c"]) or (c["e"] - 1) not in sw:
+            continue
+        entry, stop = c["l"], sw[c["e"] - 1] - TICK     # stop below the swept low, as known when the gap formed
+        for b in bars:                                   # the retrace into the gap, before 11:00
+            if b["m"] < c["e"] or b["m"] >= hi:
+                continue
+            if b["l"] <= entry - TICK:
+                return _trade(bars, b["m"], entry, stop, p, limit=True)
+        # not filled: the next FVG of the window may still give a trade
+    return None
+
+
+def ifvg(bars: list[dict], prev: dict | None, p: dict = ICT) -> dict | None:
+    lo, hi = p["ifvg_window"]
+    sw = sweeps(bars, levels(prev, bars))
+    cs = candles(bars, p["bar_min"])
+    gaps = []                                            # tops of the bearish FVGs still open
+    for k in range(2, len(cs)):
+        c, a = cs[k], cs[k - 2]
+        if lo < c["e"] <= hi and (c["e"] - 1) in sw:
+            for top in gaps:
+                if c["c"] > top:
+                    nxt = [b for b in bars if b["m"] >= c["e"]]
+                    if not nxt:
+                        return None
+                    entry = nxt[0]["o"]                  # bought at the next minute's open
+                    return _trade(bars, nxt[0]["m"], entry, sw[c["e"] - 1] - TICK, p)
+        gaps = [top for top in gaps if c["c"] <= top]    # closed through before any sweep: spent
+        if a["l"] - c["h"] >= p["min_gap_pct"] / 100 * abs(c["c"]):
+            gaps.append(a["l"])
+    return None
+
+
+def turtle_soup(bars: list[dict], prev: dict | None, p: dict = ICT) -> dict | None:
+    """Yesterday's low is taken, then a 5-minute candle closes back above it: buy the next minute's open,
+    stop under the low of the sweep."""
+    if not prev:
+        return None
+    low = None
+    for c in candles(bars, p["bar_min"]):
+        if c["e"] > p["soup_window"]:
+            return None
+        if c["l"] < prev["l"]:
+            low = c["l"] if low is None else min(low, c["l"])
+        if low is not None and c["c"] > prev["l"]:
+            nxt = [b for b in bars if b["m"] >= c["e"]]
+            return _trade(bars, nxt[0]["m"], nxt[0]["o"], low - TICK, p) if nxt else None
+    return None
+
+
+def judas(bars: list[dict], prev: dict | None, p: dict = ICT) -> dict | None:
+    """Power of three: the first 30 minutes run below the open (the fake move), then close back above it;
+    buy at 10:00, stop under that early low."""
+    first = [b for b in bars if b["m"] < p["judas_min"]]
+    nxt = [b for b in bars if b["m"] >= p["judas_min"]]
+    if not first or not nxt:
+        return None
+    o, low = first[0]["o"], min(b["l"] for b in first)
+    if low > o * (1 - p["judas_fake_pct"] / 100) or first[-1]["c"] <= o:
+        return None
+    return _trade(bars, nxt[0]["m"], nxt[0]["o"], low - TICK, p)
+
+
+def order_block(bars: list[dict], prev: dict | None, p: dict = ICT) -> dict | None:
+    """After a sweep, a displacement up leaves a bullish FVG; the last down candle before it is the order
+    block. buy the retest of its top, stop under the OB or the swept low, whichever is lower."""
+    lo, hi = p["ob_window"]
+    sw = sweeps(bars, levels(prev, bars))
+    cs = candles(bars, p["bar_min"])
+    for k in range(2, len(cs)):
+        c, a = cs[k], cs[k - 2]
+        if not (lo < c["e"] <= hi) or (c["e"] - 1) not in sw:
+            continue
+        if c["l"] - a["h"] < p["min_gap_pct"] / 100 * abs(c["c"]):
+            continue
+        ob = next((cs[j] for j in range(k - 2, max(-1, k - 2 - p["ob_lookback"]), -1) if cs[j]["c"] < cs[j]["o"]), None)
+        if ob is None or ob["h"] >= c["c"]:
+            continue
+        entry, stop = ob["h"], min(ob["l"], sw[c["e"] - 1]) - TICK
+        for b in bars:
+            if b["m"] < c["e"] or b["m"] >= hi:
+                continue
+            if b["l"] <= entry - TICK:
+                return _trade(bars, b["m"], entry, stop, p, limit=True)
+    return None
+
+
+def swings(cs: list[dict], n: int) -> list[tuple[int, str, float]]:
+    """(index of the candle that CONFIRMS it, "h" or "l", price): a swing high is a candle whose high beats
+    the n candles on each side, so it is only known n candles later."""
+    out = []
+    for i in range(n, len(cs) - n):
+        side = cs[i - n:i] + cs[i + 1:i + n + 1]
+        if all(cs[i]["h"] > c["h"] for c in side):
+            out.append((i + n, "h", cs[i]["h"]))
+        if all(cs[i]["l"] < c["l"] for c in side):
+            out.append((i + n, "l", cs[i]["l"]))
+    return out
+
+
+def tjr(bars: list[dict], prev: dict | None, p: dict = ICT) -> dict | None:
+    """TJR's day-trading plan, step by step (long; short is the mirror), 5-minute candles:
+    1-2 a swing low (or yesterday's low) is taken.  3 a candle then CLOSES above the last swing high: BOS.
+    4 the impulse left a bullish FVG.  5 price comes back into it (within 30 candles of the BOS) without
+    closing under it.  6 a candle closes back above the FVG: buy the next minute's open.
+    stop under the low that made the BOS; target the next liquidity above (a swing high or yesterday's
+    high) at least 1R away, else 2R. entries only between 10:00 and 11:30 (16:00-17:30 Paris)."""
+    lo, hi = p["tjr_window"]
+    cs = candles(bars, p["bar_min"])
+    sw = swings(cs, p["swing_n"])
+    known = lambda k, kind: [px for at, t, px in sw if at <= k and t == kind]
+    pdl, pdh = (prev["l"], prev["h"]) if prev else (None, None)
+    swept_low, bos, gap, entered = None, None, None, False
+    for k, c in enumerate(cs):
+        lows, highs = known(k - 1, "l"), known(k - 1, "h")
+        pools = lows[-1:] + ([pdl] if pdl is not None else [])
+        if bos is None:
+            if pools and c["l"] < max(pools):
+                swept_low = c["l"] if swept_low is None else min(swept_low, c["l"])
+            elif swept_low is not None:
+                swept_low = min(swept_low, c["l"])
+            if swept_low is not None and highs and c["c"] > highs[-1]:
+                bos = k
+            continue
+        if gap is None:                                      # 4: the FVG of the impulse, fresh BOS only
+            if k - bos > p["bos_fresh"]:
+                swept_low, bos = None, None
+                continue
+            for j in range(max(2, k - 3), k + 1):
+                if cs[j]["l"] > cs[j - 2]["h"] and cs[j]["l"] - cs[j - 2]["h"] >= p["min_gap_pct"] / 100 * abs(c["c"]):
+                    gap = (cs[j - 2]["h"], cs[j]["l"])
+            if gap is None:
+                continue
+            continue
+        bottom, top = gap
+        if k - bos > p["fvg_return"] or c["c"] < bottom:     # too late, or closed through: no trade
+            swept_low, bos, gap, entered = None, None, None, False
+            continue
+        if c["l"] <= top:
+            entered = True
+        if entered and c["c"] > top and lo <= c["e"] < hi:  # 6: the reaction
+            nxt = [b for b in bars if b["m"] >= c["e"]]
+            if not nxt:
+                return None
+            entry, stop = nxt[0]["o"], swept_low - TICK
+            risk = entry - stop
+            above = sorted(x for x in known(k, "h") + ([pdh] if pdh is not None else []) if x >= entry + risk)
+            return _trade(bars, nxt[0]["m"], entry, stop, p, target=above[0] if above else None)
+        if c["e"] >= hi:
+            return None
+    return None
+
+
+SETUPS = {"silver_bullet": silver_bullet, "ifvg": ifvg, "turtle_soup": turtle_soup, "judas": judas,
+          "order_block": order_block, "tjr": tjr}
+
+
+def day_trades(bars: list[dict], prev: dict | None, setup) -> list[dict]:
+    """The long and the short version of a setup on one day; if both trigger, the earlier one only."""
+    out = []
+    t = setup(bars, prev)
+    if t:
+        out.append({**t, "side": 1})
+    mp = {"h": -prev["l"], "l": -prev["h"]} if prev else None
+    t = setup(mirror(bars), mp)
+    if t:
+        out.append({**t, "side": -1, "entry": -t["entry"], "stop": -t["stop"], "exit": -t["exit"]})
+    out.sort(key=lambda x: x["m"])
+    return out[:1]
+
+
+def run(days, setup, p: dict = ICT, c: dict = COSTS, aum: float = 100_000.0) -> list[dict]:
+    rows, prev = [], None
+    for day, bars in days:
+        if not bars:
+            continue
+        for t in day_trades(bars, prev, setup):
+            risk = abs(t["entry"] - t["stop"])
+            shares = min(int(aum * p["risk_pct"] / 100 / risk), int(aum * p["max_leverage"] / t["entry"]))
+            if shares <= 0:
+                continue
+            gross = t["side"] * (t["exit"] - t["entry"]) * shares
+            cost = 2 * strategy.fee(shares, c)
+            r_net = (gross - cost) / (risk * shares)
+            rows.append({"date": day, "side": t["side"], "m": t["m"], "r": round(t["r"], 3),
+                         "r_net": round(r_net, 3), "ret": (gross - cost) / aum})
+            aum += gross - cost
+        prev = {"h": max(b["h"] for b in bars), "l": min(b["l"] for b in bars)}
+    return rows
+
+
+def summary(rows: list[dict]) -> dict:
+    n = len(rows)
+    if n < 2:
+        return {"trades": n}
+    rs = [r["r_net"] for r in rows]
+    mu = sum(rs) / n
+    sd = math.sqrt(sum((x - mu) ** 2 for x in rs) / (n - 1))
+    eq, peak, dd = 1.0, 1.0, 0.0
+    for r in rows:
+        eq *= 1 + r["ret"]
+        peak = max(peak, eq)
+        dd = min(dd, eq / peak - 1)
+    return {"trades": n, "win_pct": round(100 * sum(x > 0 for x in rs) / n, 1),
+            "avg_r_gross": round(sum(r["r"] for r in rows) / n, 3), "avg_r_net": round(mu, 3),
+            "t_stat": round(mu / (sd / math.sqrt(n)), 2) if sd else 0.0,
+            "total_pct": round((eq - 1) * 100, 1), "max_dd_pct": round(dd * 100, 1)}
+
+
+def report(rows: list[dict], p: dict = ICT) -> dict:
+    (a, b), (c, d), g = p["discovery"], p["holdout"], p["gate"]
+    disc = summary([r for r in rows if a <= r["date"] <= b])
+    hold = summary([r for r in rows if c <= r["date"] <= d])
+    ok = (disc.get("trades", 0) >= g["min_trades"] and disc.get("avg_r_net", -1) >= g["min_avg_r"]
+          and disc.get("t_stat", 0) >= g["min_t"] and hold.get("avg_r_net", -1) > g["holdout_min_avg_r"]
+          and hold.get("t_stat", 0) >= g["holdout_min_t"])
+    years = {}
+    for r in rows:
+        years.setdefault(r["date"][:4], []).append(r["r_net"])
+    return {"discovery": disc, "holdout": hold,
+            "by_year_avg_r": {y: [len(v), round(sum(v) / len(v), 3)] for y, v in sorted(years.items())},
+            "pass": ok}
+
+
+def main():
+    days = data.days()
+    if not days:
+        print(f"no {SYMBOL} data: run  DAYTRADE_SYMBOL={SYMBOL} python3 data.py fetch 2016-01-01 <today>")
+        return 1
+    out = {"symbol": SYMBOL, "range": [days[0][0], days[-1][0]]}
+    for name, f in SETUPS.items():
+        out[name] = report(run(days, f))
+    if "--short" not in sys.argv:
+        print(json.dumps(out, indent=1))
+    for name in SETUPS:
+        d, h = out[name]["discovery"], out[name]["holdout"]
+        print(f"{SYMBOL} {name}: 2016-21 {d.get('avg_r_net')}R t={d.get('t_stat')} n={d.get('trades')} | "
+              f"2022+ {h.get('avg_r_net')}R t={h.get('t_stat')} n={h.get('trades')}")
+    for name in SETUPS:
+        print(f"{SYMBOL} {name}: {'PASS' if out[name]['pass'] else 'FAIL'}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

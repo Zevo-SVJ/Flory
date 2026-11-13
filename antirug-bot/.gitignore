@@ -1,0 +1,6 @@
+.env
+data/
+__pycache__/
+card-*.png
+attach-*
+posted.log

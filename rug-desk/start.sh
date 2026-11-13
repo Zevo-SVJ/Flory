@@ -1,0 +1,60 @@
+#!/bin/bash
+# start.sh: the desk and its dashboard, kept alive all night.
+#   - each one restarts by itself 10 s after a crash (state lives in data/, so a restart is safe)
+#   - the Mac AND its screen stay awake while this runs (caffeinate -d): a screen that turns off is what
+#     locks the Mac, and a locked screen can stall Chrome, so ECHO. the lid must stay open, on power
+#   - if the dashboard can't start, the reason is printed here, not hidden
+#   - Ctrl+C stops everything
+# run it:  cd ~/Documents/rug-desk-run/rug-desk && ./start.sh
+cd "$(dirname "$0")" || exit 1
+mkdir -p data
+
+# an older start.sh still open in another window would restart ITS desk 10 s after we stop it: two desks
+# writing the same files (Oct 19 crash). stop it first
+# (a plain kill is not enough: bash runs its trap only once its foreground tail ends, so never. the whole
+# process group goes: the old script, its tail, its restart loops, its desk and dashboard)
+me=$(ps -o pgid= -p $$ | tr -d ' ')
+for pid in $(pgrep -f "start\.sh$"); do
+  pg=$(ps -o pgid= -p "$pid" | tr -d ' ')
+  [ -z "$pg" ] || [ "$pg" = "$me" ] && continue                      # ourselves and our own subshells
+  echo "an older start.sh was still running (pid $pid): stopping it and its desk"
+  kill -TERM -- "-$pg" 2> /dev/null
+  sleep 2
+done
+trap 'trap - INT TERM EXIT; echo; echo "stopping the desk..."; kill 0' INT TERM EXIT   # disarmed first: kill 0 hits us too
+
+command -v caffeinate > /dev/null && caffeinate -dims -w $$ &
+if command -v pmset > /dev/null; then
+  pmset -g batt | grep -q "Battery Power" && echo ">>> ATTENTION : le Mac est sur BATTERIE. branche le chargeur, sinon il peut dormir."
+  pmset -g | grep -q "SleepDisabled *1" || echo ">>> conseil : refermer l'écran endort le Mac. pour l'éviter : sudo pmset -a disablesleep 1"
+fi
+
+# a dashboard or desk left over from an older terminal would hold the port or run twice
+if lsof -nP -iTCP:8765 -sTCP:LISTEN > /dev/null 2>&1; then
+  echo "port 8765 already taken by an old process, stopping it:"
+  lsof -nP -iTCP:8765 -sTCP:LISTEN | tail -n +2
+  kill $(lsof -t -iTCP:8765 -sTCP:LISTEN) 2> /dev/null; sleep 1
+fi
+pkill -f "run\.py$" 2> /dev/null && echo "an old desk was still running: stopped" && sleep 1
+pkill -f "backtest\.py --accumulate$" 2> /dev/null
+
+keep_alive() {   # name, script
+  while true; do
+    echo "[$(date '+%Y-%m-%d %H:%M')] $1 starting" | tee -a data/supervisor.log
+    python3 "$2" >> "data/$1.out" 2>&1
+    code=$?
+    echo "[$(date '+%Y-%m-%d %H:%M')] $1 stopped (code $code), restarting in 10 s. last lines:" | tee -a data/supervisor.log
+    tail -n 8 "data/$1.out"
+    sleep 10
+  done
+}
+
+keep_alive dashboard dashboard.py &
+( sleep 4
+  if curl -s -o /dev/null http://localhost:8765/; then
+    echo ">>> dashboard OK: http://localhost:8765"
+  else
+    echo ">>> dashboard NOT reachable. its last lines:"; tail -n 15 data/dashboard.out
+  fi ) &
+keep_alive desk run.py &
+tail -n 0 -F data/desk.out
